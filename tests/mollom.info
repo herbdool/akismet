@@ -1,4 +1,0 @@
-; $Id$
-name = Mollom
-description = Protects forms against spam.
-core = 6.x

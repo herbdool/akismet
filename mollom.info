@@ -1,5 +1,4 @@
 ; $Id$
 name = Mollom
-description = Protects against comment and contact form spam.
-version = 1.0
+description = Protects forms against spam.
 core = 6.x
