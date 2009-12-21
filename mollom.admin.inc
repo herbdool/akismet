@@ -22,23 +22,29 @@ function mollom_admin_form_list() {
     array('data' => t('Operations'), 'colspan' => 2),
   );
   $rows = array();
-  $result = db_query("SELECT form_id FROM {mollom_form}");
-  while ($form_id = db_result($result)) {
+  $result = db_query('SELECT form_id FROM {mollom_form}')->fetchCol();
+  foreach ($result as $form_id) {
     $mollom_form = mollom_form_load($form_id);
     $rows[] = array(
       $mollom_form['title'],
       $modes[$mollom_form['mode']],
-      l(t('Configure'), 'admin/settings/mollom/manage/' . $form_id),
-      l(t('Unprotect'), 'admin/settings/mollom/unprotect/' . $form_id),
+      l(t('Configure'), 'admin/config/content/mollom/manage/' . $form_id),
+      l(t('Unprotect'), 'admin/config/content/mollom/unprotect/' . $form_id),
     );
   }
 
   // Add a row to add a form.
   if (empty($rows)) {
-    $rows[] = array(array('data' => l(t('Add form'), 'admin/settings/mollom/add'), 'colspan' => 4));
+    $rows[] = array(array('data' => l(t('Add form'), 'admin/config/content/mollom/add'), 'colspan' => 4));
   }
 
-  return theme('table', $header, $rows);
+  $build['forms'] = array(
+    '#theme' => 'table',
+    '#header' => $header,
+    '#rows' => $rows,
+  );
+
+  return $build;
 }
 
 /**
@@ -49,25 +55,23 @@ function mollom_admin_form_options() {
   $form_info = mollom_get_form_info();
 
   // Remove already configured form ids.
-  $result = db_query("SELECT form_id FROM {mollom_form}");
-  while ($form_id = db_result($result)) {
+  $result = db_query('SELECT form_id FROM {mollom_form}')->fetchCol();
+  foreach ($result as $form_id) {
     unset($form_info[$form_id]);
   }
   // If all registered forms are configured already, output a message, and
   // redirect the user back to overview.
   if (empty($form_info)) {
     drupal_set_message(t('All available forms are protected already.'));
-    drupal_goto('admin/settings/mollom');
+    drupal_goto('admin/config/content/mollom');
   }
 
   // Load module information.
   $modules = module_implements('mollom_form_info');
-  $placeholders = db_placeholders($modules, 'varchar');
-  $result = db_query("SELECT name, info FROM {system} WHERE type = 'module' AND name IN ($placeholders)", $modules);
-  $modules = array();
-  while ($row = db_fetch_object($result)) {
-    $module_info = unserialize($row->info);
-    $modules[$row->name] = t($module_info['name']);
+  $modules = db_query("SELECT name, info FROM {system} WHERE type = :type AND name IN (:name)", array(':type' => 'module', ':name' => $modules))->fetchAllKeyed();
+  foreach ($modules as $name => $info) {
+    $module_info = unserialize($info);
+    $modules[$name] = t($module_info['name']);
   }
 
   // Transform form information into an associative array suitable for #options.
@@ -83,7 +87,7 @@ function mollom_admin_form_options() {
 /**
  * Form builder; Configure Mollom protection for a form.
  */
-function mollom_admin_configure_form(&$form_state, $mollom_form = NULL) {
+function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
   // If no $mollom_form was passed, then we are adding a new form configuration.
   if (!isset($mollom_form)) {
     if (!isset($form_state['storage']['mollom_form'])) {
@@ -101,6 +105,11 @@ function mollom_admin_configure_form(&$form_state, $mollom_form = NULL) {
   }
 
   $form['#tree'] = TRUE;
+  $form['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-actions')),
+    '#weight' => 100,
+  );
 
   switch ($form_state['storage']['step']) {
     case 'select':
@@ -128,7 +137,7 @@ function mollom_admin_configure_form(&$form_state, $mollom_form = NULL) {
       $form['mollom']['form_title'] = array(
         '#type' => 'item',
         '#title' => t('Form'),
-        '#value' => $mollom_form['title'],
+        '#markup' => $mollom_form['title'],
       );
       // Form elements defined by hook_mollom_form_info() use the
       // 'parent][child' syntax, which Form API also uses internally for
@@ -168,7 +177,7 @@ function mollom_admin_configure_form(&$form_state, $mollom_form = NULL) {
   }
 
   $form['actions']['cancel'] = array(
-    '#value' => l(t('Cancel'), 'admin/settings/mollom'),
+    '#markup' => l(t('Cancel'), 'admin/config/content/mollom'),
   );
 
   return $form;
@@ -192,6 +201,7 @@ function mollom_admin_configure_form_next_submit($form, &$form_state) {
   $form_state['storage']['mollom_form'] = $mollom_form;
 
   $form_state['storage']['step'] = 'configure';
+  $form_state['rebuild'] = TRUE;
 }
 
 /**
@@ -222,19 +232,18 @@ function mollom_admin_configure_form_submit($form, &$form_state) {
     drupal_set_message('The form protection has been updated.');
   }
 
-  unset($form_state['storage']);
-  $form_state['redirect'] = 'admin/settings/mollom';
+  $form_state['redirect'] = 'admin/config/content/mollom';
 }
 
 /**
  * Form builder; Remove Mollom protection from a form.
  */
-function mollom_admin_unprotect_form(&$form_state, $mollom_form) {
+function mollom_admin_unprotect_form($form, &$form_state, $mollom_form) {
   $form['#tree'] = TRUE;
   $form['form'] = array(
     '#type' => 'item',
     '#title' => t('Form'),
-    '#value' => $mollom_form['title'],
+    '#markup' => $mollom_form['title'],
   );
   $form['mollom']['form_id'] = array(
     '#type' => 'value',
@@ -243,7 +252,7 @@ function mollom_admin_unprotect_form(&$form_state, $mollom_form) {
 
   return confirm_form($form,
     t('Are you sure you want to unprotect this form?'),
-    'admin/settings/mollom',
+    'admin/config/content/mollom',
     t('Mollom will no longer protect this form from spam.')
   );
 }
@@ -252,15 +261,15 @@ function mollom_admin_unprotect_form(&$form_state, $mollom_form) {
  * Form submit handler for mollom_admin_unprotect_form().
  */
 function mollom_admin_unprotect_form_submit($form, &$form_state) {
-  db_query("DELETE FROM {mollom_form} WHERE form_id = '%s'", $form_state['values']['mollom']['form_id']);
+  db_delete('mollom_form')->condition('form_id', $form_state['values']['mollom']['form_id'])->execute();
 
-  $form_state['redirect'] = 'admin/settings/mollom';
+  $form_state['redirect'] = 'admin/config/content/mollom';
 }
 
 /**
  * Form builder; Global Mollom settings form.
  */
-function mollom_admin_settings() {
+function mollom_admin_settings($form, &$form_state) {
   $keys = _mollom_access();
   // Since keys are not verified in HTTP POST requests, we need to default to
   // a successful key status. Otherwise, the fallback form elements would not
@@ -286,7 +295,6 @@ function mollom_admin_settings() {
   $form['server'] = array(
     '#type' => 'fieldset',
     '#title' => t('Server settings'),
-    '#access' => $status,
   );
   $form['server']['mollom_fallback'] = array(
     '#type' => 'radios',
@@ -320,14 +328,12 @@ function mollom_admin_settings() {
     '#title' => t('Public key'),
     '#default_value' => variable_get('mollom_public_key', ''),
     '#description' => t('The public key is used to uniquely identify you.'),
-    '#required' => TRUE,
   );
   $form['access-keys']['mollom_private_key'] = array(
     '#type' => 'textfield',
     '#title' => t('Private key'),
     '#default_value' => variable_get('mollom_private_key', ''),
     '#description' => t('The private key is used to prevent someone from hijacking your requests. Similar to a password, it should never be shared with anyone.'),
-    '#required' => TRUE,
   );
 
   return system_settings_form($form);
@@ -370,13 +376,16 @@ function mollom_comment_admin_overview_submit($form, &$form_state) {
         }
 
         // Second, perform the proper operation on the comments:
-        if ($comment = _comment_load($cid)) {
+        if ($comment = comment_load($cid)) {
           if ($operation == 'unpublish') {
-            db_query("UPDATE {comments} SET status = %d WHERE cid = %d", COMMENT_NOT_PUBLISHED, $cid);
+            db_update('comment')
+              ->fields(array('status' => COMMENT_NOT_PUBLISHED))
+              ->condition('cid', $cid)
+              ->execute();
             _comment_update_node_statistics($comment->nid);
           }
           elseif ($operation == 'delete') {
-            _comment_delete_thread($comment);
+            comment_delete($comment);
             _comment_update_node_statistics($comment->nid);
           }
         }
@@ -412,7 +421,10 @@ function mollom_node_admin_overview_submit($form, &$form_state) {
 
         if ($node = node_load($nid)) {
           if ($operation == 'unpublish') {
-            db_query("UPDATE {node} SET status = 0 WHERE nid = %d", $nid);
+            db_update('node')
+              ->fields(array('status' => NODE_NOT_PUBLISHED))
+              ->condition('nid', $nid)
+              ->execute();
           }
           elseif ($operation == 'delete') {
             node_delete($nid);
@@ -436,7 +448,7 @@ function mollom_node_admin_overview_submit($form, &$form_state) {
 /**
  * Menu callback; Displays the administrative reports page.
  */
-function mollom_reports_page() {
+function mollom_reports_page($form, &$form_state) {
   $embed_attributes = array(
     'src' => 'http://mollom.com/statistics.swf?key=' . check_plain(variable_get('mollom_public_key', '')),
     'quality' => 'high',
@@ -453,20 +465,21 @@ function mollom_reports_page() {
   $form['chart'] = array(
     '#type' => 'item',
     '#title' => t('Statistics'),
-    '#value' => '<embed' . drupal_attributes($embed_attributes) . '></embed>',
+    '#markup' => '<embed' . drupal_attributes($embed_attributes) . '></embed>',
   );
   if (module_exists('dblog')) {
     $logs = array();
-    $query = db_query_range("SELECT message, variables FROM {watchdog} WHERE type = 'mollom' AND severity <= %d ORDER BY wid DESC", WATCHDOG_WARNING, 0, 10);
-    while ($log = db_fetch_object($query)) {
-      $logs[] = t($log->message, unserialize($log->variables));
+    $result = db_query_range('SELECT message, variables FROM {watchdog} WHERE type = :type AND severity <= :severity ORDER BY wid DESC', 0, 10, array(':type' => 'mollom', ':severity' => WATCHDOG_WARNING));
+    foreach ($result as $log) {
+      $t_args = unserialize($log->variables);
+      $logs[] = t($log->message, ($t_args ? $t_args : array()));
     }
     $form['watchdog'] = array(
       '#type' => 'item',
       '#title' => t('Recent Mollom messages'),
-      '#value' => $logs ? theme('item_list', $logs) : t('None'),
+      '#markup' => $logs ? theme('item_list', array('items' => $logs)) : t('None'),
     );
   }
-  return drupal_render($form);
+  return $form;
 }
 

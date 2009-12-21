@@ -1,4 +1,9 @@
 ; $Id$
 name = Mollom
 description = Protects forms against spam.
-core = 6.x
+core = 7.x
+files[] = mollom.module
+files[] = mollom.admin.inc
+files[] = mollom.pages.inc
+files[] = mollom.install
+files[] = tests/mollom.test

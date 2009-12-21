@@ -31,7 +31,7 @@ function _mollom_authentication() {
   $private_key = variable_get('mollom_private_key', '');
 
   // Generate a timestamp according to the dateTime format (http://www.w3.org/TR/xmlschema-2/#dateTime):
-  $time = gmdate("Y-m-d\TH:i:s.\\0\\0\\0O", time());
+  $time = gmdate("Y-m-d\TH:i:s.\\0\\0\\0O", REQUEST_TIME);
 
   // Generate a random number:
   $nonce = md5(mt_rand());

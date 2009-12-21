@@ -44,7 +44,7 @@ function mollom_captcha_js($type, $session_id) {
  *   which should only be used to report session data that was not stored for an
  *   entity in the database (such as contact form submissions).
  */
-function mollom_report_form(&$form_state, $entity, $id) {
+function mollom_report_form($form, &$form_state, $entity, $id) {
   $form['entity'] = array(
     '#type' => 'value',
     '#value' => $entity,
@@ -57,7 +57,7 @@ function mollom_report_form(&$form_state, $entity, $id) {
 
   return confirm_form($form,
     t('Are you sure you want to delete and report the content as inappropriate?'),
-    isset($_GET['destination']) ? $_GET['destination'] : '<front>',
+    '<front>',
     t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
   );

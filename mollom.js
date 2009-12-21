@@ -1,12 +1,16 @@
 // $Id$
 
+(function ($) {
+
 /**
  * Attach click event handlers for CAPTCHA links.
  */
-Drupal.behaviors.mollom = function(context) {
-  $('a.mollom-audio-captcha', context).click(getAudioCaptcha);
-  $('a.mollom-image-captcha', context).click(getImageCaptcha);
-}
+Drupal.behaviors.mollom = {
+  attach: function (context) {
+    $('a.mollom-audio-captcha', context).click(getAudioCaptcha);
+    $('a.mollom-image-captcha', context).click(getImageCaptcha);
+  }
+};
 
 function getAudioCaptcha() {
   var context = $(this).parents('.form-item').parent();
@@ -45,3 +49,5 @@ function getImageCaptcha() {
    });
    return false;
 }
+
+})(jQuery);
