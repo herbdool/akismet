@@ -78,7 +78,7 @@ function mollom_schema() {
         'default' => 0,
       ),
       'fields' => array(
-        'description' => 'The module name the $form_id belongs to.',
+        'description' => 'A list of form fields configured for textual analysis.',
         'type' => 'text',
         'not null' => FALSE,
         'serialize' => TRUE,

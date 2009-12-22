@@ -125,9 +125,9 @@ function mollom_help($path, $arg) {
 }
 
 /**
- * Implements hook_init().
+ * Implements hook_exit().
  */
-function mollom_init() {
+function mollom_exit() {
   // Expire all mollom session IDs as soon as possible.
   $now = REQUEST_TIME;
   if (isset($_SESSION['mollom_sessions'])) {
@@ -208,7 +208,7 @@ function mollom_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_reports_page'),
     'access callback' => '_mollom_access',
-    'access arguments' => array('access mollom reports'),
+    'access arguments' => array('administer mollom'),
     'file' => 'mollom.admin.inc',
   );
 
@@ -289,9 +289,6 @@ function mollom_permission() {
   return array(
     'administer mollom' => array(
       'title' => t('Administer Mollom-protected forms and Mollom settings'),
-    ),
-    'access mollom reports' => array(
-      'title' => t('Access Mollom reports'),
     ),
     'post with no checking' => array(
       'title' => t('Post content without checking'),
@@ -1360,7 +1357,7 @@ function node_mollom_form_info() {
       'title' => t('@name form', array('@name' => $type->name)),
       'mode' => MOLLOM_MODE_ANALYSIS,
       // @todo This is incompatible with node access.
-      'bypass access' => array('administer nodes', 'edit any ' . $type->type . ' content'),
+      'bypass access' => array('bypass node access', 'edit any ' . $type->type . ' content'),
       'report access callback' => 'node_mollom_report_access',
       'report delete callback' => 'node_mollom_report_delete',
       'entity' => 'node',

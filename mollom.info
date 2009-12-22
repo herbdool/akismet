@@ -7,3 +7,4 @@ files[] = mollom.admin.inc
 files[] = mollom.pages.inc
 files[] = mollom.install
 files[] = tests/mollom.test
+configure = admin/config/content/mollom
