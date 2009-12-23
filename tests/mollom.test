@@ -670,12 +670,48 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
       variable_set('mollom_servers', $servers);
 
       $key_is_valid = mollom('mollom.verifyKey');
-      $this->assertIdentical($key_is_valid, NETWORK_ERROR, t('The Mollom servers could not be contacted'));
+      $this->assertIdentical($key_is_valid, NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
       $this->assertMollomWatchdogMessages(FALSE);
 
       $key_is_valid = mollom('mollom.verifyKey');
       $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
       $this->assertMollomWatchdogMessages();
+    }
+  }
+}
+
+class MollomLanguageDetectionTestCase extends MollomWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Language detection',
+      'description' => 'Check that the language detection functionality works.',
+      'group' => 'Mollom',
+    );
+  }
+
+  /**
+   * Test the language detection functionality at the API level without using a web interface.
+   */
+  function testLanguageDetectionAPI() {
+    // Note that Mollom supports more languages than those tested.
+    $strings = array(
+      'en' => "Hi, this is a test of the language detection code to see if it works well.",
+      'nl' => "Hallo, dit is een test van de taaldetectiecode om te controleren of het werkt.",
+      'fr' => "Bonjour, ceci est un test du detecteur langue automatique pour voir ci ça marche bien.",
+      'de' => "Bedecke deinen Himmel, Zeus, Mit Wolkendunst Und übe, dem Knaben gleich, der Disteln köpft, An Eichen dich und Bergeshöhn.",
+      'ko' => "'엄마야 누나야 강변살자. 뜰에는 반짝이는 금모래 빛. 뒷문 밖에는 갈잎의 노래",
+      'ru' => "Холуй трясется. Раб хохочет. Палач свою секиру точит. Тиран кромсает каплуна. Сверкает зимняя луна.",
+      'hu' => "Földszintiek mászófámról pillantva fejjel lefelé ti lógtok bele nézőim az űrbe ki tudja így kölcsönös kíváncsiak a helyes felelet kié",
+      'el' => "Σαν να 'χουνε την όψη της αιώνες οργωμένη. Κάτι άναρχο κι ατέλειωτο στο πρόσωπό της μένει.",
+      'ja' => "吹くからに秋の草木のしをるれば",
+      'th' => "ทั่วประเทศ ประมาณ ๔๐,๐๐๐ แห่ง ชาวไทยนับตั้งแต่ครั้งอดีตมีวิถี ชีวิตผูกพันกับพุทธศาสนาอย่างใกล้ชิด แสดงออกมาเป็น ขนบธรรมเนียมประเพณี",
+      'zh' => "螽斯羽，诜诜兮。宜尔子孙，振振兮",
+    );
+	
+    foreach ($strings as $language => $text) {
+      $result = mollom('mollom.detectLanguage', array('text' => $text));
+      $this->assertEqual($result[0]['language'], $language, t('A language code was specified and they match.'));
+      $this->assertTrue($result[0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));    
     }
   }
 }
