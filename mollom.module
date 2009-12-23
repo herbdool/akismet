@@ -1193,6 +1193,9 @@ function mollom($method, $data = array()) {
     while ($server = current($servers)) {
       $result = xmlrpc($server . '/' . MOLLOM_API_VERSION, $method, $data + _mollom_authentication());
 
+      // REMOVEME:
+      _mollom_debug("Called $method at $server.\n  Parameters: ". print_r($data, TRUE) ."\n  Result: ". print_r($result, TRUE) ."\n  Error: ". print_r(xmlrpc_error(), TRUE));
+
       if ($result === FALSE && ($error = xmlrpc_error())) {
         if ($error->code == MOLLOM_REFRESH) {
           // Safety pal to avoid endless loops.
@@ -1666,4 +1669,15 @@ function mollom_mail_alter(&$message) {
 /**
  * @} End of "name mollom_contact".
  */
+
+/*
+ * This helper function is used by developers to debug the form API workflow in this module.
+ * Uncomment the function body to activate.
+ */
+function _mollom_debug($message) {
+  // print $message .'<br />';
+  // error_log($message);
+  $message = "-----\n$message\n";
+  file_put_contents('/tmp/mollom-debug.txt', $message, FILE_APPEND);
+}
 
