@@ -288,11 +288,10 @@ function mollom_admin_settings($form, &$form_state) {
 
   $form['server'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Server settings'),
+    '#title' => t('Fallback strategy'),
   );
   $form['server']['mollom_fallback'] = array(
     '#type' => 'radios',
-    '#title' => t('Fallback strategy'),
     // Default to treating everything as inappropriate.
     '#default_value' => variable_get('mollom_fallback', MOLLOM_FALLBACK_BLOCK),
     '#options' => array(
@@ -314,8 +313,6 @@ function mollom_admin_settings($form, &$form_state) {
       '@mollom-manager-add' => 'http://mollom.com/site-manager/add',
       '@mollom-manager' => 'http://mollom.com/site-manager',
     )),
-    '#collapsible' => $keys,
-    '#collapsed' => $keys,
   );
   $form['access-keys']['mollom_public_key'] = array(
     '#type' => 'textfield',
