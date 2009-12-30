@@ -684,7 +684,7 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
   public static function getInfo() {
     return array(
       'name' => 'Language detection',
-      'description' => 'Check that the language detection functionality works.',
+      'description' => 'Tests language detection functionality.',
       'group' => 'Mollom',
     );
   }
@@ -711,7 +711,7 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
     foreach ($strings as $language => $text) {
       $result = mollom('mollom.detectLanguage', array('text' => $text));
       $this->assertEqual($result[0]['language'], $language, t('A language code was specified and they match.'));
-      $this->assertTrue($result[0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));    
+      $this->assertTrue($result[0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));
     }
   }
 }
@@ -720,7 +720,7 @@ class MollomBlackListTestCase extends MollomWebTestCase {
   public static function getInfo() {
     return array(
       'name' => 'Blacklisting',
-      'description' => 'Check that the URL and text blacklist functionality works.',
+      'description' => 'Tests URL and text blacklist functionality.',
       'group' => 'Mollom',
     );
   }
@@ -729,25 +729,28 @@ class MollomBlackListTestCase extends MollomWebTestCase {
    * Test the URL blacklist functionality at the API level without using a web interface.
    */
   function testUrlBlackListAPI() {
-    // Blacklist an URL:
-    mollom('mollom.addBlacklistURL', array(
-      'url' => 'http://unicorn.com'));
+    // Blacklist a URL.
+    mollom('mollom.addBlacklistURL', array('url' => 'http://unicorn.com'));
 
-    // Check whether posts containing the blacklisted URL are properly blocked.  
+    // Check whether posts containing the blacklisted URL are properly blocked.
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the exact URL is present, the post should get blocked: http://unicorn.com"));
+      'post_body' => "When the exact URL is present, the post should get blocked: http://unicorn.com",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL is expanded in the back, the post should get blocked: http://unicorn.com/oh-my"));
+      'post_body' => "When the URL is expanded in the back, the post should get blocked: http://unicorn.com/oh-my",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL is expanded in the front, the post should get blocked: http://www.unicorn.com"));
+      'post_body' => "When the URL is expanded in the front, the post should get blocked: http://www.unicorn.com",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL has a different schema, the post should get blocked: ftp://www.unicorn.com"));
+      'post_body' => "When the URL has a different schema, the post should get blocked: ftp://www.unicorn.com",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     // Validate that there is one entry.
@@ -775,15 +778,18 @@ class MollomBlackListTestCase extends MollomWebTestCase {
       'text' => 'unicorn',
       'match' => 'contains',
       'reason' => 'spam',
-      'language' => 'en'));
+      'language' => 'en',
+    ));
 
-    // Check whether posts containing the blacklisted URL are properly blocked. 
+    // Check whether posts containing the blacklisted URL are properly blocked.
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the text is present, the post should get blocked: unicorn"));
+      'post_body' => "When the text is present, the post should get blocked: unicorn",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When match is 'contains', the word can be surrounded by other text: abcunicorndef"));
+      'post_body' => "When match is 'contains', the word can be surrounded by other text: abcunicorndef",
+    ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was blocked.'));
 
     // To update the work (i.e. to change the 'match' property), we simply 
@@ -792,12 +798,14 @@ class MollomBlackListTestCase extends MollomWebTestCase {
       'text' => 'unicorn',
       'match' => 'exact',
       'reason' => 'spam',
-      'language' => 'en'));
+      'language' => 'en',
+    ));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When match is 'exact', it has to be exact: abcunicorndef"));
+      'post_body' => "When match is 'exact', it has to be exact: abcunicorndef",
+    ));
     $this->assertNotEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('The message was not blocked.'));
-	
+
     // Validate that there is one entry.
     $blacklist = mollom('mollom.listBlacklistText');
     $this->assertEqual(count($blacklist), 1, t('The server-side blacklist has one entry.'));
