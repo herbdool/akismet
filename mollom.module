@@ -1265,6 +1265,25 @@ function mollom_get_statistics($refresh = FALSE) {
 }
 
 /**
+ * Implements hook_field_extra_fields().
+ *
+ * Allow users to re-order the CAPTCHA field on node forms through the Field UI.
+ */
+function mollom_field_extra_fields() {
+  $extras = array();
+  foreach (node_type_get_names() as $type => $name) {
+    if (mollom_form_load($type . '_node_form')) {
+      $extras['node'][$type]['mollom'] = array(
+        'label' => t('Mollom'),
+        'description' => t('Mollom CAPTCHA'),
+        'weight' => 99999,
+      );
+    }
+  }
+  return $extras;
+}
+
+/**
  * @name mollom_node Node module integration for Mollom.
  * @{
  */
@@ -1588,4 +1607,3 @@ function mollom_mail_alter(&$message) {
 /**
  * @} End of "name mollom_contact".
  */
-
