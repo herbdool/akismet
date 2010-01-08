@@ -1039,7 +1039,7 @@ function mollom_validate_captcha(&$form, &$form_state) {
     $form['mollom']['captcha']['#value'] = '';
 
     form_set_error('mollom][captcha', t('The CAPTCHA was not completed correctly. Please complete this new CAPTCHA and try again.'));
-    watchdog('mollom', 'Invalid CAPTCHA: <pre>@data<pre>', array('@data' => print_r($form_state['values'], TRUE)));
+    watchdog('mollom', 'Incorrect CAPTCHA: <pre>@data<pre>', array('@data' => print_r($form_state['values'], TRUE)));
   }
 }
 
