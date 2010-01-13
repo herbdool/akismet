@@ -93,6 +93,13 @@ class MollomWebTestCase extends DrupalWebTestCase {
     ));
     $this->setKeys();
     $this->assertValidKeys();
+
+    // @todo Remove this when comment body is required again.
+    $instance = field_info_instance('comment', 'comment_body', 'comment_node_article');
+    if (empty($instance['required'])) {
+      $instance['required'] = TRUE;
+      field_update_instance($instance);
+    }
   }
 
   function tearDown() {
@@ -207,7 +214,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Explicitly enable the passed fields, if $fields were passed.
     if (isset($fields)) {
       foreach ($fields as $field) {
-        $edit['mollom[fields][' . $field . ']'] = TRUE;
+        $edit['mollom[fields][' . rawurlencode($field) . ']'] = TRUE;
       }
     }
     $form_info = mollom_get_form_info($form_id);
@@ -216,13 +223,13 @@ class MollomWebTestCase extends DrupalWebTestCase {
       // remaining checkboxes manually.
       if (isset($fields)) {
         if (!isset($edit[$field])) {
-          $edit['mollom[fields][' . $field . ']'] = FALSE;
+          $edit['mollom[fields][' . rawurlencode($field) . ']'] = FALSE;
         }
       }
       // If no $fields were passed, enable all elements exposed by the
       // implementation.
       else {
-        $edit['mollom[fields][' . $field . ']'] = TRUE;
+        $edit['mollom[fields][' . rawurlencode($field) . ']'] = TRUE;
       }
     }
     $this->drupalPost(NULL, $edit, t('Save'));
@@ -515,10 +522,10 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $node = $this->drupalCreateNode(array('body' => array(LANGUAGE_NONE => array(array('value' => 'node body'))), 'type' => 'article'));
 
     // Create a regular user and post a comment.
-    $this->web_user = $this->drupalCreateUser(array('post comments', 'post comments without approval'));
+    $this->web_user = $this->drupalCreateUser(array('edit own comments'));
     $this->drupalLogin($this->web_user);
     $edit = array(
-      'comment' => 'ham',
+      'comment_body[und][0][value]' => 'ham',
     );
     $this->drupalPost('comment/reply/' . $node->nid, $edit, t('Preview'));
     $this->assertMollomWatchdogMessages();
@@ -526,7 +533,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, array(), t('Save'));
     $this->assertMollomWatchdogMessages();
     $this->assertText('node body');
-    $this->assertText($edit['comment']);
+    $this->assertText($edit['comment_body[und][0][value]']);
 
     // Ensure a user having one of the permissions to bypass access can post
     // spam without triggering the spam protection.
@@ -534,7 +541,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->drupalGet('node/' . $node->nid);
     $this->clickLink('edit');
 
-    $this->drupalPost(NULL, array('subject' => '', 'comment' => 'spam'), t('Preview'));
+    $this->drupalPost(NULL, array('subject' => '', 'comment_body[und][0][value]' => 'spam'), t('Preview'));
     $this->assertMollomWatchdogMessages();
     $this->assertNoText($this->spam_message);
 
@@ -1147,7 +1154,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp('comment');
 
-    $this->web_user = $this->drupalCreateUser(array('access comments', 'post comments', 'post comments without approval', 'create article content'));
+    $this->web_user = $this->drupalCreateUser(array('create article content'));
     $this->node = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->web_user->uid));
     variable_set('comment_preview_article', DRUPAL_OPTIONAL);
   }
@@ -1167,7 +1174,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertNoCaptchaField();
 
     // Preview a comment that is 'spam' and make sure there is still no CAPTCHA.
-    $this->drupalPost(NULL, array('comment' => 'spam'), t('Preview'));
+    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'spam'), t('Preview'));
     $this->assertNoCaptchaField();
 
     // Save the comment and make sure it appears.
@@ -1196,7 +1203,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // Try to submit an incorrect answer for the CAPTCHA, without value for
     // required field.
     $this->postIncorrectCaptcha(NULL, array(), t('Preview'));
-    $this->assertText(t('Comment field is required.'), t('Missing required field triggers form rebuild.'));
+    $this->assertText(t('Comment field is required.'));
     $this->assertFieldByID('edit-mollom-session-id', $mollom_session_id, t('The Mollom Session ID is present on the comment form after a possible spam comment is previewed.'));
 
     // Try to submit a correct answer for the CAPTCHA, still without required
@@ -1205,7 +1212,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertText(t('Comment field is required.'), t('Missing required field triggers form rebuild.'));
 
     // Finally, we should be able to submit a comment.
-    $this->drupalPost(NULL, array('comment' => 'spam'), t('Save'));
+    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'spam'), t('Save'));
     $this->assertText(t('Your comment has been posted.'));
     $this->assertRaw('<p>spam</p>', t('Spam comment could be posted with correct CAPTCHA.'));
   }
@@ -1226,7 +1233,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 
     // Try to save a comment that is 'unsure' and make sure there is a CAPTCHA
     // and a Mollom ID.
-    $this->drupalPost(NULL, array('comment' => 'unsure'), t('Save'));
+    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'unsure'), t('Save'));
     $this->assertCaptchaField();
     $this->assertFieldByID('edit-mollom-session-id', '', t('The Mollom Session ID is present on the comment form after a possible spam comment is previewed.'));
 
@@ -1237,7 +1244,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // Try to submit the form by using an invalid CAPTCHA. At this point,
     // the submission should be rejected and a new CAPTCHA generated (even
     // if the text of the comment is changed to ham).
-    $this->postIncorrectCaptcha(NULL, array('comment' => 'ham'), t('Save'));
+    $this->postIncorrectCaptcha(NULL, array('comment_body[und][0][value]' => 'ham'), t('Save'));
     $this->assertFieldByID('edit-mollom-session-id', $mollom_session_id, 'The Mollom Session ID remains unchanged.');
 
     // Now try using a valid CAPTCHA. The CAPTCHA form should no longer
@@ -1248,20 +1255,20 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // Preview a 'spam' comment and try to save it. It should be
     // rejected, with no CAPTCHA appearing on the page.
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
-    $this->assertSpamSubmit('comment/reply/'. $this->node->nid, array('comment'), array(), t('Save'));
+    $this->assertSpamSubmit('comment/reply/'. $this->node->nid, array('comment_body[und][0][value]'), array(), t('Save'));
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertFieldByID('edit-mollom-session-id', $mollom_session_id, 'The Mollom Session ID remains unchanged.');
 
     // Try to save again the above 'spam' comment. It should also be
     // rejected with no CAPTCHA.
-    $this->assertSpamSubmit(NULL, array('comment'), array(), t('Save'));
+    $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertFieldByID('edit-mollom-session-id', $mollom_session_id, 'The Mollom Session ID remains unchanged.');
 
     // Preview and save a comment that is 'ham'. Make sure that the submitted
     // comment appears on the screen and in the database.
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
-    $this->assertHamSubmit('comment/reply/'. $this->node->nid, array('comment'), array(), t('Save'));
+    $this->assertHamSubmit('comment/reply/'. $this->node->nid, array('comment_body[und][0][value]'), array(), t('Save'));
     $this->assertRaw('<p>ham</p>', t('A comment that is known to be ham appears on the screen after it is submitted.'));
     $this->assertCommentCount($this->node->nid, $original_number_of_comments + 1);
   }
@@ -1545,17 +1552,17 @@ class MollomDataTestCase extends MollomWebTestCase {
     // Create a node we can comment on.
     $node = $this->drupalCreateNode(array('type' => 'article', 'promote' => 1));
     $this->drupalGet('');
-    $this->assertText($node->title[LANGUAGE_NONE][0]['value']);
+    $this->assertText($node->title);
 
     // Log in regular user and post a comment.
     $this->drupalLogout();
-    $this->web_user = $this->drupalCreateUser(array('post comments without approval'));
+    $this->web_user = $this->drupalCreateUser();
     $this->drupalLogin($this->web_user);
     $this->drupalGet('');
     $this->clickLink(t('Add new comment'));
     $edit = array(
       'subject' => $this->randomString(),
-      'comment' => 'unsure',
+      'comment_body[und][0][value]' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->unsure_message);
@@ -1566,7 +1573,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
     $this->_assertEqual('post_title', $data['post_title'], $edit['subject']);
-    $this->_assertEqual('post_body', $data['post_body'], $edit['comment']);
+    $this->_assertEqual('post_body', $data['post_body'], $edit['comment_body[und][0][value]']);
     $this->_assertEqual('author_name', $data['author_name'], $this->web_user->name);
     $this->_assertEqual('author_mail', $data['author_mail'], $this->web_user->mail);
     $this->_assertEqual('author_id', $data['author_id'], $this->web_user->uid);
@@ -1595,7 +1602,7 @@ class MollomDataTestCase extends MollomWebTestCase {
       'mail' => 'mollom@example.com',
       'homepage' => 'http://mollom.com',
       'subject' => $this->randomString(),
-      'comment' => 'unsure',
+      'comment_body[und][0][value]' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->unsure_message);
@@ -1606,7 +1613,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
     $this->_assertEqual('post_title', $data['post_title'], $edit['subject']);
-    $this->_assertEqual('post_body', $data['post_body'], $edit['comment']);
+    $this->_assertEqual('post_body', $data['post_body'], $edit['comment_body[und][0][value]']);
     $this->_assertEqual('author_name', $data['author_name'], $edit['name']);
     $this->_assertEqual('author_mail', $data['author_mail'], $edit['mail']);
     $this->_assertEqual('author_url', $data['author_url'], $edit['homepage']);
@@ -1639,7 +1646,7 @@ class MollomReportTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp('comment');
 
-    $this->web_user = $this->drupalCreateUser(array('access comments', 'post comments', 'post comments without approval', 'create article content'));
+    $this->web_user = $this->drupalCreateUser(array('create article content'));
   }
 
   /**
@@ -1652,18 +1659,18 @@ class MollomReportTestCase extends MollomWebTestCase {
     // Post a comment.
     $this->drupalLogin($this->web_user);
     $edit = array(
-      'comment' => 'ham',
+      'comment_body[und][0][value]' => 'ham',
     );
     $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
     $this->assertMollomWatchdogMessages();
-    $this->comment = db_query('SELECT * FROM {comment} WHERE comment = :comment AND nid = :nid', array(':comment' => $edit['comment'], ':nid' => $this->node->nid))->fetchObject();
+    $this->comment = db_query('SELECT * FROM {comment} WHERE comment = :comment AND nid = :nid', array(':comment' => $edit['comment_body[und][0][value]'], ':nid' => $this->node->nid))->fetchObject();
     $this->assertTrue($this->comment, t('Comment was found in the database.'));
     $this->assertData('comment', $this->comment->cid);
 
     // Log in comment administrator and verify that we can report to Mollom.
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('node/' . $this->node->nid);
-    $this->assertText($edit['comment'], t('Comment found.'));
+    $this->assertText($edit['comment_body[und][0][value]'], t('Comment found.'));
     $this->clickLink('report to Mollom');
     $edit = array(
       'feedback' => 'spam',
@@ -1691,7 +1698,7 @@ class MollomReportTestCase extends MollomWebTestCase {
     foreach (range(1, 3) as $num) {
       $edit = array(
         'subject' => $this->randomName(),
-        'comment' => 'ham',
+        'comment_body[und][0][value]' => 'ham',
       );
       $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
       $this->assertMollomWatchdogMessages();

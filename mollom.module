@@ -1421,13 +1421,12 @@ function comment_mollom_form_info() {
     'entity' => 'comment',
     'elements' => array(
       'subject' => t('Subject'),
-      'comment' => t('Comment'),
+      // @todo Update for Field API.
+      'comment_body][und][0][value' => t('Comment'),
     ),
     'mapping' => array(
       'post_id' => 'cid',
       'post_title' => 'subject',
-      // In D6, comment_form() dynamically uses different form elements for
-      // anonymous users, authenticated users, and comment administrators.
       'author_name' => 'name',
       'author_mail' => 'mail',
       'author_url' => 'homepage',
