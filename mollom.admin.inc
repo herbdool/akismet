@@ -288,6 +288,10 @@ function mollom_admin_settings($form, &$form_state) {
   $form['server'] = array(
     '#type' => 'fieldset',
     '#title' => t('Fallback strategy'),
+    '#description' => t('When the Mollom servers are down or otherwise unreachable, no text analysis is performed and no CAPTCHAs are generated. If this occurs, your site will use the configured fallback strategy. Subscribers to <a href="@pricing-url">Mollom Plus</a> receive access to <a href="@sla-url">Mollom\'s high-availability backend infrastructure</a>, not available to free users, reducing potential downtime.', array(
+      '@pricing-url' => 'http://mollom.com/pricing',
+      '@sla-url' => 'http://mollom.com/standard-service-level-agreement',
+    )),
   );
   $form['server']['mollom_fallback'] = array(
     '#type' => 'radios',
@@ -297,20 +301,15 @@ function mollom_admin_settings($form, &$form_state) {
       MOLLOM_FALLBACK_BLOCK => t('Block all submissions of protected forms until the server problems are resolved'),
       MOLLOM_FALLBACK_ACCEPT => t('Leave all forms unprotected and accept all submissions'),
     ),
-    '#description' => t('When the Mollom servers are down or otherwise unreachable, no text analysis is performed and no CAPTCHAs are generated. If this occurs, your Drupal site will use the configured fallback strategy, and will either accept all submissions without spam checking, or block all submissions until the server or connection problems are resolved. Subscribers to <a href="@pricing">Mollom Plus</a> receive access to <a href="@sla">Mollom\'s high-availability backend infrastructure</a>, not available to free users, reducing potential downtime.', array(
-      '@pricing' => 'http://mollom.com/pricing',
-      '@sla' => 'http://mollom.com/standard-service-level-agreement',
-    )),
   );
 
   $form['access-keys'] = array(
     '#type' => 'fieldset',
     '#title' => t('Mollom access keys'),
-    '#description' => t('To use Mollom, you need a public and private key. To obtain your keys, <a href="@mollom-login">register and login on mollom.com</a>, and <a href="@mollom-manager-add">create a subscription</a> for your site. Once you created a subscription, copy your private and public access keys from the <a href="@mollom-manager">site manager</a> into the form fields below, and you are ready to go.', array(
-      '@mollom-register' => 'http://mollom.com/user/register',
-      '@mollom-login' => 'http://mollom.com/user',
-      '@mollom-manager-add' => 'http://mollom.com/site-manager/add',
-      '@mollom-manager' => 'http://mollom.com/site-manager',
+    '#description' => t('To use Mollom, you need a public and private key. To obtain your keys, <a href="@mollom-login-url">register and login on mollom.com</a>, and <a href="@mollom-manager-add-url">create a subscription</a> for your site. Once you created a subscription, copy your private and public access keys from the <a href="@mollom-manager-url">site manager</a> into the form fields below, and you are ready to go.', array(
+      '@mollom-login-url' => 'http://mollom.com/user',
+      '@mollom-manager-add-url' => 'http://mollom.com/site-manager/add',
+      '@mollom-manager-url' => 'http://mollom.com/site-manager',
     )),
   );
   $form['access-keys']['mollom_public_key'] = array(
@@ -324,6 +323,18 @@ function mollom_admin_settings($form, &$form_state) {
     '#title' => t('Private key'),
     '#default_value' => variable_get('mollom_private_key', ''),
     '#description' => t('The private key is used to prevent someone from hijacking your requests. Similar to a password, it should never be shared with anyone.'),
+  );
+
+  $form['mollom_privacy_link'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Link to Mollom's privacy policy on forms protected by textual analysis"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('mollom_privacy_link', 1),
+    '#description' => t('Displays a link to the recommended <a href="@privacy-policy-url">privacy policy on mollom.com</a> on all forms that are protected via <a href="@help-url">textual analysis</a>. When disabling this option, you are required to inform visitors about data privacy through other means, as stated in the <a href="@terms-of-service-url">terms of service</a> applying to your subscription.', array(
+      '@privacy-policy-url' => 'http://mollom.com/web-service-privacy-policy',
+      '@help-url' => url('admin/help/mollom'),
+      '@terms-of-service-url' => 'http://mollom.com/terms-of-service',
+    )),
   );
 
   return system_settings_form($form);
