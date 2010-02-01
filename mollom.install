@@ -330,6 +330,23 @@ function mollom_update_6106() {
 }
 
 /**
+ * Disable the privacy policy link for existing sites by default.
+ */
+function mollom_update_6107() {
+  variable_set('mollom_privacy_link', 0);
+}
+
+/**
+ * Rename 'post with no checking' permission to 'bypass mollom protection'.
+ */
+function mollom_update_6108() {
+  db_update('role_permission')
+    ->fields(array('permission' => 'bypass mollom protection'))
+    ->condition('permission', 'post with no checking')
+    ->execute();
+}
+
+/**
  * Migrate form configuration for changed form ids in Drupal 7.
  */
 function mollom_update_7000() {

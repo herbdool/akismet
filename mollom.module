@@ -269,8 +269,8 @@ function mollom_permission() {
     'administer mollom' => array(
       'title' => t('Administer Mollom-protected forms and Mollom settings'),
     ),
-    'post with no checking' => array(
-      'title' => t('Post content without checking'),
+    'bypass mollom protection' => array(
+      'title' => t('Bypass Mollom protection on forms'),
     ),
   );
 }
@@ -371,7 +371,7 @@ function mollom_data_delete($entity, $id) {
  */
 function mollom_form_alter(&$form, &$form_state, $form_id) {
   // Site administrators don't have their content checked with Mollom.
-  if (!user_access('post with no checking') && _mollom_status() === TRUE) {
+  if (!user_access('bypass mollom protection') && _mollom_status() === TRUE) {
     // Retrieve configuration for this form.
     if ($mollom_form = mollom_form_load($form_id)) {
       // Determine whether to bypass validation for the current user.
