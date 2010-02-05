@@ -915,6 +915,9 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     if (!empty($form_state['mollom']['session_id'])) {
       $data['session_id'] = $form_state['mollom']['session_id'];
     }
+    if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
+      $data['ssl'] = TRUE;
+    }
     $result = mollom('mollom.getImageCaptcha', $data);
 
     // If we get a response, add the image CAPTCHA to the form element.
