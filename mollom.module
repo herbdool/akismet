@@ -186,7 +186,6 @@ function mollom_menu() {
     'access arguments' => array('administer mollom'),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',
-    'weight' => 2,
   );
   $items['admin/config/content/mollom/settings'] = array(
     'title' => 'Settings',
@@ -218,22 +217,6 @@ function mollom_menu() {
   );
 
   return $items;
-}
-
-/**
- * Implements hook_theme().
- */
-function mollom_theme() {
-  return array(
-    'mollom_admin_blacklist_text_form' => array(
-      'render element' => 'form',
-      'file' => 'mollom.admin.inc',
-    ),
-    'mollom_admin_blacklist_url_form' => array(
-      'render element' => 'form',
-      'file' => 'mollom.admin.inc',
-    ),
-  );
 }
 
 /**
@@ -857,6 +840,22 @@ function mollom_element_info() {
         // Setup a new Mollom session.
         'mollom_process_mollom',
       ),
+    ),
+  );
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mollom_theme() {
+  return array(
+    'mollom_admin_blacklist_text_form' => array(
+      'render element' => 'form',
+      'file' => 'mollom.admin.inc',
+    ),
+    'mollom_admin_blacklist_url_form' => array(
+      'render element' => 'form',
+      'file' => 'mollom.admin.inc',
     ),
   );
 }

@@ -460,8 +460,7 @@ function mollom_admin_blacklist_delete($form, &$form_state, $blacklist, $key) {
     t('Are you sure you want to delete %key from the blacklist?', array('%key' => $form['#mollom-blacklist-key'])),
     'admin/config/content/mollom/blacklist',
     t('This action cannot be undone.'),
-    t('Delete'), t('Cancel'),
-    'mollom_admin_blacklist_delete_submit'
+    t('Delete'), t('Cancel')
   );
 }
 
@@ -476,7 +475,7 @@ function mollom_admin_blacklist_delete_submit($form, &$form_state) {
     $result = mollom('mollom.removeBlacklistURL', array('url' => $form['#mollom-blacklist-key']));
   }
 
-  if ($result == TRUE) {
+  if ($result === TRUE) {
     drupal_set_message(t('The item has been removed from the blacklist.'));
   }
   else {
