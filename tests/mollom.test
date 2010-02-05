@@ -1014,7 +1014,12 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
   }
 }
 
-class MollomBlackListTestCase extends MollomWebTestCase {
+class MollomBlacklistTestCase extends MollomWebTestCase {
+
+  // Note: the blacklists are stored on the server. These tests can fail when
+  // different people run the tests at the same time because all tests share
+  // the same blacklist. You can configure a custom key to avoid this.
+  
   public static function getInfo() {
     return array(
       'name' => 'Blacklisting',
@@ -1026,7 +1031,7 @@ class MollomBlackListTestCase extends MollomWebTestCase {
   /**
    * Test the URL blacklist functionality at the API level without using a web interface.
    */
-  function testUrlBlackListAPI() {
+  function testUrlBlacklistAPI() {
     // Blacklist a URL.
     mollom('mollom.addBlacklistURL', array('url' => 'http://unicorn.com'));
 
@@ -1070,7 +1075,7 @@ class MollomBlackListTestCase extends MollomWebTestCase {
   /**
    * Test the text blacklist functionality at the API level without using a web interface.
    */
-  function testTextBlackListAPI() {
+  function testTextBlacklistAPI() {
     // Blacklist a word:
     mollom('mollom.addBlacklistText', array(
       'text' => 'unicorn',
@@ -1116,6 +1121,41 @@ class MollomBlackListTestCase extends MollomWebTestCase {
     // Retrieve the blacklist again, and make sure it is empty.
     $blacklist = mollom('mollom.listBlacklistText');
     $this->assertEqual(count($blacklist), 0, t('The server-side blacklist is empty.'));
+  }
+  
+  /**
+   * Test the blacklist administration interface.
+   */
+  function testBlacklistUI() {    
+    // Log in as an administrator and access the blacklist administration page.
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet('admin/config/content/mollom/blacklist');
+        
+    // Add a word to the text blacklist.
+    $this->drupalPost(NULL, array('match' => 'contains', 'text' => 'spam word', 'reason' => 'spam'), t('Add'));
+    $this->assertText(t('The text has been added to the blacklist.'));
+    $this->assertText(t('spam word'));
+    
+    // Remove the word from the text blacklist.
+    $this->clickLink(t('delete'));
+    $this->drupalPost(NULL, array(), t('Delete'));
+    $this->assertEqual($this->getUrl(), url('admin/config/content/mollom/blacklist', array('absolute' => TRUE)), t('Correct page redirection.'));
+    $this->assertNoText(t('spam word'), 'Text blacklist removed.');
+    
+    // Add an URL  to the text blacklist.
+    $this->drupalPost(NULL, array('url' => 'spam.com'), t('Add'));
+    $this->assertText(t('The URL has been added to the blacklist.'));
+    $this->assertText(t('http://spam.com'));
+    
+    // Remove the URL from the text blacklist.
+    $this->clickLink(t('delete'));
+    $this->drupalPost(NULL, array(), t('Delete'));
+    $this->assertEqual($this->getUrl(), url('admin/config/content/mollom/blacklist', array('absolute' => TRUE)), t('Correct page redirection.'));
+    $this->assertNoText(t('http://spam.com'), 'URL blacklist removed.');
+    
+    // Note: we don't need to check whether the blacklisting actually works
+    // (i.e. blocks posts) because we tested thatin testTextBlacklistAPI() and 
+    // testURLBlacklistAPI().
   }
 }
 

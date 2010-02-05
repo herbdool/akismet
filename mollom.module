@@ -143,8 +143,8 @@ function mollom_menu() {
     'access arguments' => array('administer mollom'),
     'file' => 'mollom.admin.inc',
   );
-  $items['admin/config/content/mollom/list'] = array(
-    'title' => 'List',
+  $items['admin/config/content/mollom/forms'] = array(
+    'title' => 'Forms',
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'weight' => -10,
   );
@@ -170,6 +170,24 @@ function mollom_menu() {
     'access arguments' => array('administer mollom'),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',
+  );
+  $items['admin/config/content/mollom/blacklist'] = array(
+    'title' => 'Blacklist',
+    'description' => 'Configure word and URL blacklists.',
+    'page callback' => 'mollom_admin_blacklist',
+    'access arguments' => array('administer mollom'),
+    'type' => MENU_LOCAL_TASK,
+    'file' => 'mollom.admin.inc',
+  );
+  $items['admin/config/content/mollom/blacklist/delete'] = array(
+    'title' => 'Delete',
+    'page callback' => 'drupal_get_form',
+    'page arguments' => array('mollom_admin_blacklist_delete', 6, 7),
+    'access arguments' => array('administer mollom'),
+    'type' => MENU_LOCAL_TASK,
+    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+    'file' => 'mollom.admin.inc',
+    'weight' => 2,
   );
   $items['admin/config/content/mollom/settings'] = array(
     'title' => 'Settings',
@@ -201,6 +219,22 @@ function mollom_menu() {
   );
 
   return $items;
+}
+
+/**
+ * Implements hook_theme().
+ */
+function mollom_theme() {
+  return array(
+    'mollom_admin_blacklist_text_form' => array(
+      'render element' => 'form',
+      'file' => 'mollom.admin.inc',
+    ),
+    'mollom_admin_blacklist_url_form' => array(
+      'render element' => 'form',
+      'file' => 'mollom.admin.inc',
+    ),
+  );
 }
 
 /**
