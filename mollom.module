@@ -184,8 +184,7 @@ function mollom_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_admin_blacklist_delete', 6, 7),
     'access arguments' => array('administer mollom'),
-    'type' => MENU_LOCAL_TASK,
-    'context' => MENU_CONTEXT_PAGE | MENU_CONTEXT_INLINE,
+    'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',
     'weight' => 2,
   );
