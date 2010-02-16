@@ -1216,6 +1216,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   }
 
   /**
+    $this->assertText(t('The item has been removed from the blacklist.'));
    * Tests configuration of form fields for textual analysis.
    */
   function testFormFieldsConfiguration() {
