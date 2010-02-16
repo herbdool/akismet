@@ -584,7 +584,7 @@ function mollom_comment_admin_overview_submit($form, &$form_state) {
             _comment_update_node_statistics($comment->nid);
           }
           elseif ($operation == 'delete') {
-            comment_delete($comment);
+            comment_delete($cid);
             _comment_update_node_statistics($comment->nid);
           }
         }

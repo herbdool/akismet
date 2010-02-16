@@ -105,6 +105,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $modules[] = 'dblog';
       call_user_func_array(array($this, 'parent::setUp'), $modules);
     }
+    // @see mollom_modules_installed()
+    drupal_static_reset('mollom_get_form_info');
 
     // If not explicitly disabled by a test, setup and validate testing keys.
     if (empty($this->disableDefaultSetup)) {
@@ -211,11 +213,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   verify that the proper session id was stored in the database.
    */
   protected function assertSessionIDInForm() {
-    // The session id found in the form element value is prefixed with the UNIX
-    // timestamp denoting the time it was generated/output. The form element
-    // #process callback mollom_process_mollom_session_id() uses this timestamp
-    // to additionally validate its age.
-    list($timestamp, $session_id) = explode('-', $this->getFieldValueByName('mollom[session_id]'));
+    $session_id = $this->getFieldValueByName('mollom[session_id]');
     return $this->assertSessionID($session_id);
   }
 
@@ -264,11 +262,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   (optional) A list of form elements to enable for text analysis.
    */
   protected function setProtection($form_id, $fields = NULL) {
+    // Always start from overview page, also to make debugging easier.
+    $this->drupalGet('admin/config/content/mollom');
     // Determine whether the form is already protected.
-    $exists = db_query_range('SELECT 1 FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id));
+    $exists = db_query_range('SELECT 1 FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchField();
     // Add a new form.
     if (!$exists) {
-      $this->drupalGet('admin/config/content/mollom');
       $this->clickLink(t('Add form'));
       $edit = array(
         'mollom[form_id]' => $form_id,
@@ -277,6 +276,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     }
     // Edit an existing form.
     else {
+      $this->assertLinkByHref('admin/config/content/mollom/manage/' . $form_id);
       $this->drupalGet('admin/config/content/mollom/manage/' . $form_id);
     }
 
@@ -664,7 +664,7 @@ class MollomStatusTestCase extends MollomWebTestCase {
     $edit = array(
       DRUPAL_AUTHENTICATED_RID . '[administer mollom]' => TRUE,
     );
-    $this->drupalPost('admin/config/people/permissions', $edit, t('Save permissions'));
+    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
 
     // Configure invalid keys.
     $edit = array(
@@ -1345,24 +1345,16 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
    * Tests default configuration, protecting, and unprotecting forms.
    */
   function testFormAdministration() {
-    // @todo Figure out why we need to reset the static cache here.
-    mollom_get_form_info(NULL, TRUE);
     $form_info = mollom_get_form_info();
 
     // Verify that all registered forms specifying a default mode are
     // auto-protected after installation.
-    // @todo During Drupal installation, modules are installed in an arbitrary
-    //   order, so module_list() only returns modules that were installed before
-    //   this module. Registered forms for Contact and Node modules are not
-    //   contained. Uncomment these assertions in D7.
-    /*
     $this->drupalGet('admin/config/content/mollom');
     foreach ($form_info as $form_id => $info) {
       if (!empty($info['mode'])) {
         $this->assertText($info['title']);
       }
     }
-    */
 
     // Unprotect user_register_form form.
     $this->drupalPost('admin/config/content/mollom/unprotect/user_register_form', array(), t('Confirm'));
@@ -1479,7 +1471,7 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     // Try to register with a valid CAPTCHA. Make sure the user was able
     // to successfully register.
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
-    $this->assertText(t('Your password and further instructions have been sent to your e-mail address.'));
+    $this->assertText(t('A welcome message with further instructions has been sent to your e-mail address.'));
     $this->assertTrue(user_load_by_name($name), t('The user who attempted to register appears in the database when the CAPTCHA is valid.'));
   }
 }
@@ -1942,7 +1934,7 @@ class MollomDataTestCase extends MollomWebTestCase {
       DRUPAL_ANONYMOUS_RID . '[post comments]' => TRUE,
       DRUPAL_ANONYMOUS_RID . '[post comments without approval]' => TRUE,
     );
-    $this->drupalPost('admin/config/people/permissions', $edit, t('Save permissions'));
+    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
 
     // Allow anonymous users to post contact information.
     $edit = array(
