@@ -236,7 +236,8 @@ function mollom_test_form($form, &$form_state, $mid = NULL) {
     '#weight' => 1000,
   );
 
-  $form['submit'] = array('#type' => 'submit', '#value' => 'Submit');
+  $form['actions'] = array('#type' => 'container', '#attributes' => array('class' => array('form-actions')));
+  $form['actions']['submit'] = array('#type' => 'submit', '#value' => 'Submit');
 
   return $form;
 }
