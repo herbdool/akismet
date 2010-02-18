@@ -293,6 +293,11 @@ function mollom_update_6106() {
     'default' => '',
   ));
 
+  // Change the primary key to prevent duplicate key errors in the following
+  // data conversions.
+  db_drop_primary_key('mollom');
+  db_add_primary_key('mollom', array('entity', 'did'));
+
   // Migrate existing node data.
   db_update('mollom')
     ->fields(array('entity' => 'node'))
@@ -322,9 +327,6 @@ function mollom_update_6106() {
     'not null' => TRUE,
     'default' => '',
   ));
-
-  db_drop_primary_key('mollom');
-  db_add_primary_key('mollom', array('entity', 'did'));
 }
 
 /**
