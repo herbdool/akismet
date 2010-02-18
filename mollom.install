@@ -255,8 +255,9 @@ function mollom_update_6105() {
   }
   drupal_load('module', 'mollom');
 
-  // Ensure that we don't get stale form information.
+  // Ensure that we don't get stale form or schema information.
   drupal_static_reset('mollom_get_form_info');
+  drupal_get_schema('mollom_form', TRUE);
 
   $form_info = mollom_get_form_info();
   $result = db_query("SELECT name, value FROM {variable} WHERE name LIKE 'mollom_%%' AND name NOT IN ('mollom_servers', 'mollom_fallback', 'mollom_public_key', 'mollom_private_key')");
@@ -384,4 +385,3 @@ function mollom_update_7000() {
 function mollom_update_7001() {
   db_drop_table('cache_mollom');
 }
-
