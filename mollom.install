@@ -361,6 +361,17 @@ function mollom_update_6109() {
 }
 
 /**
+ * Automatically update the new 'mollom_status' variable.
+ *
+ * _mollom_status() was introduced in 6.x-1.11 to prevent Mollom from
+ * interfering with forms when it is incorrectly configured. Sites updating from
+ * previous versions should be correctly configured, so we just invoke it here.
+ */
+function mollom_update_6110() {
+  _mollom_status(TRUE);
+}
+
+/**
  * Migrate form configuration for changed form ids in Drupal 7.
  */
 function mollom_update_7000() {
