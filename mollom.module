@@ -863,7 +863,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
       'require_captcha' => $element['#mollom_form']['mode'] == MOLLOM_MODE_CAPTCHA,
       'passed_captcha' => FALSE,
       'entity' => $element['#mollom_form']['entity'],
-      'fields' => $element['#mollom_form']['enabled_fields'],
+      'enabled_fields' => $element['#mollom_form']['enabled_fields'],
       'mapping' => $element['#mollom_form']['mapping'],
       'response' => array(
         'session_id' => '',
