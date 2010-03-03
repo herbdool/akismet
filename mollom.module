@@ -295,8 +295,6 @@ function mollom_permission() {
  * Implements hook_modules_installed().
  */
 function mollom_modules_installed($modules) {
-  // @todo This is not yet invoked, but should be.
-  // @see http://drupal.org/node/347959
   drupal_static_reset('mollom_get_form_info');
 }
 

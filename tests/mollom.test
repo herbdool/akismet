@@ -105,8 +105,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $modules[] = 'dblog';
       call_user_func_array(array($this, 'parent::setUp'), $modules);
     }
-    // @see mollom_modules_installed()
-    drupal_static_reset('mollom_get_form_info');
 
     // If not explicitly disabled by a test, setup and validate testing keys.
     if (empty($this->disableDefaultSetup)) {
