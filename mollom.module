@@ -502,10 +502,6 @@ function mollom_form_load($form_id) {
   $mollom_form = db_query_range('SELECT * FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchAssoc();
   if ($mollom_form) {
     $mollom_form['enabled_fields'] = unserialize($mollom_form['enabled_fields']);
-    // @todo Is this a bug in D7?
-    if (!$mollom_form['enabled_fields']) {
-      $mollom_form['enabled_fields'] = array();
-    }
 
     // Attach form registry information.
     $mollom_form += mollom_get_form_info($form_id);
@@ -859,10 +855,6 @@ function mollom_theme() {
  * replayed.
  */
 function mollom_process_mollom($element, &$form_state, $complete_form) {
-  // The 'cache' flag does not persist upon validation errors (yet).
-  // @see http://drupal.org/node/648170
-  $form_state['cache'] = TRUE;
-
   // Setup initial Mollom session and form information.
   if (empty($form_state['mollom'])) {
     $form_state['mollom'] = array(
@@ -1049,17 +1041,6 @@ function mollom_validate_captcha(&$form, &$form_state) {
     $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
     return;
   }
-
-  // @todo Problem: This error is output also in case we have no valid keys or a
-  //   communication error, in this request or perhaps even in the last already.
-  //   Thus, in case the fallback method blocks all submissions, a user gets TWO
-  //   error messages, and one of them being totally nuts, because *there is no*
-  //   CAPTCHA in the form, because we didn't reach the servers in the first
-  //   place. However, we also do not really want to invoke lots of XML-RPC
-  //   requests for the case when we (could) *know* that we won't get a usable
-  //   $result, because the servers are empty or keys are invalid - unless the
-  //   site administrator revisits Mollom's settings page again and fixes the
-  //   keys/servers.
 
   // Bail out if no value was provided.
   if (empty($form_state['values']['mollom']['captcha'])) {
