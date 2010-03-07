@@ -133,35 +133,6 @@ function mollom_schema() {
 }
 
 /**
- * Implements hook_install().
- */
-function mollom_install() {
-  // Install default form configuration for enabled, supported modules.
-  foreach (module_list(FALSE, FALSE) as $module) {
-    drupal_load('module', $module);
-  }
-  drupal_load('module', 'mollom');
-
-  $form_info = mollom_get_form_info();
-  $query = db_insert('mollom_form')
-    ->fields(array('form_id', 'mode', 'enabled_fields', 'module'));
-  foreach ($form_info as $form_id => $info) {
-    if (!empty($info['mode'])) {
-      $info['enabled_fields'] = array_keys($info['elements']);
-      // Upon installation, our own schema is not available yet, so we cannot
-      // use mollom_form_save(), resp. drupal_write_record().
-      $query->values(array(
-        $info['form_id'],
-        $info['mode'],
-        serialize($info['enabled_fields']),
-        $info['module'],
-      ));
-    }
-  }
-  $query->execute();
-}
-
-/**
  * Implements hook_uninstall().
  */
 function mollom_uninstall() {
@@ -187,18 +158,17 @@ function mollom_update_2() {
  * Upgrade form protection storage.
  */
 function mollom_update_3() {
-  // Load mollom_get_form_info() and hook_mollom_form_info() implementations.
+  // Load hook_mollom_form_info() implementations for mollom_form_list().
   foreach (module_list(FALSE, FALSE) as $module) {
     drupal_load('module', $module);
   }
   drupal_load('module', 'mollom');
 
-  foreach (mollom_get_form_info() as $form_id => $info) {
+  foreach (mollom_form_list() as $form_id => $info) {
     $name = 'mollom_' . $form_id;
     $mode = variable_get($name, NULL);
-    // $mode was stored as 1; default to MOLLOM_MODE_ANALYSIS if the form
-    // supports it.
-    if (isset($mode) && $info['mode'] == MOLLOM_MODE_ANALYSIS) {
+    // $mode was stored as 1; convert to MOLLOM_MODE_ANALYSIS.
+    if (isset($mode)) {
       variable_set($name, MOLLOM_MODE_ANALYSIS);
     }
   }
@@ -255,20 +225,24 @@ function mollom_update_6105() {
   }
   drupal_load('module', 'mollom');
 
-  // Ensure that we don't get stale form or schema information.
-  drupal_static_reset('mollom_get_form_info');
-  drupal_get_schema('mollom_form', TRUE);
 
-  $form_info = mollom_get_form_info();
+  $form_list = mollom_form_list();
   $result = db_query("SELECT name, value FROM {variable} WHERE name LIKE 'mollom_%%' AND name NOT IN ('mollom_servers', 'mollom_fallback', 'mollom_public_key', 'mollom_private_key')");
   foreach ($result as $row) {
     $form_id = substr($row->name, 7);
     $mode = unserialize($row->value);
-    if (!empty($mode) && isset($form_info[$form_id])) {
-      $info = $form_info[$form_id];
-      $info['mode'] = $mode;
-      $info['enabled_fields'] = array_keys($info['elements']);
-      mollom_form_save($info);
+    if (!empty($mode) && isset($form_list[$form_id])) {
+      $info = $form_list[$form_id];
+      $info += module_form_info($form_id, $info['module']);
+      $info['enabled_fields'] = ($mode == MOLLOM_MODE_ANALYSIS ? array_keys($info['elements']) : array());
+      db_insert('mollom_form')
+        ->fields(array(
+          'form_id' => $form_id,
+          'mode' => $mode,
+          'enabled_fields' => serialize($info['enabled_fields']),
+          'module' => $info['module'],
+        ))
+        ->execute();
     }
     variable_del($row->name);
   }
