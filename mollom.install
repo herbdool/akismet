@@ -346,6 +346,21 @@ function mollom_update_6110() {
 }
 
 /**
+ * Fix enabled_fields array for CAPTCHA-only protected forms.
+ *
+ * mollom_update_6105() incorrectly stored enabled_fields values for forms
+ * protected by CAPTCHAs only.
+ */
+function mollom_update_6111() {
+  db_update('mollom_form')
+    ->fields(array(
+      'enabled_fields' => serialize(array()),
+    ))
+    ->condition('mode', MOLLOM_MODE_CAPTCHA)
+    ->execute();
+}
+
+/**
  * Migrate form configuration for changed form ids in Drupal 7.
  */
 function mollom_update_7000() {
