@@ -9,11 +9,25 @@
 /**
  * AJAX callback to retrieve a CAPTCHA.
  *
+ * @param $type
+ *   The new CAPTCHA type to retrieve, e.g. 'image' or 'audio'.
+ * @param $form_build_id
+ *   The internal form build id of the form to update the CAPTCHA for.
+ * @param $mollom_session_id
+ *   The last known Mollom session id contained in the form.
+ *
+ * @return
+ *   A JSON array containing:
+ *   - content: The HTML markup for the new CAPTCHA.
+ *   - session_id: The Mollom session id for the new CAPTCHA.
+ *
  * @todo Add error handling.
  */
-function mollom_captcha_js($type, $session_id) {
+function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
   $output = '';
-  $data = array('author_ip' => ip_address(), 'session_id' => $session_id);
+
+  // Prepare common request data for both CAPTCHA types.
+  $data = array('author_ip' => ip_address(), 'session_id' => $mollom_session_id);
   if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
     $data['ssl'] = TRUE;
   }
@@ -37,7 +51,7 @@ function mollom_captcha_js($type, $session_id) {
         $output .= '<embed src="' . $source . '" loop="false" menu="false" quality="high" wmode="transparent" bgcolor="#ffffff" width="110" height="50" align="baseline" allowScriptAccess="sameDomain" allowFullScreen="false" type="application/x-shockwave-flash" pluginspage="http://www.adobe.com/go/getflashplayer_de" />';
         $output .= '</object>';
 
-        $output = '<span class="mollom-captcha">' . $output . '</span>';
+        $output = '<span class="mollom-captcha-content">' . $output . '</span>';
         $output .= ' (<a href="#" class="mollom-image-captcha">' . t('use image CAPTCHA') . '</a>)';
       }
       break;
@@ -47,14 +61,40 @@ function mollom_captcha_js($type, $session_id) {
       if ($response) {
         $output .= '<img src="' . check_plain(url($response['url'])) . '" alt="Mollom CAPTCHA" />';
 
-        $output = '<a href="http://mollom.com" class="mollom-captcha">' . $output . '</a>';
+        $output = '<a href="http://mollom.com" class="mollom-captcha-content">' . $output . '</a>';
         $output .= ' (<a href="#" class="mollom-audio-captcha">' . t('play audio CAPTCHA') . '</a>)';
       }
       break;
   }
 
-  print $output;
-  exit();
+  // Update cached session id in the cached $form_state.
+  // We rely on native form caching of Form API to store our Mollom session
+  // data. When retrieving a new CAPTCHA through this JavaScript callback, the
+  // cached $form_state is not updated and still contains the Mollom session
+  // data that was known when rendering the form. Since above XML-RPC requests
+  // may return a new Mollom session id for the new CAPTCHA, the user would not
+  // be able to successfully complete the CAPTCHA, because we would try to
+  // validate the user's response in combination with the old/previous session
+  // id. Therefore, we need to update the session id in the cached $form_state.
+  // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
+  //   functionality.
+  if (!empty($response['session_id'])) {
+    if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
+      $form_state = $cache->data;
+      $form_state['mollom']['session_id'] = $response['session_id'];
+      cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
+      // After successfully updating the cache, replace the original session id.
+      $mollom_session_id = $response['session_id'];
+    }
+  }
+
+  // Return new content and new session_id via JSON.
+  $data = array(
+    'content' => $output,
+    'session_id' => $mollom_session_id,
+  );
+  drupal_json_output($data);
+  drupal_exit();
 }
 
 /**
