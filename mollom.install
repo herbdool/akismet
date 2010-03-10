@@ -27,7 +27,7 @@ function mollom_requirements($phase = 'runtime') {
     // Missing API keys.
     if (!$status['keys']) {
       $requirements['mollom']['value'] = t('Not configured');
-      $requirements['mollom']['description'] = t('Mollom API keys are not <a href="@settings-url">configured</a> yet.', array('@settings-url' => url('admin/settings/mollom/settings')));
+      $requirements['mollom']['description'] = t('Mollom API keys are not <a href="@settings-url">configured</a> yet.', array('@settings-url' => url('admin/config/content/mollom/settings')));
     }
     elseif ($status['keys valid'] === NETWORK_ERROR) {
       $requirements['mollom']['value'] = t('Network error');
@@ -35,7 +35,7 @@ function mollom_requirements($phase = 'runtime') {
     }
     elseif ($status['keys valid'] === MOLLOM_ERROR) {
       $requirements['mollom']['value'] = t('Invalid');
-      $requirements['mollom']['description'] = t('The <a href="@settings-url">configured</a> Mollom API keys are invalid.', array('@settings-url' => url('admin/settings/mollom/settings')));
+      $requirements['mollom']['description'] = t('The <a href="@settings-url">configured</a> Mollom API keys are invalid.', array('@settings-url' => url('admin/config/content/mollom/settings')));
     }
   }
   return $requirements;
@@ -68,6 +68,12 @@ function mollom_schema() {
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
+      ),
+      'changed' => array(
+        'description' => 'The Unix timestamp when the data was changed.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
       ),
       'quality' => array(
         'description' => "A quality rating assigned to the content to tell whether or not it's spam. Experimental; Mollom might return inconsistent values.",
@@ -386,4 +392,17 @@ function mollom_update_7000() {
  */
 function mollom_update_7001() {
   db_drop_table('cache_mollom');
+}
+
+/**
+ * Add {mollom}.changed column to auto-flush expired entries.
+ */
+function mollom_update_7002() {
+  if (!db_column_exists('mollom', 'changed')) {
+    db_add_field('mollom', 'changed', array(
+      'type' => 'int',
+      'not null' => TRUE,
+      'default' => 0,
+    ));
+  }
 }

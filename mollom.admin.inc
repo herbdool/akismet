@@ -177,7 +177,9 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
   }
 
   $form['actions']['cancel'] = array(
-    '#markup' => l(t('Cancel'), 'admin/config/content/mollom'),
+    '#type' => 'link',
+    '#title' => t('Cancel'),
+    '#href' => 'admin/config/content/mollom',
   );
 
   return $form;
@@ -561,87 +563,6 @@ function mollom_admin_settings($form, &$form_state) {
   );
 
   return system_settings_form($form);
-}
-
-/**
- * Form submit handler to mass-report and unpublish or delete comments.
- */
-function mollom_comment_admin_overview_submit($form, &$form_state) {
-  if (strpos($form_state['values']['operation'], 'mollom-') === 0) {
-    list($id, $operation) = explode('-', $form_state['values']['operation']);
-    foreach ($form_state['values']['comments'] as $cid => $value) {
-      if ($value) {
-        // First, report the comments as spam to Mollom.com.
-        if ($data = mollom_data_load('comment', $cid)) {
-          _mollom_send_feedback($data->session);
-        }
-
-        // Second, perform the proper operation on the comments:
-        if ($comment = comment_load($cid)) {
-          if ($operation == 'unpublish') {
-            db_update('comment')
-              ->fields(array('status' => COMMENT_NOT_PUBLISHED))
-              ->condition('cid', $cid)
-              ->execute();
-            _comment_update_node_statistics($comment->nid);
-          }
-          elseif ($operation == 'delete') {
-            comment_delete($cid);
-            _comment_update_node_statistics($comment->nid);
-          }
-        }
-      }
-    }
-
-    // Flush caches so the content changes are visible for anonymous users.
-    cache_clear_all();
-
-    if ($operation == 'delete') {
-      drupal_set_message(t('The selected comments have been reported as inappropriate and are deleted.'));
-    }
-    else {
-      drupal_set_message(t('The selected comments have been reported as inappropriate and are unpublished.'));
-    }
-  }
-}
-
-/**
- * Form submit handler to mass-report and unpublish or delete nodes.
- */
-function mollom_node_admin_overview_submit($form, &$form_state) {
-  if (strpos($form_state['values']['operation'], 'mollom-') === 0) {
-    list($id, $operation) = explode('-', $form_state['values']['operation']);
-    foreach ($form_state['values']['nodes'] as $nid => $value) {
-      if ($value) {
-        // First, report the nodes as spam to Mollom.com.
-        if ($data = mollom_data_load('node', $nid)) {
-           _mollom_send_feedback($data->session);
-        }
-
-        if ($node = node_load($nid)) {
-          if ($operation == 'unpublish') {
-            db_update('node')
-              ->fields(array('status' => NODE_NOT_PUBLISHED))
-              ->condition('nid', $nid)
-              ->execute();
-          }
-          elseif ($operation == 'delete') {
-            node_delete($nid);
-          }
-        }
-      }
-    }
-
-    // Flush caches so the content changes are visible for anonymous users.
-    cache_clear_all();
-
-    if ($operation == 'delete') {
-      drupal_set_message(t('The selected posts have been reported as inappropriate and are deleted.'));
-    }
-    else {
-      drupal_set_message(t('The selected posts have been reported as inappropriate and are unpublished.'));
-    }
-  }
 }
 
 /**

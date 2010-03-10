@@ -98,6 +98,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
         'administer content types',
         'administer comments',
         'administer permissions',
+        'administer users',
       ));
     }
     else {
@@ -681,7 +682,7 @@ class MollomStatusTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/reports/status');
     // @todo Should a user without Mollom administration access see a
     //   requirement error containing a link to the settings page?
-    $this->assertRaw(t('Mollom API keys are not <a href="@settings-url">configured</a> yet.', array('@settings-url' => url('admin/settings/mollom/settings'))), t('Requirements error found.'));
+    $this->assertRaw(t('Mollom API keys are not <a href="@settings-url">configured</a> yet.', array('@settings-url' => url('admin/config/content/mollom/settings'))), t('Requirements error found.'));
 
     // Grant access to Mollom settings.
     $edit = array(
@@ -702,7 +703,7 @@ class MollomStatusTestCase extends MollomWebTestCase {
 
     // Verify requirements error about invalid API keys.
     $this->drupalGet('admin/reports/status', array('watchdog' => FALSE));
-    $this->assertRaw(t('The <a href="@settings-url">configured</a> Mollom API keys are invalid.', array('@settings-url' => url('admin/settings/mollom/settings'))), t('Requirements error found.'));
+    $this->assertRaw(t('The <a href="@settings-url">configured</a> Mollom API keys are invalid.', array('@settings-url' => url('admin/config/content/mollom/settings'))), t('Requirements error found.'));
 
     // Replace server list with unreachable servers.
     variable_set('mollom_servers', array('http://fake-host'));
@@ -2102,13 +2103,13 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('node/' . $this->node->nid);
     $this->assertText($edit['comment_body[und][0][value]'], t('Comment found.'));
-    $this->clickLink('report to Mollom');
+    $this->clickLink('delete');
     $edit = array(
-      'feedback' => 'spam',
+      'mollom[feedback]' => 'spam',
     );
     $this->drupalPost(NULL, $edit, t('Delete'));
-    $this->assertText(t('The content was successfully reported as inappropriate.'));
     $this->assertText(t('The comment and all its replies have been deleted.'));
+    $this->assertText(t('The content was successfully reported as inappropriate.'));
 
     // Verify that the comment and Mollom session data has been deleted.
     $this->assertFalse(comment_load($this->comment->cid), t('Comment was deleted.'));
@@ -2144,29 +2145,67 @@ class MollomReportTestCase extends MollomWebTestCase {
     // comments to Mollom.
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('admin/content/comment');
-    $edit = array('operation' => 'mollom-unpublish');
+    $edit = array(
+      'operation' => 'delete',
+    );
     foreach ($this->comments as $comment) {
-      $this->assertText($comment->subject, t('Comment found.'));
       $edit["comments[{$comment->cid}]"] = TRUE;
     }
     $this->drupalPost(NULL, $edit, t('Update'));
-    $this->assertText(t('The selected comments have been reported as inappropriate and are unpublished.'));
-
-    // Verify that unpublished comments are found in approval queue and
-    // mass-report all comments again to delete them.
-    $this->drupalGet('admin/content/comment/approval');
-    $edit['operation'] = 'mollom-delete';
     foreach ($this->comments as $comment) {
       $this->assertText($comment->subject, t('Comment found.'));
     }
-    $this->drupalPost(NULL, $edit, t('Update'));
-    $this->assertText(t('The selected comments have been reported as inappropriate and are deleted.'));
+    $edit = array(
+      'mollom[feedback]' => 'spam',
+    );
+    $this->drupalPost(NULL, $edit, t('Delete comments'));
+    $this->assertText(t('Deleted @count comments.', array('@count' => count($this->comments))));
+    $this->assertText(t('The posts were successfully reported as inappropriate.'));
 
     // Verify that the comments and Mollom session data has been deleted.
     foreach ($this->comments as $comment) {
       $this->assertFalse(comment_load($comment->cid), t('Comment was deleted.'));
       $this->assertNoData('comment', $comment->cid);
     }
+  }
+
+  /**
+   * Tests reporting users.
+   */
+  function testReportUser() {
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('user_register_form');
+    $this->drupalLogout();
+
+    // Disable e-mail verification.
+    variable_set('user_email_verification', 0);
+
+    // Register a user.
+    $password = $this->randomName();
+    $edit = array(
+      'name' => $this->randomName(),
+      'pass[pass1]' => $password,
+      'pass[pass2]' => $password,
+      'mail' => 'spam@example.com',
+    );
+    $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
+    // Determine new uid.
+    $uid = db_query('SELECT uid FROM {users} WHERE name = :name', array(':name' => $edit['name']))->fetchField();
+    $this->assertData('user', $uid);
+
+    // Log in administrator and verify that we can report to Mollom.
+    $this->drupalLogout();
+    $this->drupalLogin($this->admin_user);
+    $edit = array(
+      'user_cancel_method' => 'user_cancel_delete',
+      'mollom[feedback]' => 'spam',
+    );
+    $this->drupalPost("user/$uid/cancel", $edit, t('Cancel account'));
+    // @todo errrrr, "content"? ;)
+    $this->assertText(t('The content was successfully reported as inappropriate.'));
+
+    // Verify that Mollom session data has been deleted.
+    $this->assertNoData('user', $uid);
   }
 }
 
