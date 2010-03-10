@@ -619,24 +619,11 @@ function mollom_delete_form_list($reset = FALSE) {
           }
         }
       }
+      cache_set('mollom:delete_form_list', $forms);
     }
   }
 
   return $forms;
-}
-
-/**
- * Return the protection mode for a given form id.
- *
- * @return
- *   The protection mode for the given form id, one of:
- *   - MOLLOM_MODE_DISABLED: None.
- *   - MOLLOM_MODE_CAPTCHA: CAPTCHA only.
- *   - MOLLOM_MODE_ANALYSIS: Text analysis with CAPTCHA fallback.
- */
-function mollom_get_mode($form_id) {
-  $mollom_form = mollom_form_load($form_id);
-  return isset($mollom_form['mode']) ? $mollom_form['mode'] : MOLLOM_MODE_DISABLED;
 }
 
 /**
@@ -918,7 +905,7 @@ function mollom_form_get_values($form_values, $fields, $mapping) {
 }
 
 /**
- * Recursive helper function flatten nested form values.
+ * Recursive helper function to flatten nested form values.
  *
  * Takes a potentially nested array and moves all nested keys to the top-level.
  */
