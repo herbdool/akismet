@@ -600,7 +600,7 @@ function mollom_delete_form_list($reset = FALSE) {
     // Try to fetch from database cache first.
     $cache = cache_get('mollom:delete_form_list');
     if ($cache) {
-      $forms = $cache;
+      $forms = $cache->data;
     }
     else {
       $forms = array();
