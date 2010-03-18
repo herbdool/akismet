@@ -271,51 +271,74 @@ function mollom_admin_unprotect_form_submit($form, &$form_state) {
 }
 
 /**
- * Menu callback; renders the blacklist overview page.
- *
- * @todo Do we want to keep both blacklist on the same page?
+ * Menu callback; The blacklist administration page.
  */
 function mollom_admin_blacklist() {
-  $output  = '<h2>' . t('Text blacklist') . '</h2>';
-  $output .= drupal_render(drupal_get_form('mollom_admin_blacklist_text_form'));
-  $output .= '<h2>' . t('URL blacklist') . '</h2>';
-  $output .= drupal_render(drupal_get_form('mollom_admin_blacklist_url_form'));
-  return $output;
+  drupal_set_title(t('Mollom blacklist'));
+  return drupal_get_form('mollom_admin_blacklist_form');
 }
 
 /**
- * Form builder; declares the text blacklist form.
+ * Form builder; Declares the text blacklist form.
  */
-function mollom_admin_blacklist_text_form() {
+function mollom_admin_blacklist_form($form, &$form_state) {
   $form['#tree'] = TRUE;
 
-  $form['entry']['match'] = array(
+  // Select options and translation of internal values for rendering.
+  $contexts = array(
+    'everything' => t('All fields'),
+    'links' => t('Links'),
+  );
+  $reasons = array(
+    'spam' => t('Spam'),
+    'profanity' => t('Profanity'),
+    'unwanted' => t('Unwanted'),
+  );
+
+  $form['blacklist'] = array();
+  // Do not retrieve the current blacklist when submitting the form.
+  $blacklist = (empty($form_state['input']) ? mollom('mollom.listBlacklistText') : array());
+  if (is_array($blacklist)) {
+    foreach ($blacklist as $id => $entry) {
+      $row = array(
+        'context' => array('#markup' => check_plain($contexts[$entry['context']])),
+        'text' => array('#markup' => check_plain($entry['text'])),
+        'reason' => array('#markup' => check_plain($reasons[$entry['reason']])),
+        'text' => array('#markup' => check_plain($entry['text'])),
+      );
+      $row['actions']['delete'] = array(
+        '#type' => 'link',
+        '#title' => t('delete'),
+        '#href' => 'admin/config/content/mollom/blacklist/delete/' .  base64_encode($entry['text']),
+      );
+      $form['blacklist'][$id] = $row;
+    }
+  }
+
+  $form['entry']['context'] = array(
     '#type' => 'select',
-    '#options' => array(
-      'exact' => t('Exact'),
-      'contains' => t('Contains'),
-    ),
-    '#default_value' => 'exact',
+    '#options' => $contexts,
+    '#default_value' => 'everything',
     '#required' => TRUE,
   );
   $form['entry']['text'] = array(
     '#type' => 'textfield',
-    '#size' => 30,
+    '#size' => 40,
     '#required' => TRUE,
     '#maxlength' => 64,
   );
   $form['entry']['reason'] = array(
     '#type' => 'select',
-    '#options' => array(
-      'spam' => t('Spam'),
-      'profanity' => t('Profanity'),
-      'unwanted' => t('Unwanted'),
-    ),
+    '#options' => $reasons,
     '#default_value' => 'spam',
     '#required' => TRUE,
   );
-  $form['actions'] = array('#type' => 'container', '#attributes' => array('class' => array('form-actions')));
-  $form['actions']['submit'] = array(
+  $form['entry']['actions'] = array(
+    '#type' => 'container',
+    '#attributes' => array('class' => array('form-actions')),
+    '#tree' => FALSE,
+  );
+  $form['entry']['actions']['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Add'),
   );
@@ -326,11 +349,11 @@ function mollom_admin_blacklist_text_form() {
 /**
  * Form submit handler to save a text string to the Mollom blacklist.
  */
-function mollom_admin_blacklist_text_form_submit($form, &$form_state) {
+function mollom_admin_blacklist_form_submit($form, &$form_state) {
   $result = mollom('mollom.addBlacklistText', $form_state['values']['entry']);
 
   if ($result === TRUE) {
-    drupal_set_message(t('The text has been added to the blacklist.'));
+    drupal_set_message(t('The entry was added to the blacklist.'));
   }
   else {
     drupal_set_message(t('An error occurred upon trying to add the text to the blacklist.'), 'error');
@@ -338,108 +361,32 @@ function mollom_admin_blacklist_text_form_submit($form, &$form_state) {
 }
 
 /**
- * Theme function; theme the text blacklist table so we can integrate the form.
+ * Formats the blacklist form as table to embed the form.
  */
-function theme_mollom_admin_blacklist_text_form($variables) {
+function theme_mollom_admin_blacklist_form($variables) {
   $form = $variables['form'];
   $header = array(
-    t('Match'),
+    t('Context'),
     t('Text'),
     t('Reason'),
-    t('Operations'),
+    '',
   );
-
-  $blacklist = mollom('mollom.listBlacklistText');
-
   $rows = array();
-  if (is_array($blacklist)) {
-    foreach ($blacklist as $entry) {
-      $rows[] = array(
-        check_plain($entry['match']),
-        check_plain($entry['text']),
-        check_plain($entry['reason']),
-        l(t('delete'), 'admin/config/content/mollom/blacklist/delete/text/' . base64_encode($entry['text'])),
-      );
-    }
+
+  foreach (element_children($form['blacklist']) as $id) {
+    $rows[] = array(
+      drupal_render($form['blacklist'][$id]['context']),
+      drupal_render($form['blacklist'][$id]['text']),
+      drupal_render($form['blacklist'][$id]['reason']),
+      drupal_render($form['blacklist'][$id]['actions']),
+    );
   }
 
   $rows[] = array(
-    drupal_render($form['entry']['match']),
+    drupal_render($form['entry']['context']),
     drupal_render($form['entry']['text']),
     drupal_render($form['entry']['reason']),
-    drupal_render($form['actions']),
-  );
-
-  // This table is never empty due to the form.
-  $output  = theme('table', array('header' => $header, 'rows' => $rows));
-  $output .= drupal_render_children($form);
-
-  return $output;
-}
-
-/**
- * Form builder; declares the URL blacklist form.
- */
-function mollom_admin_blacklist_url_form() {
-  $form['#tree'] = TRUE;
-
-  $form['entry']['url'] = array(
-    '#type' => 'textfield',
-    '#size' => 30,
-    '#required' => TRUE,
-    '#field_prefix' => 'http://',
-    '#maxlength' => 64,
-  );
-  $form['actions'] = array('#type' => 'container', '#attributes' => array('class' => array('form-actions')));
-  $form['actions']['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Add'),
-  );
-
-  return $form;
-}
-
-/**
- * Form submit handler to save a URL to the Mollom blacklist.
- */
-function mollom_admin_blacklist_url_form_submit($form, &$form_state) {
-  $result = mollom('mollom.addBlacklistURL', array(
-    'url' => 'http://' . $form_state['values']['entry']['url'],
-  ));
-
-  if ($result === TRUE) {
-    drupal_set_message(t('The URL has been added to the blacklist.'));
-  }
-  else {
-    drupal_set_message(t('An error occurred upon trying to add the URL to the blacklist.'), 'error');
-  }
-}
-
-/**
- * Theme function; theme the URL blacklist table so we can integrate the form.
- */
-function theme_mollom_admin_blacklist_url_form($variables) {
-  $form = $variables['form'];
-  $header = array(
-    t('URL'),
-    t('Operations'),
-  );
-
-  $blacklist = mollom('mollom.listBlacklistURL');
-
-  $rows = array();
-  if (is_array($blacklist)) {
-    foreach ($blacklist as $entry) {
-      $rows[] = array(
-        check_plain($entry['url']),
-        l(t('delete'), 'admin/config/content/mollom/blacklist/delete/url/' . base64_encode($entry['url'])),
-      );
-    }
-  }
-
-  $rows[] = array(
-    drupal_render($form['entry']['url']),
-    drupal_render($form['actions']),
+    drupal_render($form['entry']['actions']),
   );
 
   // This table is never empty due to the form.
@@ -455,13 +402,12 @@ function theme_mollom_admin_blacklist_url_form($variables) {
  * @ingroup forms
  * @see mollom_admin_blacklist_delete_submit()
  */
-function mollom_admin_blacklist_delete($form, &$form_state, $blacklist, $key) {
-  $form['#mollom-blacklist-type'] = $blacklist;
-  $form['#mollom-blacklist-key'] = base64_decode($key);
+function mollom_admin_blacklist_delete($form, &$form_state, $key) {
+  $form['#mollom-blacklist-text'] = base64_decode($key);
 
   return confirm_form(
     $form,
-    t('Are you sure you want to delete %key from the blacklist?', array('%key' => $form['#mollom-blacklist-key'])),
+    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $form['#mollom-blacklist-text'])),
     'admin/config/content/mollom/blacklist',
     t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
@@ -472,15 +418,10 @@ function mollom_admin_blacklist_delete($form, &$form_state, $blacklist, $key) {
  * Form submit handler to delete an entry from the blacklist.
  */
 function mollom_admin_blacklist_delete_submit($form, &$form_state) {
-  if ($form['#mollom-blacklist-type'] == 'text') {
-    $result = mollom('mollom.removeBlacklistText', array('text' => $form['#mollom-blacklist-key']));
-  }
-  else {
-    $result = mollom('mollom.removeBlacklistURL', array('url' => $form['#mollom-blacklist-key']));
-  }
+  $result = mollom('mollom.removeBlacklistText', array('text' => $form['#mollom-blacklist-text']));
 
   if ($result === TRUE) {
-    drupal_set_message(t('The item has been removed from the blacklist.'));
+    drupal_set_message(t('The entry was removed from the blacklist.'));
   }
   else {
     drupal_set_message(t('An error occurred upon trying to remove the item from the blacklist.'), 'error');
