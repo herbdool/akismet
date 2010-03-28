@@ -261,7 +261,7 @@ function mollom_update_6105() {
  *   been removed.
  */
 function mollom_update_6106() {
-  if (db_column_exists('mollom', 'entity')) {
+  if (db_field_exists('mollom', 'entity')) {
     return;
   }
   // Add the 'entity' column.
@@ -332,7 +332,7 @@ function mollom_update_6108() {
  * 'fields' is a reserved keyword in MySQL.
  */
 function mollom_update_6109() {
-  if (db_column_exists('mollom_form', 'fields')) {
+  if (db_field_exists('mollom_form', 'fields')) {
     db_change_field('mollom_form', 'fields', 'enabled_fields', array(
       'type' => 'text',
       'serialize' => TRUE,
