@@ -239,7 +239,7 @@ function mollom_update_6105() {
     $mode = unserialize($row->value);
     if (!empty($mode) && isset($form_list[$form_id])) {
       $info = $form_list[$form_id];
-      $info += module_form_info($form_id, $info['module']);
+      $info += mollom_form_info($form_id, $info['module']);
       $info['enabled_fields'] = ($mode == MOLLOM_MODE_ANALYSIS ? array_keys($info['elements']) : array());
       db_insert('mollom_form')
         ->fields(array(
@@ -398,7 +398,7 @@ function mollom_update_7001() {
  * Add {mollom}.changed column to auto-flush expired entries.
  */
 function mollom_update_7002() {
-  if (!db_column_exists('mollom', 'changed')) {
+  if (!db_field_exists('mollom', 'changed')) {
     db_add_field('mollom', 'changed', array(
       'type' => 'int',
       'not null' => TRUE,
