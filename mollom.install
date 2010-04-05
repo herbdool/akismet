@@ -348,6 +348,7 @@ function mollom_update_6109() {
  * previous versions should be correctly configured, so we just invoke it here.
  */
 function mollom_update_6110() {
+  drupal_load('module', 'mollom');
   _mollom_status(TRUE);
 }
 
