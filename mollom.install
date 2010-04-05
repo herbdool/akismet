@@ -231,7 +231,6 @@ function mollom_update_6105() {
   }
   drupal_load('module', 'mollom');
 
-
   $form_list = mollom_form_list();
   $result = db_query("SELECT name, value FROM {variable} WHERE name LIKE 'mollom_%%' AND name NOT IN ('mollom_servers', 'mollom_fallback', 'mollom_public_key', 'mollom_private_key')");
   foreach ($result as $row) {
@@ -363,7 +362,7 @@ function mollom_update_6111() {
     ->fields(array(
       'enabled_fields' => serialize(array()),
     ))
-    ->condition('mode', MOLLOM_MODE_CAPTCHA)
+    ->condition('mode', 1)
     ->execute();
 }
 
