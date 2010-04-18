@@ -571,8 +571,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * @see MollomWebTestCase->assertSessionID()
    * @see DrupalWebTestCase->drupalPost()
    */
-  protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array()) {
-    $output = parent::drupalPost($path, $edit, $submit, $options, $headers);
+  protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL) {
+    $output = parent::drupalPost($path, $edit, $submit, $options, $headers, $form_html_id);
     $options += array('watchdog' => TRUE);
     $this->assertMollomWatchdogMessages($options['watchdog']);
     return $output;
@@ -1056,7 +1056,7 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
       'th' => "ทั่วประเทศ ประมาณ ๔๐,๐๐๐ แห่ง ชาวไทยนับตั้งแต่ครั้งอดีตมีวิถี ชีวิตผูกพันกับพุทธศาสนาอย่างใกล้ชิด แสดงออกมาเป็น ขนบธรรมเนียมประเพณี",
       'zh' => "螽斯羽，诜诜兮。宜尔子孙，振振兮",
     );
-	
+
     foreach ($strings as $language => $text) {
       $result = mollom('mollom.detectLanguage', array('text' => $text));
       $this->assertEqual($result[0]['language'], $language, t('A language code was specified and they match.'));
@@ -1169,7 +1169,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     ));
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial match was blocked.'));
 
-    // To update the work (i.e. to change the 'match' property), we simply 
+    // To update the work (i.e. to change the 'match' property), we simply
     // overwrite it.
     $result = mollom('mollom.addBlacklistText', array(
       'text' => $term,
@@ -2209,4 +2209,3 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->assertNoData('user', $uid);
   }
 }
-
