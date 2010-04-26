@@ -1157,7 +1157,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   }
 
   // Add the JavaScript to switch to an audio CAPTCHA.
-  drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.js');
+  drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.js', array('scope' => 'footer'));
   drupal_add_css(drupal_get_path('module', 'mollom') . '/mollom.css');
 
   return $element;
