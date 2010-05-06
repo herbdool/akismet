@@ -24,48 +24,7 @@
  * @todo Add error handling.
  */
 function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
-  $output = '';
-
-  // Prepare common request data for both CAPTCHA types.
-  $data = array('author_ip' => ip_address(), 'session_id' => $mollom_session_id);
-  if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on') {
-    $data['ssl'] = TRUE;
-  }
-
-  switch ($type) {
-    case 'audio':
-      $response = mollom('mollom.getAudioCaptcha', $data);
-      if ($response) {
-        $source = url(base_path() . drupal_get_path('module', 'mollom') . '/mollom-captcha-player.swf', array(
-          'query' => array('url' => $response['url']),
-          'external' => TRUE,
-        ));
-        $output = '<object classid="clsid:d27cdb6e-ae6d-11cf-96b8-444553540000" codebase="http://download.macromedia.com/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0" width="110" height="50">';
-        $output .= '<param name="allowFullScreen" value="false" />';
-        $output .= '<param name="movie" value="' . $source . '" />';
-        $output .= '<param name="loop" value="false" />';
-        $output .= '<param name="menu" value="false" />';
-        $output .= '<param name="quality" value="high" />';
-        $output .= '<param name="wmode" value="transparent" />';
-        $output .= '<param name="bgcolor" value="#ffffff" />';
-        $output .= '<embed src="' . $source . '" loop="false" menu="false" quality="high" wmode="transparent" bgcolor="#ffffff" width="110" height="50" align="baseline" allowScriptAccess="sameDomain" allowFullScreen="false" type="application/x-shockwave-flash" pluginspage="http://www.adobe.com/go/getflashplayer_de" />';
-        $output .= '</object>';
-
-        $output = '<span class="mollom-captcha-content">' . $output . '</span>';
-        $output .= ' (<a href="#" class="mollom-image-captcha">' . t('use image CAPTCHA') . '</a>)';
-      }
-      break;
-
-    case 'image':
-      $response = mollom('mollom.getImageCaptcha', $data);
-      if ($response) {
-        $output .= '<img src="' . check_plain(url($response['url'])) . '" alt="Mollom CAPTCHA" />';
-
-        $output = '<a href="http://mollom.com" class="mollom-captcha-content">' . $output . '</a>';
-        $output .= ' (<a href="#" class="mollom-audio-captcha">' . t('play audio CAPTCHA') . '</a>)';
-      }
-      break;
-  }
+  $captcha = mollom_get_captcha($type, array('session_id' => $mollom_session_id));
 
   // Update cached session id in the cached $form_state.
   // We rely on native form caching of Form API to store our Mollom session
@@ -78,19 +37,19 @@ function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
   // id. Therefore, we need to update the session id in the cached $form_state.
   // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
   //   functionality.
-  if (!empty($response['session_id'])) {
+  if (!empty($captcha['response']['session_id'])) {
     if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
       $form_state = $cache->data;
-      $form_state['mollom']['session_id'] = $response['session_id'];
+      $form_state['mollom']['session_id'] = $captcha['response']['session_id'];
       cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
       // After successfully updating the cache, replace the original session id.
-      $mollom_session_id = $response['session_id'];
+      $mollom_session_id = $captcha['response']['session_id'];
     }
   }
 
   // Return new content and new session_id via JSON.
   $data = array(
-    'content' => $output,
+    'content' => $captcha['markup'],
     'session_id' => $mollom_session_id,
   );
   drupal_json_output($data);
@@ -180,4 +139,3 @@ function mollom_report_form_submit($form, &$form_state) {
     $form_state['redirect'] = '<front>';
   }
 }
-
