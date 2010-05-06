@@ -33,15 +33,11 @@ function mollom_admin_form_list() {
     );
   }
 
-  // Add a row to add a form.
-  if (empty($rows)) {
-    $rows[] = array(array('data' => l(t('Add form'), 'admin/config/content/mollom/add'), 'colspan' => 4));
-  }
-
   $build['forms'] = array(
     '#theme' => 'table',
     '#header' => $header,
     '#rows' => $rows,
+    '#empty' => l(t('Add form'), 'admin/config/content/mollom/add'),
   );
 
   return $build;
