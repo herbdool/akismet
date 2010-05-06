@@ -144,10 +144,10 @@ class MollomWebTestCase extends DrupalWebTestCase {
       ->orderBy('w.timestamp', 'ASC');
     foreach ($query->execute() as $row) {
       if ($no_fail_expected ? $row->severity >= WATCHDOG_NOTICE : $row->severity < WATCHDOG_NOTICE) {
-        $this->pass(_dblog_format_message($row), t('Watchdog'));
+        $this->pass(theme_dblog_message(array('event' => $row, 'link' => FALSE)), t('Watchdog'));
       }
       else {
-        $this->fail(_dblog_format_message($row), t('Watchdog'));
+        $this->fail(theme_dblog_message(array('event' => $row, 'link' => FALSE)), t('Watchdog'));
       }
       $this->messages[$row->wid] = $row;
     }
