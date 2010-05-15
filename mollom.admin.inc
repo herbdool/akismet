@@ -147,7 +147,7 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
       if (!empty($mollom_form['elements'])) {
         // Add the text analysis protection mode option.
         $form['mollom']['mode']['#options'][MOLLOM_MODE_ANALYSIS] = t('Text analysis and CAPTCHA backup');
-        $form['mollom']['mode']['#description'] = t('If <em>Text analysis and CAPTCHA backup</em> is selected, the user will not immediately see a CAPTCHA until after the form has been submitted and sent to Mollom for textual analysis.');
+        $form['mollom']['mode']['#description'] = t('If <em>Text analysis and CAPTCHA backup</em> is selected, the user will only see a CAPTCHA until after the form has been submitted and Mollom\'s textual analysis has determined it is unsure about the content.');
 
         // Form elements defined by hook_mollom_form_info() use the
         // 'parent][child' syntax, which Form API also uses internally for

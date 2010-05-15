@@ -1302,7 +1302,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
 
     // Verify that field configuration was properly stored.
     $this->drupalGet('admin/config/content/mollom/manage/mollom_test_form');
-    foreach ($edit_fields as $name => $value) {
+    foreach ($edit as $name => $value) {
       if (strpos($name, 'enabled_fields') === FALSE) {
         // Skip any inputs that are not the fields for analysis checkboxes.
         continue;
