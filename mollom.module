@@ -1114,7 +1114,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     $element['captcha']['#required'] = TRUE;
 
     // Prevent the page cache from storing a form containing a CAPTCHA element.
-    $GLOBALS['conf']['cache'] = CACHE_DISABLED;
+    $GLOBALS['conf']['cache'] = 0;
 
     $data = array();
     if (!empty($form_state['mollom']['response']['session_id'])) {
