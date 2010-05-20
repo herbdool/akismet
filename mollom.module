@@ -1071,9 +1071,9 @@ function mollom_theme() {
  * The 'mollom' form element is stateful. The Mollom session ID that is exchanged
  * between Drupal, the Mollom back-end, and the user allows us to keep track of
  * the form validation state.
- * The session ID is valid for a specific user session and a given $form_id
- * only. We expire it as soon as the form is submitted, to avoid it being
- * replayed.
+ *
+ * The session ID is valid for a given $form_id only. We expire it as soon as
+ * the form is submitted, to avoid it being replayed.
  */
 function mollom_process_mollom($element, &$form_state, $complete_form) {
   // Setup initial Mollom session and form information.
@@ -1129,12 +1129,6 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
       // Assign the session ID returned by Mollom.
       $form_state['mollom']['response']['session_id'] = $captcha['response']['session_id'];
       $element['session_id']['#value'] = $captcha['response']['session_id'];
-
-      // Store the Mollom session id in the user session to force a
-      // session for anonymous users in Drupal 7 and Drupal 6 Pressflow.
-      // @see mollom_exit()
-      // @see mollom_form_submit()
-      $_SESSION['mollom_sessions'][$captcha['response']['session_id']] = REQUEST_TIME;
     }
     // Otherwise, we have a communication or configuration error.
     // @todo Short-cut form processing entirely in this case; see also
@@ -1190,12 +1184,6 @@ function mollom_validate_analysis(&$form, &$form_state) {
   $form['mollom']['session_id']['#value'] = $result['session_id'];
   $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
   $GLOBALS['mollom_form'] = $form['mollom']['#mollom_form'];
-
-  // Store the Mollom session id in the user session to force a
-  // session for anonymous users in Drupal 7 and Drupal 6 Pressflow.
-  // @see mollom_exit()
-  // @see mollom_form_submit()
-  $_SESSION['mollom_sessions'][$result['session_id']] = REQUEST_TIME;
 
   switch ($result['spam']) {
     case MOLLOM_ANALYSIS_HAM:
@@ -1313,36 +1301,9 @@ function mollom_form_submit($form, &$form_state) {
       mollom_data_save($form_state['mollom']['entity'], $data['post_id']);
     }
   }
-  // Flush Mollom session information from database cache and user session.
-  if (!empty($form_state['mollom']['response']['session_id'])) {
-    // @todo This only removes the last known and used session id; collect all
-    //   session ids belonging to this form submissions in $form_state to
-    //   immediately clear all of them here.
-    $session_id = $form_state['mollom']['response']['session_id'];
-    unset($_SESSION['mollom_sessions'][$session_id]);
-  }
   // Remove Mollom session information from form state to account for unforeseen
   // new builds of the form.
   unset($form_state['mollom']);
-}
-
-/**
- * Implements hook_exit().
- */
-function mollom_exit() {
-  // Expire all mollom session IDs as soon as possible.
-  $now = REQUEST_TIME;
-  if (isset($_SESSION['mollom_sessions'])) {
-    foreach ($_SESSION['mollom_sessions'] as $id => $timestamp) {
-      if ($now - $timestamp > 30 * 60) {
-        unset($_SESSION['mollom_sessions'][$id]);
-      }
-    }
-  }
-  // If all sessions were removed, also remove our storage key.
-  if (isset($_SESSION) && empty($_SESSION['mollom_sessions'])) {
-    unset($_SESSION['mollom_sessions']);
-  }
 }
 
 /**
