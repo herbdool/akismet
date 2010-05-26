@@ -705,6 +705,7 @@ function mollom_form_load($form_id) {
   $mollom_form = db_query_range('SELECT * FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchAssoc();
   if ($mollom_form) {
     $mollom_form['enabled_fields'] = unserialize($mollom_form['enabled_fields']);
+    $mollom_form['data'] = unserialize($mollom_form['data']);
 
     // Attach form registry information.
     $mollom_form += mollom_form_info($form_id, $mollom_form['module']);
@@ -1086,6 +1087,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
       'entity' => $element['#mollom_form']['entity'],
       'enabled_fields' => $element['#mollom_form']['enabled_fields'],
       'mapping' => $element['#mollom_form']['mapping'],
+      'data' => $element['#mollom_form']['data'],
       'response' => array(
         'session_id' => '',
       ),
@@ -1184,6 +1186,12 @@ function mollom_validate_analysis(&$form, &$form_state) {
   $form['mollom']['session_id']['#value'] = $result['session_id'];
   $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
   $GLOBALS['mollom_form'] = $form['mollom']['#mollom_form'];
+
+  // Check the profanity threshold of the content.
+  if (!empty($form_state['mollom']['data']['profanity']) && $result['profanity'] >= 0.5) {
+    form_set_error('mollom', t('Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.'));
+    watchdog('mollom', 'Profanity: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
+  }
 
   switch ($result['spam']) {
     case MOLLOM_ANALYSIS_HAM:

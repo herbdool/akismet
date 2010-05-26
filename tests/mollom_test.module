@@ -53,6 +53,7 @@ function mollom_test_check_content($data) {
   // unsure as response.
   $spam = FALSE;
   $ham = FALSE;
+  
   foreach (array('post_title', 'post_body') as $key) {
     if (!isset($data[$key])) {
       continue;
@@ -69,6 +70,12 @@ function mollom_test_check_content($data) {
     elseif (strpos($data[$key], 'unsure') !== FALSE) {
       $spam = TRUE;
       $ham = TRUE;
+    }
+    
+    // If the message contains 'Joomla', give it a profanity score of 0.8.
+    $profanity = 0.0;
+    if (strpos($data[$key], 'Joomla') !== FALSE) {
+      $profanity = 0.8;
     }
   }
   if ($spam && $ham) {
@@ -93,6 +100,7 @@ function mollom_test_check_content($data) {
     'session_id' => !empty($data['session_id']) ? $data['session_id'] : session_id(),
     'spam' => $response,
     'quality' => $quality,
+    'profanity' => $profanity,
   );
 }
 
@@ -280,4 +288,3 @@ function mollom_test_form_submit($form, &$form_state) {
   drupal_set_message('Successful form submission.');
   drupal_set_message('<pre>' . var_export($form_state['values'], TRUE) . '</pre>');
 }
-

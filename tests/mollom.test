@@ -61,6 +61,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
   protected $unsure_message = "To complete this form, please complete the word verification below.";
 
   /**
+   * The text the user should see if the textual analysis determined that there
+   * was profane content.
+   */
+  protected $profanity_message = "Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.";
+
+  /**
    * The public key used during testing.
    */
   protected $public_key = '';
@@ -261,8 +267,11 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   The Mollom protection mode for the form.
    * @param $fields
    *   (optional) A list of form elements to enable for text analysis.
+   * @param $edit
+   *   (optional) An array of POST data to pass through to drupalPost() when
+   *   configuring the form's protection.
    */
-  protected function setProtection($form_id, $mode = MOLLOM_MODE_ANALYSIS, $fields = NULL) {
+  protected function setProtection($form_id, $mode = MOLLOM_MODE_ANALYSIS, $fields = NULL, $edit = array()) {
     // Always start from overview page, also to make debugging easier.
     $this->drupalGet('admin/config/content/mollom');
     // Determine whether the form is already protected.
@@ -270,10 +279,10 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Add a new form.
     if (!$exists) {
       $this->clickLink(t('Add form'));
-      $edit = array(
+      $add_form_edit = array(
         'mollom[form_id]' => $form_id,
       );
-      $this->drupalPost(NULL, $edit, t('Next'));
+      $this->drupalPost(NULL, $add_form_edit, t('Next'));
     }
     // Edit an existing form.
     else {
@@ -281,32 +290,25 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $this->drupalGet('admin/config/content/mollom/manage/' . $form_id);
     }
 
-    $edit = array(
+    $edit += array(
       'mollom[mode]' => $mode,
     );
 
-    // Explicitly enable the passed fields, if $fields were passed.
-    if (isset($fields)) {
-      foreach ($fields as $field) {
-        $edit['mollom[enabled_fields][' . rawurlencode($field) . ']'] = TRUE;
-      }
-    }
+    // Process the enabled fields.
     $form_list = mollom_form_list();
     $form_info = mollom_form_info($form_id, $form_list[$form_id]['module']);
     foreach (array_keys($form_info['elements']) as $field) {
-      // Due to SimpleTest's form handling of checkboxes, we need to disable all
-      // remaining checkboxes manually.
-      if (isset($fields)) {
-        if (!isset($edit[$field])) {
-          $edit['mollom[enabled_fields][' . rawurlencode($field) . ']'] = FALSE;
-        }
-      }
-      // If no $fields were passed, enable all elements exposed by the
-      // implementation.
-      else {
+      if (!isset($fields) || in_array($field, $fields)) {
+        // If the user specified all fields by default or to include this
+        // field, set its checkbox value to TRUE.
         $edit['mollom[enabled_fields][' . rawurlencode($field) . ']'] = TRUE;
       }
+      else {
+        // Otherwise set the field's checkbox value to FALSE.
+        $edit['mollom[enabled_fields][' . rawurlencode($field) . ']'] = FALSE;
+      }
     }
+
     $this->drupalPost(NULL, $edit, t('Save'));
     if (!$exists) {
       $this->assertText(t('The form protection has been added.'));
@@ -803,7 +805,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
 class MollomAccessTestCase extends MollomWebTestCase {
   public static function getInfo() {
     return array(
-      'name' => 'Mollom access checking',
+      'name' => 'Access checking',
       'description' => 'Confirm that there is a working key pair and that this status is correctly indicated on the module settings page for appropriate users.',
       'group' => 'Mollom',
     );
@@ -1231,25 +1233,58 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, array(), t('Delete'));
     $this->assertEqual($this->getUrl(), url('admin/config/content/mollom/blacklist', array('absolute' => TRUE)), t('Correct page redirection.'));
     $this->assertNoText($text, 'Text blacklist removed.');
+  }
+}
 
-    // Add an URL to the text blacklist.
-    $domain = drupal_strtolower($this->randomName() . '.com');
-    $edit = array(
-      'entry[context]' => 'links',
-      'entry[text]' => $domain,
+/**
+ * Tests Mollom form profanity filtering functionality.
+ */
+class MollomProfanityTestCase extends MollomWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Profanity filtering',
+      'description' => 'Verify that forms can be properly protected and unprotected.',
+      'group' => 'Mollom',
     );
-    $this->drupalPost(NULL, $edit, t('Add'));
-    $this->assertText(t('The entry was added to the blacklist.'));
-    $this->assertText($domain);
+  }
 
-    // Remove the URL from the text blacklist.
-    $delete_url = 'admin/config/content/mollom/blacklist/delete/' . base64_encode($domain);
-    $this->assertLinkByHref(url($delete_url));
-    $this->drupalGet($delete_url);
-    $this->drupalPost(NULL, array(), t('Delete'));
-    $this->assertEqual($this->getUrl(), url('admin/config/content/mollom/blacklist', array('absolute' => TRUE)), t('Correct page redirection.'));
-    $this->assertText(t('The entry was removed from the blacklist.'));
-    $this->assertNoText($domain, 'URL blacklist removed.');
+  function setUp() {
+    parent::setUp('mollom_test');
+    // Re-route Mollom communication to this testing site.
+    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+
+    $this->drupalLogin($this->admin_user);
+  }
+
+  /**
+   * Test the different levels of profanity filtering. With our test Mollom
+   * server, the profanity keyword is 'Joomla'.
+   */
+  function testProfanityFiltering() {
+    // Protect Mollom test form but do not enable the profanity filter.
+    $config_edit = array('mollom[data][profanity]' => 0);
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, array('title', 'body'), $config_edit);
+    $this->drupalLogout();
+
+    // Assert that the profanity filter is disabled.
+    $post_edit = array(
+      'title' => 'Joomla lover unite!',
+      'body' => 'This is a post just for Joomla lovers. If you love Joomla, this is the content for you!',
+    );
+    $this->drupalPost('mollom-test/form', $post_edit, 'Submit');
+    $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
+    $this->assertNoText($this->profanity_message);
+
+    // Enable the profanity filter setting for this form.
+    $this->drupalLogin($this->admin_user);
+    $config_edit['mollom[data][profanity]'] = 1;
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, array('title', 'body'), $config_edit);
+    $this->drupalLogout();
+
+    // Assert that the profanity filter now blocks this content.
+    $this->drupalPost('mollom-test/form', $post_edit, 'Submit');
+    $this->assertNoText('Successful form submission.');
+    $this->assertText($this->profanity_message);
   }
 }
 

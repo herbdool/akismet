@@ -131,6 +131,12 @@ function mollom_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      'data' => array(
+        'description' => "Serialized data containing the form's Mollom options.",
+        'type' => 'text',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
     ),
     'primary key' => array('form_id'),
   );
@@ -403,6 +409,32 @@ function mollom_update_7002() {
       'type' => 'int',
       'not null' => TRUE,
       'default' => 0,
+    ));
+  }
+}
+
+/**
+ * Add {mollom}.data to store the individual form configuration.
+ */
+function mollom_update_7003() {
+  //@todo Migrate {mollom}.enabled_fields to this data.
+  if (!db_field_exists('mollom_form', 'data')) {
+    // First add the {mollom_form}.data as a nullable field.
+    db_add_field('mollom_form', 'data', array(
+      'type' => 'text',
+      'serialized' => TRUE,
+    ));
+    // Update {mollom_form}.data to equal an empty serialized array.
+    db_update('mollom_form')
+      ->fields(array(
+        'data' => serialize(array()),
+      ))
+      ->execute();
+    // Change the {mollom_form}.data field to not allow nullable values.
+    db_change_field('mollom_form', 'data', 'data', array(
+      'type' => 'text',
+      'not null' => TRUE,
+      'serialized' => TRUE,
     ));
   }
 }

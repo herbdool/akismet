@@ -137,11 +137,25 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
       );
       $form['mollom']['mode'] = array(
         '#type' => 'select',
-        '#title' => t('Protection mode'),
+        '#title' => t('Spam blocking'),
         '#options' => array(
           MOLLOM_MODE_CAPTCHA => t('CAPTCHA only'),
         ),
         '#default_value' => $mollom_form['mode'],
+      );
+
+      // Expose any individual form options from $mollom_form['data'].
+      $form['mollom']['data']['#tree'] = TRUE;
+      $form['mollom']['data']['profanity'] = array(
+        '#type' => 'radios',
+        '#title' => t('Profanity blocking (beta)'),
+        '#options' => array(t('Disabled'), t('Enabled')),
+        '#default_value' => isset($mollom_form['data']['profanity']) ? $mollom_form['data']['profanity'] : 0,
+        '#states' => array(
+          'visible' => array(
+            'select[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
+          ),
+        ),
       );
 
       if (!empty($mollom_form['elements'])) {
@@ -171,7 +185,7 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         }
         $form['mollom']['enabled_fields'] = array(
           '#type' => 'checkboxes',
-          '#title' => t('Fields to analyze'),
+          '#title' => t('Fields to analyze for spam or profanity'),
           '#options' => $elements,
           '#default_value' => $enabled_fields,
           '#required' => $mollom_form['mode'] == MOLLOM_MODE_ANALYSIS,
