@@ -469,17 +469,11 @@ function mollom_admin_settings($form, &$form_state) {
   // When a user visits the Mollom administration page, automatically verify the
   // keys and output any error messages.
   if (empty($form_state['input'])) {
-    $status = _mollom_status(TRUE);
+    $status = _mollom_status();
     if ($status === TRUE) {
       // Output a positive status message, since users keep on asking whether
       // Mollom should work or not.
       drupal_set_message(t('We contacted the Mollom servers to verify your keys: the Mollom services are operating correctly. We are now blocking spam.'));
-    }
-    elseif ($status['keys valid'] === NETWORK_ERROR) {
-      drupal_set_message(t('We tried to contact the Mollom servers but we encountered a network error. Please make sure that your web server can make outgoing HTTP requests.'), 'error');
-    }
-    elseif ($status['keys valid'] === MOLLOM_ERROR) {
-      drupal_set_message(t('We contacted the Mollom servers to verify your keys: your keys do not exist or are no longer valid. Please visit the <em>Manage sites</em> page on the Mollom website again: <a href="@mollom-user">@mollom-user</a>.', array('@mollom-user' => 'http://mollom.com/user')), 'error');
     }
   }
 
@@ -531,8 +525,15 @@ function mollom_admin_settings($form, &$form_state) {
     '#description' => t('Displays a link to the recommended <a href="@privacy-policy-url">privacy policy on mollom.com</a> on all forms that are protected via <a href="@help-url">textual analysis</a>. When disabling this option, you are required to inform visitors about data privacy through other means, as stated in the <a href="@terms-of-service-url">terms of service</a> applying to your subscription.', array(
       '@privacy-policy-url' => 'http://mollom.com/web-service-privacy-policy',
       '@help-url' => url('admin/help/mollom'),
-      '@terms-of-service-url' => 'http://mollom.com/terms-of-service',
-    )),
+      '@terms-of-service-url' => 'http://mollom.com/terms-of-service')),
+  );
+
+  $form['mollom_developer_mode'] = array(
+    '#type' => 'checkbox',
+    '#title' => t("Activate developer mode"),
+    '#return_value' => 1,
+    '#default_value' => variable_get('mollom_developer_mode', 0),
+    '#description' => t("Allows Mollom to be tested. When developer mode is activated, you can type 'ham', 'unsure' or 'spam' in the post body of a Mollom protected form to trigger the corresponding Mollom behavior. When enabling this option, Mollom stops working correctly so it should never be used in production environments."),
   );
 
   return system_settings_form($form);
