@@ -319,7 +319,7 @@ function mollom_admin_blacklist_form($form, &$form_state) {
   $contexts = array(
     'everything' => t('All fields'),
     'links' => t('Links'),
-    'author' => t('Author'),
+    'author' => t('Author name'),
   );
   $reasons = array(
     'spam' => t('Spam'),
