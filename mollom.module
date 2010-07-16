@@ -1314,7 +1314,7 @@ function mollom_validate_captcha(&$form, &$form_state) {
     // Empty the CAPTCHA field value, since the user has to re-enter a new one.
     $form['mollom']['captcha']['#value'] = '';
 
-    form_set_error('mollom][captcha', t('The CAPTCHA was not completed correctly. Please complete this new CAPTCHA and try again.'));
+    form_set_error('mollom][captcha', t('The word verification was not completed correctly. Please complete this new word verification and try again.'));
     watchdog('mollom', 'Incorrect CAPTCHA: <pre>@data<pre>', array('@data' => print_r($form_state['values'], TRUE)));
   }
 }
@@ -1636,16 +1636,16 @@ function mollom_get_captcha($type, array $data = array()) {
         $output .= '</object>';
 
         $output = '<span class="mollom-captcha-content mollom-audio-captcha">' . $output . '</span>';
-        $output .= ' (<a href="#" class="mollom-switch-captcha mollom-image-captcha">' . t('use image CAPTCHA') . '</a>)';
+        $output .= ' (<a href="#" class="mollom-switch-captcha mollom-image-captcha">' . t('verify using image') . '</a>)';
       }
       break;
 
     case 'image':
       $response = mollom('mollom.getImageCaptcha', $data);
       if ($response) {
-        $captcha = theme('image', array('path' => url($response['url']), 'alt' => t('Mollom CAPTCHA'), 'getsize' => FALSE));
+        $captcha = theme('image', array('path' => url($response['url']), 'alt' => t('Type the characters you see in this picture.'), 'getsize' => FALSE));
         $output = '<span class="mollom-captcha-content mollom-image-captcha">' . $captcha . '</span>';
-        $output .= ' (<a href="#" class="mollom-switch-captcha mollom-audio-captcha">' . t('play audio CAPTCHA') . '</a>)';
+        $output .= ' (<a href="#" class="mollom-switch-captcha mollom-audio-captcha">' . t('verify using audio') . '</a>)';
       }
       break;
   }
