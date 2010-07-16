@@ -525,15 +525,15 @@ function mollom_admin_settings($form, &$form_state) {
     '#description' => t('Displays a link to the recommended <a href="@privacy-policy-url">privacy policy on mollom.com</a> on all forms that are protected via <a href="@help-url">textual analysis</a>. When disabling this option, you are required to inform visitors about data privacy through other means, as stated in the <a href="@terms-of-service-url">terms of service</a> applying to your subscription.', array(
       '@privacy-policy-url' => 'http://mollom.com/web-service-privacy-policy',
       '@help-url' => url('admin/help/mollom'),
-      '@terms-of-service-url' => 'http://mollom.com/terms-of-service')),
+      '@terms-of-service-url' => 'http://mollom.com/terms-of-service',
+    )),
   );
 
-  $form['mollom_developer_mode'] = array(
+  $form['mollom_testing_mode'] = array(
     '#type' => 'checkbox',
-    '#title' => t("Activate developer mode"),
-    '#return_value' => 1,
-    '#default_value' => variable_get('mollom_developer_mode', 0),
-    '#description' => t("Allows Mollom to be tested. When developer mode is activated, you can type 'ham', 'unsure' or 'spam' in the post body of a Mollom protected form to trigger the corresponding Mollom behavior. When enabling this option, Mollom stops working correctly so it should never be used in production environments."),
+    '#title' => t('Enable testing mode'),
+    '#default_value' => variable_get('mollom_testing_mode', 0),
+    '#description' => t('Submitting "ham", "unsure", or "spam" on a protected form will trigger the corresponding behavior, and similarly, word verifications will only respond to "correct" and "incorrect", instead of the actual characters asked for. This option should be disabled in production environments.'),
   );
 
   return system_settings_form($form);

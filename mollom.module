@@ -319,7 +319,7 @@ function mollom_init() {
       }
     }
     else {
-      if (variable_get('mollom_developer_mode', 0) == 1) {
+      if (variable_get('mollom_testing_mode', 0) == 1) {
         drupal_set_message(t('Mollom developer mode is still enabled. Visit the <a href="@settings-url">Mollom settings page</a> to disable developer mode.', array('@settings-url' => url('admin/config/content/mollom/settings'))), 'warning');
       }
     }
@@ -1364,13 +1364,13 @@ function mollom($method, $data = array()) {
   // Initialize refresh variable.
   $refresh = FALSE;
 
-  // Retrieve the list of Mollom servers from the database.
-  $servers = variable_get('mollom_servers', array());
-
   // Enable testing mode.
-  if (variable_get('mollom_developer_mode', 0) == 1) {
+  if (variable_get('mollom_testing_mode', 0)) {
     $data['testing'] = TRUE;
   }
+
+  // Retrieve the list of Mollom servers from the database.
+  $servers = variable_get('mollom_servers', array());
 
   if (empty($servers)) {
     // Retrieve a new list of servers.
