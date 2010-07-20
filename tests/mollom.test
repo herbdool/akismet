@@ -110,7 +110,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     else {
       $modules = func_get_args();
       $modules[] = 'dblog';
-      call_user_func_array(array($this, 'parent::setUp'), $modules);
+      parent::setUp($modules);
     }
 
     // If not explicitly disabled by a test, setup and validate testing keys.
@@ -1877,7 +1877,7 @@ class MollomResellerTestCase extends MollomWebTestCase {
         // Verify that the existing information did not change (partial updates).
         $this->assertEqual($details['status'], 0, t('The original information is correctly retrieved from Mollom.'));
         $this->assertEqual($details['testing'], 1, t('The original information is correctly retrieved from Mollom.'));
-	
+
         // Delete the test site:
         mollom('mollom.deleteSite', array('client_key' => $site));
       }
