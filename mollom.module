@@ -1279,10 +1279,15 @@ function mollom_validate_captcha(&$form, &$form_state) {
   }
 
   // Check the CAPTCHA result.
+  // Next to the Mollom session id and captcha result, the Mollom back-end also
+  // takes into account the author's IP and local user id (if registered). Any
+  // other values are ignored.
+  $data = mollom_form_get_values($form_state['values'], $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
   $result = mollom('mollom.checkCaptcha', array(
     'session_id' => $form_state['mollom']['response']['session_id'],
     'captcha_result' => $form_state['values']['mollom']['captcha'],
-    'author_ip' => ip_address(),
+    'author_ip' => $data['author_ip'],
+    'author_id' => isset($data['author_id']) ? $data['author_id'] : NULL,
   ));
 
   // Invoke fallback behavior upon a server error; communication errors are
