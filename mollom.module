@@ -569,15 +569,10 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
         }
       }
       // Determine the weight for the CAPTCHA.
-      $weight = 999;
-      if (isset($form['actions'])) {
-        if (isset($form['actions']['#weight'])) {
-          $weight = $form['actions']['#weight'] - 1 / 10;
-        }
-        else {
-          $form['actions']['#weight'] = 100;
-          $weight = 99;
-        }
+      // #type 'actions' defaults to 100.
+      $weight = 99;
+      if (isset($form['actions']['#weight'])) {
+        $weight = $form['actions']['#weight'] - 1 / 10;
       }
       // Add Mollom form widget.
       $form['mollom'] = array(
