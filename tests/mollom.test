@@ -96,7 +96,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $modules = func_get_args();
       $modules[] = 'mollom';
       $modules[] = 'dblog';
-      call_user_func_array(array($this, 'parent::setUp'), $modules);
+      parent::setUp($modules);
 
       $this->admin_user = $this->drupalCreateUser(array(
         'administer mollom',
