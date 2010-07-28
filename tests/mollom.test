@@ -113,6 +113,11 @@ class MollomWebTestCase extends DrupalWebTestCase {
       parent::setUp($modules);
     }
 
+    // D7's new default theme Bartik is bogus in various locations, which leads
+    // to failing tests.
+    // @todo Remove this override.
+    variable_set('theme_default', 'garland');
+
     // If not explicitly disabled by a test, setup and validate testing keys.
     if (empty($this->disableDefaultSetup)) {
       $this->setKeys();
@@ -785,8 +790,6 @@ class MollomResponseTestCase extends MollomWebTestCase {
 
   /**
    * Tests mollom.getImageCaptcha().
-   *
-   * @todo Add further getImageCaptcha() response assertions.
    */
   function testGetImageCaptcha() {
     // Ensure we get no SSL URL by default.
@@ -1994,7 +1997,7 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Make comment preview optional.
     $edit = array(
-      'comment_preview' => 0,
+      'comment_preview' => DRUPAL_OPTIONAL,
     );
     $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
 
