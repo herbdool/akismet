@@ -373,8 +373,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   protected function assertCaptchaField() {
     $this->assertFieldByXPath('//input[@type="text"][@name="mollom[captcha]"]', '', 'CAPTCHA field found.');
-    $image = $this->xpath('//img[@alt="Mollom CAPTCHA"]');
-    $this->assert(!empty($image), 'CAPTCHA image found.', 'Mollom');
+    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t('Type the characters you see in this picture.')));
+    $this->assert(!empty($image), 'CAPTCHA image found.');
   }
 
   /**
@@ -382,8 +382,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   protected function assertNoCaptchaField() {
     $this->assertNoFieldByXPath('//input[@type="text"][@name="mollom[captcha]"]', '', 'CAPTCHA field not found.');
-    $image = $this->xpath('//img[@alt="Mollom CAPTCHA"]');
-    $this->assert(empty($image), 'CAPTCHA image not found.', 'Mollom');
+    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t('Type the characters you see in this picture.')));
+    $this->assert(empty($image), 'CAPTCHA image not found.');
   }
 
   /**
