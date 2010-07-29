@@ -547,12 +547,23 @@ class MollomWebTestCase extends DrupalWebTestCase {
   /**
    * Retrieve submitted XML-RPC values from testing server implementation.
    *
-   * @see mollom_test.module
+   * @param $method
+   *   (optional) The XML-RPC method name to retrieve submitted values from.
+   *   Defaults to 'mollom.checkContent'.
+   *
+   * @see mollom_test_xmlrpc()
    */
-  protected function getServerRecord() {
-    $storage = variable_get('mollom_test_check_content', array());
+  protected function getServerRecord($method = 'mollom.checkContent') {
+    // Map the XML-RPC method name to the corresponding function callback name.
+    drupal_load('module', 'mollom_test');
+    $method_function_map = mollom_test_xmlrpc();
+    $function = $method_function_map[$method];
+
+    // Retrieve last recorded values.
+    $storage = variable_get($function, array());
     $return = array_shift($storage);
-    variable_set('mollom_test_check_content', $storage);
+    variable_set($function, $storage);
+
     return $return;
   }
 
@@ -808,6 +819,29 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = mollom('mollom.getImageCaptcha', $data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(strpos($result['url'], 'https://') === 0, t('CAPTCHA URL uses HTTPS protocol.'));
+  }
+
+  /**
+   * Tests mollom.checkCaptcha().
+   */
+  function testCheckCaptcha() {
+    // Ensure we can send an 'author_id'.
+    // Verifying no severe watchdog messages is sufficient, as unsupported
+    // parameters would trigger a XML-RPC error.
+    $uid = rand();
+    $data = array(
+      'author_ip' => ip_address(),
+      'author_id' => $uid,
+    );
+    $result = mollom('mollom.getImageCaptcha', $data);
+    $this->assertMollomWatchdogMessages();
+
+    $data += array(
+      'session_id' => $result['session_id'],
+      'captcha_result' => 'correct',
+    );
+    $result = mollom('mollom.checkCaptcha', $data);
+    $this->assertMollomWatchdogMessages();
   }
 }
 
@@ -2019,9 +2053,6 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->unsure_message);
-    $this->PostCorrectCaptcha(NULL, array(), t('Save'));
-    $comment = db_query('SELECT * FROM {comment} WHERE subject = :subject', array(':subject' => $edit['subject']))->fetchObject();
-    $this->assertTrue($comment, t('Comment exists in database.'));
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
@@ -2029,6 +2060,14 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->_assertEqual('post_body', $data['post_body'], $edit['comment_body[und][0][value]']);
     $this->_assertEqual('author_name', $data['author_name'], $this->web_user->name);
     $this->_assertEqual('author_mail', $data['author_mail'], $this->web_user->mail);
+    $this->_assertEqual('author_id', $data['author_id'], $this->web_user->uid);
+
+    $this->PostCorrectCaptcha(NULL, array(), t('Save'));
+    $comment = db_query('SELECT * FROM {comment} WHERE subject = :subject', array(':subject' => $edit['subject']))->fetchObject();
+    $this->assertTrue($comment, t('Comment exists in database.'));
+
+    // Verify that submitted data equals post data.
+    $data = $this->getServerRecord('mollom.checkCaptcha');
     $this->_assertEqual('author_id', $data['author_id'], $this->web_user->uid);
 
     // Allow anonymous users to post comments without approval.
@@ -2060,9 +2099,6 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->unsure_message);
-    $this->PostCorrectCaptcha(NULL, array(), t('Save'));
-    $comment = db_query('SELECT * FROM {comment} WHERE subject = :subject', array(':subject' => $edit['subject']))->fetchObject();
-    $this->assertTrue($comment, t('Comment exists in database.'));
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
@@ -2072,6 +2108,14 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->_assertEqual('author_mail', $data['author_mail'], $edit['mail']);
     $this->_assertEqual('author_url', $data['author_url'], $edit['homepage']);
     $this->assertFalse(isset($data['author_id']), t('author_id: Undefined.'));
+
+    $this->PostCorrectCaptcha(NULL, array(), t('Save'));
+    $comment = db_query('SELECT * FROM {comment} WHERE subject = :subject', array(':subject' => $edit['subject']))->fetchObject();
+    $this->assertTrue($comment, t('Comment exists in database.'));
+
+    // Verify that submitted data equals post data.
+    $data = $this->getServerRecord('mollom.checkCaptcha');
+    $this->_assertEqual('author_id', $data['author_id'], NULL);
 
     // Log in admin user and edit comment containing spam.
     $this->drupalLogin($this->admin_user);
