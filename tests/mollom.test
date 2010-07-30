@@ -218,8 +218,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   is a Mollom session id and, depending on the recorded watchdog messages,
    *   that it either equals the last known session id or the new session id is
    *   used for future comparisons in case of a server redirect.
-   * - The return value of this function is used to invoke assertData(), to
-   *   verify that the proper session id was stored in the database.
+   * - The return value of this function is used to invoke assertMollomData(),
+   *   to verify that the proper session id was stored in the database.
    */
   protected function assertSessionIDInForm() {
     $session_id = $this->getFieldValueByName('mollom[session_id]');
@@ -351,7 +351,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * @param $session_id
    *   (optional) The Mollom session id to assert additionally.
    */
-  protected function assertData($entity, $id, $session_id = NULL) {
+  protected function assertMollomData($entity, $id, $session_id = NULL) {
     $data = mollom_data_load($entity, $id);
     $this->assertTrue($data->session, t('Mollom session data for %entity @id exists: <pre>@data</pre>', array('%entity' => $entity, '@id' => $id, '@data' => var_export($data, TRUE))));
     if (isset($session_id)) {
@@ -363,7 +363,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
   /**
    * Assert that no Mollom session data exists for a certain entity.
    */
-  protected function assertNoData($entity, $id) {
+  protected function assertNoMollomData($entity, $id) {
     $data = mollom_data_load($entity, $id);
     $this->assertFalse($data, t('No Mollom session data exists for %entity @id.', array('%entity' => $entity, '@id' => $id)));
   }
@@ -1685,7 +1685,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertText(t('Your comment has been posted.'));
     $this->assertRaw('<p>spam</p>', t('Spam comment could be posted with correct CAPTCHA.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
-    $this->assertData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, $session_id);
   }
 
   /**
@@ -1721,7 +1721,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha(NULL, array(), t('Save'));
     $this->assertRaw('<p>ham</p>', t('A comment that is known to be ham appears on the screen after it is submitted.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'ham'))->fetchField();
-    $this->assertData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, $session_id);
 
     // Try to save a new 'spam' comment; it should be rejected, with no CAPTCHA
     // appearing on the page.
@@ -1749,7 +1749,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertRaw('<p>ham</p>', t('A comment that is known to be ham appears on the screen after it is submitted.'));
     $this->assertCommentCount($this->node->nid, $original_number_of_comments + 1);
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'ham'))->fetchField();
-    $this->assertData('comment', $cid);
+    $this->assertMollomData('comment', $cid);
   }
 
   /**
@@ -1836,12 +1836,13 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     $this->drupalLogout();
 
     // Add some fields to the contact form so that it is active.
+    // Empty 'reply' so as to not have to fiddle with auto-reply messages.
     $this->drupalLogin($this->web_user);
     db_insert('contact')
       ->fields(array(
         'category' => 'test category',
         'recipients' => $this->web_user->mail,
-        'reply' => 'test auto-reply',
+        'reply' => '',
       ))
       ->execute();
 
@@ -1856,10 +1857,51 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     // Submit a 'ham' message.  This should be accepted.
     $this->assertHamSubmit($url, array('subject', 'message'), array(), $button);
     $this->assertText($success);
+    $report_link = $this->parseMollomMailReportLink();
+    $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
+    $this->assertEqual($report_link['entity'], 'session', t('Report link in e-mail uses entity type "session".'));
+    $this->assertMollomData($report_link['entity'], $report_link['session_id']);
 
     // Submit an 'unsure' message.  This should be accepted only after the
     // CAPTCHA has been solved.
     $this->assertUnsureSubmit($url, array('subject', 'message'), array(), $button, $success);
+    $report_link = $this->parseMollomMailReportLink();
+    $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
+    $this->assertEqual($report_link['entity'], 'session', t('Report link in e-mail uses entity type "session".'));
+    $this->assertMollomData($report_link['entity'], $report_link['session_id']);
+
+    // Report the mail to Mollom.
+    $this->drupalGet($report_link['url']);
+    $edit = array(
+      'feedback' => 'spam',
+    );
+    $this->drupalPost(NULL, $edit, t('Delete'));
+    $this->assertText(t('The content was successfully reported as inappropriate.'));
+  }
+
+  /**
+   * Returns data about the report to Mollom link in the last sent mail.
+   *
+   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
+   * sent mail from the internally recorded stack.
+   */
+  function parseMollomMailReportLink() {
+    // Grab the last sent mail.
+    // @see DrupalWebTestCase::assertMail()
+    $captured_emails = variable_get('drupal_test_email_collector', array());
+    $email = array_pop($captured_emails);
+    variable_set('drupal_test_email_collector', $captured_emails);
+
+    $found = FALSE;
+    if (preg_match('@http.+?/mollom/report/([^/]+)/([^\s]+)@', $email['body'], $matches)) {
+      $found = array(
+        'url' => $matches[0],
+        'entity' => $matches[1],
+        'session_id' => $matches[2],
+        'mail' => $email,
+      );
+    }
+    return $found;
   }
 }
 
@@ -2150,7 +2192,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertText('Successful form submission.');
     $mid = $this->getFieldValueByName('mid');
     $this->assertTrue($mid > 0, t('Submission was stored.'));
-    $data = $this->assertData('mollom_test', $mid);
+    $data = $this->assertMollomData('mollom_test', $mid);
 
     // Ensure we were redirected to the form for the stored entry.
     $this->assertFieldByName('body', $edit['body'], t('Existing body value found.'));
@@ -2162,7 +2204,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertCaptchaField();
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
-    $new_data = $this->assertData('mollom_test', $mid);
+    $new_data = $this->assertMollomData('mollom_test', $mid);
 
     // Verify that only session data was updated.
     $this->_assertEqual('entity', $data->entity, $new_data->entity);
@@ -2211,7 +2253,7 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
     $this->comment = db_query('SELECT * FROM {comment} WHERE subject = :comment AND nid = :nid', array(':comment' => $edit['comment_body[und][0][value]'], ':nid' => $this->node->nid))->fetchObject();
     $this->assertTrue($this->comment, t('Comment was found in the database.'));
-    $this->assertData('comment', $this->comment->cid);
+    $this->assertMollomData('comment', $this->comment->cid);
 
     // Log in comment administrator and verify that we can report to Mollom.
     $this->drupalLogin($this->admin_user);
@@ -2227,7 +2269,7 @@ class MollomReportTestCase extends MollomWebTestCase {
 
     // Verify that the comment and Mollom session data has been deleted.
     $this->assertFalse(comment_load($this->comment->cid), t('Comment was deleted.'));
-    $this->assertNoData('comment', $this->comment->cid);
+    $this->assertNoMollomData('comment', $this->comment->cid);
   }
 
   /**
@@ -2252,7 +2294,7 @@ class MollomReportTestCase extends MollomWebTestCase {
       $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
       $this->comments[$num] = db_query('SELECT * FROM {comment} WHERE subject = :subject AND nid = :nid', array(':subject' => $edit['subject'], ':nid' => $this->node->nid))->fetchObject();
       $this->assertTrue($this->comments[$num], t('Comment was found in the database.'));
-      $this->assertData('comment', $this->comments[$num]->cid);
+      $this->assertMollomData('comment', $this->comments[$num]->cid);
     }
 
     // Log in comment administrator and verify that we can mass-report all
@@ -2279,7 +2321,7 @@ class MollomReportTestCase extends MollomWebTestCase {
     // Verify that the comments and Mollom session data has been deleted.
     foreach ($this->comments as $comment) {
       $this->assertFalse(comment_load($comment->cid), t('Comment was deleted.'));
-      $this->assertNoData('comment', $comment->cid);
+      $this->assertNoMollomData('comment', $comment->cid);
     }
   }
 
@@ -2305,7 +2347,7 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
     // Determine new uid.
     $uid = db_query('SELECT uid FROM {users} WHERE name = :name', array(':name' => $edit['name']))->fetchField();
-    $this->assertData('user', $uid);
+    $this->assertMollomData('user', $uid);
 
     // Log in administrator and verify that we can report to Mollom.
     $this->drupalLogin($this->admin_user);
@@ -2318,6 +2360,6 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->assertText(t('The content was successfully reported as inappropriate.'));
 
     // Verify that Mollom session data has been deleted.
-    $this->assertNoData('user', $uid);
+    $this->assertNoMollomData('user', $uid);
   }
 }
