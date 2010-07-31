@@ -1580,16 +1580,22 @@ function mollom_get_statistics($refresh = FALSE) {
 /**
  * Implements hook_field_extra_fields().
  *
- * Allow users to re-order the CAPTCHA field on node forms through the Field UI.
+ * Allow users to re-order Mollom form additions through Field UI.
  */
 function mollom_field_extra_fields() {
   $extras = array();
-  foreach (node_type_get_names() as $type => $name) {
-    if (mollom_form_load($type . '_node_form')) {
-      $extras['node'][$type]['mollom'] = array(
+  $forms = array_flip(db_query('SELECT form_id FROM {mollom_form}')->fetchCol());
+  foreach (mollom_form_list() as $form_id => $info) {
+    if (isset($info['entity']) && isset($forms[$form_id])) {
+      // If the entity type does not implement bundles, then entity_get_info()
+      // assumes a single bundle named after the entity.
+      $entity_type = $info['entity'];
+      $bundle = (isset($info['bundle']) ? $info['bundle'] : $entity_type);
+
+      $extras[$entity_type][$bundle]['form']['mollom'] = array(
         'label' => t('Mollom'),
-        'description' => t('Mollom CAPTCHA'),
-        'weight' => 99999,
+        'description' => t('Mollom CAPTCHA or privacy policy link'),
+        'weight' => 99,
       );
     }
   }
@@ -1705,6 +1711,7 @@ function node_mollom_form_list() {
     $forms[$form_id] = array(
       'title' => t('@name form', array('@name' => $type->name)),
       'entity' => 'node',
+      'bundle' => $type->type,
       'delete form' => 'node_delete_confirm',
     );
   }
@@ -1724,6 +1731,7 @@ function node_mollom_form_info($form_id) {
     // @todo This is incompatible with node access.
     'bypass access' => array('bypass node access', 'edit any ' . $type->type . ' content'),
     'entity' => 'node',
+    'bundle' => $type->type,
     'elements' => array(),
     'mapping' => array(
       'post_id' => 'nid',
