@@ -260,11 +260,6 @@ function _mollom_access($permission = FALSE) {
 /**
  * Menu access callback; Determine access to report to Mollom.
  *
- * The special $entity type "session" may be used for mails and messages, which
- * originate from form submissions protected by Mollom, and can be reported by
- * anyone; $id is expected to be a Mollom session id instead of an entity id
- * then.
- *
  * @param $entity
  *   The entity type of the data to report.
  * @param $id
@@ -398,11 +393,6 @@ function mollom_data_load($entity, $id) {
  * - reputation: The reputation of the author.
  * - languages: An array containing language codes the content might be
  *   written in.
- *
- * The special $entity type "session" may be used for mails and messages, which
- * originate from form submissions protected by Mollom, and can be reported by
- * anyone; $id is expected to be a Mollom session id instead of an entity id
- * then.
  *
  * @param $entity
  *   The entity type of the data to save.
@@ -1691,10 +1681,10 @@ function mollom_mail_alter(&$message) {
  * Add the 'Report as innapropriate' link to an e-mail message.
  */
 function mollom_mail_add_report_link(&$message) {
-  if (!empty($GLOBALS['mollom_response']['session_id'])) {
-    mollom_data_save('session', $GLOBALS['mollom_response']['session_id']);
+  if (isset($GLOBALS['mollom_response']['session_id'])) {
+    mollom_data_save('mail', $message['id']);
     $report_link = t('Report as inappropriate: @link', array(
-      '@link' => url('mollom/report/session/' . $GLOBALS['mollom_response']['session_id'], array('absolute' => TRUE)),
+      '@link' => url('mollom/report/mail/' . $GLOBALS['mollom_response']['session_id'], array('absolute' => TRUE)),
     ));
     $message['body'][] = $report_link;
   }
@@ -1964,7 +1954,6 @@ function contact_mollom_form_info($form_id) {
         'title' => t('Site-wide contact form'),
         'mode' => MOLLOM_MODE_ANALYSIS,
         'bypass access' => array('administer site-wide contact form'),
-        'mail ids' => array('contact_page_mail'),
         'elements' => array(
           'subject' => t('Subject'),
           'message' => t('Message'),
@@ -1974,6 +1963,7 @@ function contact_mollom_form_info($form_id) {
           'author_name' => 'name',
           'author_mail' => 'mail',
         ),
+        'mail ids' => array('contact_page_mail', 'contact_page_copy'),
       );
       return $form_info;
 
@@ -1982,7 +1972,6 @@ function contact_mollom_form_info($form_id) {
         'title' => t('User contact form'),
         'mode' => MOLLOM_MODE_ANALYSIS,
         'bypass access' => array('administer users'),
-        'mail ids' => array('contact_user_mail'),
         'elements' => array(
           'subject' => t('Subject'),
           'message' => t('Message'),
@@ -1992,6 +1981,7 @@ function contact_mollom_form_info($form_id) {
           'author_name' => 'name',
           'author_mail' => 'mail',
         ),
+        'mail ids' => array('contact_user_mail', 'contact_user_copy'),
       );
       return $form_info;
   }
