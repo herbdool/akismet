@@ -572,17 +572,12 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
           return;
         }
       }
-      // Determine the weight for the CAPTCHA.
-      // #type 'actions' defaults to 100.
-      $weight = 99;
-      if (isset($form['actions']['#weight'])) {
-        $weight = $form['actions']['#weight'] - 1 / 10;
-      }
       // Add Mollom form widget.
       $form['mollom'] = array(
         '#type' => 'mollom',
         '#mollom_form' => $mollom_form,
-        '#weight' => $weight,
+        // #type 'actions' defaults to 100.
+        '#weight' => (isset($form['actions']['#weight']) ? $form['actions']['#weight'] - 1 : 99),
         '#tree' => TRUE,
       );
       // Enable caching of this form; required for out form validation and
