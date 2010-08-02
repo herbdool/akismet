@@ -155,6 +155,7 @@ function mollom_test_menu() {
 function mollom_test_mollom_form_list() {
   $forms['mollom_test_form'] = array(
     'title' => 'Mollom test form',
+    'entity' => 'mollom_test',
   );
   return $forms;
 }

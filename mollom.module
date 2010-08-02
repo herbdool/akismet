@@ -1601,6 +1601,11 @@ function mollom_field_extra_fields() {
   $extras = array();
   $forms = array_flip(db_query('SELECT form_id FROM {mollom_form}')->fetchCol());
   foreach (mollom_form_list() as $form_id => $info) {
+    // @todo Technically, an 'entity' does not need to be a Entity/Field API
+    //   kind of entity. Ideally of course, developers should use fieldable
+    //   entities, but contributed/custom code may not. It is not clear whether
+    //   registering extra fields for non-existing entities/bundles can break
+    //   anything, so leaving it this way for now.
     if (isset($info['entity']) && isset($forms[$form_id])) {
       // If the entity type does not implement bundles, then entity_get_info()
       // assumes a single bundle named after the entity.
