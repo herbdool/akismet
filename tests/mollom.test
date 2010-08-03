@@ -1393,18 +1393,23 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     // Verify that field configuration was properly stored.
     $this->drupalGet('admin/config/content/mollom/manage/mollom_test_form');
     foreach ($edit as $name => $value) {
-      if (strpos($name, 'enabled_fields') === FALSE) {
-        // Skip any inputs that are not the fields for analysis checkboxes.
+      // Skip any inputs that are not the fields for analysis checkboxes.
+      if (strpos($name, '[enabled_fields]') === FALSE) {
         continue;
       }
       // assertFieldByName() does not work for checkboxes.
       // @see assertFieldChecked()
-      $elements = $this->xpath('//input[@name="' . $name . '"]');
-      if ($value) {
-        $this->assertTrue(isset($elements[0]) && !empty($elements[0]['checked']), t('Field @name is checked', array('@name' => $name)));
+      $elements = $this->xpath('//input[@name=:name]', array(':name' => $name));
+      if (isset($elements[0])) {
+        if ($value) {
+          $this->assertTrue(!empty($elements[0]['checked']), t('Field @name is checked', array('@name' => $name)));
+        }
+        else {
+          $this->assertTrue(empty($elements[0]['checked']), t('Field @name is not checked', array('@name' => $name)));
+        }
       }
       else {
-        $this->assertFalse(isset($elements[0]) && !empty($elements[0]['checked']), t('Field @name is not checked', array('@name' => $name)));
+        $this->fail(t('Field @name not found.', array('@name' => $name)));
       }
     }
 
@@ -1531,19 +1536,17 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
         );
         $this->drupalPost('admin/config/content/mollom/add', $edit, t('Next'));
         $this->assertText($info['title']);
-        if (isset($info['mode'])) {
-          // Verify that CAPTCHA-only forms contain no configurable fields.
-          if ($info['mode'] == MOLLOM_MODE_CAPTCHA) {
-            $this->assertNoText(t('Fields to analyze'));
+        // Verify that forms specifying elements have all possible elements
+        // preselected for textual analysis.
+        if (!empty($info['elements'])) {
+          foreach ($info['elements'] as $field => $label) {
+            $field = rawurlencode($field);
+            $this->assertFieldByName("mollom[enabled_fields][$field]", TRUE);
           }
-          // Verify that forms specifying textual analysis as default mode have
-          // all possible elements preselected.
-          elseif ($info['mode'] == MOLLOM_MODE_ANALYSIS && !empty($info['elements'])) {
-            foreach ($info['elements'] as $field => $label) {
-              $field = rawurlencode($field);
-              $this->assertFieldByName("mollom[enabled_fields][$field]", TRUE);
-            }
-          }
+        }
+        // Verify that CAPTCHA-only forms contain no configurable fields.
+        else {
+          $this->assertNoText(t('Fields to analyze for spam or profanity'));
         }
         $this->drupalPost(NULL, array(), t('Save'));
         $this->assertText(t('The form protection has been added.'));
