@@ -40,7 +40,7 @@ function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
   if (!empty($captcha['response']['session_id'])) {
     if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
       $form_state = $cache->data;
-      $form_state['mollom']['session_id'] = $captcha['response']['session_id'];
+      $form_state['mollom']['response']['session_id'] = $captcha['response']['session_id'];
       cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
       // After successfully updating the cache, replace the original session id.
       $mollom_session_id = $captcha['response']['session_id'];

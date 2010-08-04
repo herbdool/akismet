@@ -102,15 +102,11 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
 
   $form['#tree'] = TRUE;
   $form['actions'] = array(
-    '#type' => 'container',
-    '#attributes' => array('class' => array('form-actions')),
-    '#weight' => 100,
+    '#type' => 'actions',
   );
 
   switch ($form_state['storage']['step']) {
     case 'select':
-      drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.js');
-
       $form['mollom']['form_id'] = array(
         '#type' => 'select',
         '#title' => t('Form'),
@@ -383,8 +379,7 @@ function mollom_admin_blacklist_form($form, &$form_state) {
     '#required' => TRUE,
   );
   $form['entry']['actions'] = array(
-    '#type' => 'container',
-    '#attributes' => array('class' => array('form-actions')),
+    '#type' => 'actions',
     '#tree' => FALSE,
   );
   $form['entry']['actions']['submit'] = array(
@@ -581,3 +576,4 @@ function mollom_reports_page($form, &$form_state) {
 
   return $form;
 }
+

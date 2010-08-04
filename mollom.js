@@ -1,5 +1,4 @@
 // $Id$
-
 (function ($) {
 
 /**
@@ -43,6 +42,9 @@ function getMollomCaptcha() {
   // Retrieve a CAPTCHA:
   $.getJSON(Drupal.settings.basePath + 'mollom/captcha/' + newCaptchaType + '/' + formBuildId + '/' + mollomSessionId,
     function (data) {
+      if (!(data && data.content)) {
+        return;
+      }
       // Inject new CAPTCHA.
       $('.mollom-captcha-content', context).parent().html(data.content);
       // Update session id.

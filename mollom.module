@@ -317,7 +317,7 @@ function mollom_report_access($entity, $id) {
 }
 
 /**
- * Implements hook_menu().
+ * Implements hook_init().
  */
 function mollom_init() {
   // When on an administration page, verify the Mollom keys.
@@ -339,11 +339,12 @@ function mollom_init() {
         drupal_set_message(t('The configured Mollom API keys are invalid. Visit the <a href="@settings-url">Mollom settings page</a> to configure your keys.', array('@settings-url' => url('admin/config/content/mollom/settings'))), 'error');
       }
     }
-    else {
-      if (variable_get('mollom_testing_mode', 0) == 1) {
-        drupal_set_message(t('Mollom developer mode is still enabled. Visit the <a href="@settings-url">Mollom settings page</a> to disable developer mode.', array('@settings-url' => url('admin/config/content/mollom/settings'))), 'warning');
-      }
-    }
+  }
+  if (empty($_POST) && variable_get('mollom_testing_mode', 0) && user_access('administer mollom')) {
+    $message = t('Mollom testing mode is still enabled. Visit the <a href="@settings-url">Mollom settings page</a> to disable developer mode.', array(
+      '@settings-url' => url('admin/config/content/mollom/settings'),
+    ));
+    drupal_set_message($message, 'warning');
   }
 }
 
@@ -479,10 +480,6 @@ function mollom_data_delete_multiple($entity, array $ids) {
  * Helper function to add Mollom feedback options to confirmation forms.
  */
 function mollom_data_delete_form_alter(&$form, &$form_state) {
-  // @todo D7: Fix #weight of actions in confirm_form().
-  if (!isset($form['actions']['#weight'])) {
-    $form['actions']['#weight'] = 100;
-  }
   if (!isset($form['description']['#weight'])) {
     $form['description']['#weight'] = 90;
   }
@@ -603,7 +600,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
         '#weight' => (isset($form['actions']['#weight']) ? $form['actions']['#weight'] - 1 : 99),
         '#tree' => TRUE,
       );
-      // Enable caching of this form; required for out form validation and
+      // Enable caching of this form; required for our form validation and
       // submit handlers.
       $form_state['cache'] = TRUE;
 
@@ -1230,7 +1227,7 @@ function mollom_validate_analysis(&$form, &$form_state) {
     return _mollom_fallback();
   }
 
-  // Assign the session ID returned by Mollom.
+  // Store the response returned by Mollom.
   $form_state['mollom']['response'] = $result;
   $form['mollom']['session_id']['#value'] = $result['session_id'];
   $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
