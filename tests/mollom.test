@@ -700,11 +700,24 @@ class MollomInstallationTestCase extends MollomWebTestCase {
    *
    * We walk through a regular installation of the Mollom module instead of using
    * setUp() to ensure that everything works as expected.
+   *
+   * Note: Partial error messages tested here; hence, no t().
    */
   function testInstallationProcess() {
-    // Install the Mollom module.
+    $admin_message = t('Visit the <a href="@settings-url">Mollom settings page</a> to configure your keys.', array(
+      '@settings-url' => url('admin/config/content/mollom/settings'),
+    ));
     $this->drupalLogin($this->admin_user);
+
+    // Ensure there is no requirements error by default.
+    $this->drupalGet('admin/reports/status');
+    $this->clickLink('run cron manually');
+
+    // Install the Mollom module.
     $this->drupalPost('admin/modules', array('modules[Other][mollom][enable]' => TRUE), t('Save configuration'));
+    $this->assertRaw(t('The Mollom API keys are not configured yet. !admin-message', array(
+      '!admin-message' => $admin_message,
+    )), t('Post installation warning found.'));
 
     // Verify that forms can be submitted without valid Mollom module configuration.
     $node = $this->drupalCreateNode(array('type' => 'article'));
@@ -726,23 +739,47 @@ class MollomInstallationTestCase extends MollomWebTestCase {
 
     // Verify presence of 'empty keys' error message.
     $this->drupalGet('admin/config/content/mollom');
-    $this->assertText(t('The Mollom API keys are not configured yet.'));
-    $this->assertNoText(t('The configured Mollom API keys are invalid.'));
+    $this->assertText('The Mollom API keys are not configured yet.');
+    $this->assertNoText('The configured Mollom API keys are invalid.');
 
-    // Verify presence of 'incorrect keys' error message.
+    // Verify requirements error about missing API keys.
+    $this->drupalGet('admin/reports/status');
+    $this->assertRaw(t('The Mollom API keys are not configured yet. !admin-message', array(
+      '!admin-message' => $admin_message,
+    )), t('Requirements error found.'));
+
+    // Configure invalid keys.
     $edit = array(
       'mollom_public_key' => 'foo',
       'mollom_private_key' => 'bar',
     );
     $this->drupalPost('admin/config/content/mollom/settings', $edit, t('Save configuration'), array('watchdog' => FALSE));
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText(t('The configured Mollom API keys are invalid.'));
-    $this->assertNoText(t('The Mollom API keys are not configured yet.'));
+    $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
-    // Verify presence of 'network problem' error message.
+    // Verify presence of 'incorrect keys' error message.
+    $this->assertText('The configured Mollom API keys are invalid.');
+    $this->assertNoText('The Mollom API keys are not configured yet.');
+    $this->assertNoText(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'));
+
+    // Verify requirements error about invalid API keys.
+    $this->drupalGet('admin/reports/status', array('watchdog' => FALSE));
+    $this->assertText('The configured Mollom API keys are invalid.');
+
+    // Ensure unreachable servers.
     variable_set('mollom_servers', array('http://fake-host'));
+
+    // Verify presence of 'network error' message.
     $this->drupalGet('admin/config/content/mollom/settings', array('watchdog' => FALSE));
-    $this->assertText(t('The Mollom servers could not be contacted.'));
+    $this->assertText(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'));
+
+    // Ensure unreachable servers.
+    variable_set('mollom_servers', array('http://fake-host'));
+
+    // Verify requirements error about network error.
+    $this->drupalGet('admin/reports/status', array('watchdog' => FALSE));
+    $this->assertText(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'));
+    $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
     // Verify that valid keys work.
     $this->drupalGet('admin/config/content/mollom/settings', array('watchdog' => FALSE));
@@ -753,11 +790,12 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'));
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText(t('We are now blocking spam.'));
-    $this->assertNoText(t('The configured Mollom API keys are invalid.'));
-    $this->assertNoText(t('The Mollom API keys are not configured yet.'));
+    $this->assertText('We are now blocking spam.');
+    $this->assertNoText('The Mollom API keys are not configured yet.');
+    $this->assertNoText('The configured Mollom API keys are invalid.');
 
     // Verify presence of testing mode warning.
+    $this->drupalGet('admin/config/content/mollom/blacklist');
     $this->assertText('Mollom testing mode is still enabled.');
   }
 }
@@ -883,7 +921,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => FALSE));
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText(t('The configured Mollom API keys are invalid.'));
+    $this->assertText('The configured Mollom API keys are invalid.');
   }
 
   /**

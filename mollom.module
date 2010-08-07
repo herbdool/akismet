@@ -157,6 +157,24 @@ function mollom_help($path, $arg) {
 }
 
 /**
+ * Implements hook_init().
+ */
+function mollom_init() {
+  // On all Mollom administration pages, check the module configuration and
+  // display the corresponding requirements error, if invalid.
+  if (empty($_POST) && strpos($_GET['q'], 'admin/config/content/mollom') === 0 && user_access('administer mollom')) {
+    // Re-check the status on the settings form only.
+    $status = _mollom_status($_GET['q'] == 'admin/config/content/mollom/settings');
+    if ($status !== TRUE) {
+      // Fetch and display requirements error message, without re-checking.
+      module_load_install('mollom');
+      $requirements = mollom_requirements('runtime', FALSE);
+      drupal_set_message($requirements['mollom']['description'], 'error');
+    }
+  }
+}
+
+/**
  * Implements hook_menu().
  */
 function mollom_menu() {
@@ -314,38 +332,6 @@ function mollom_report_access($entity, $id) {
   // If we end up here, then the current user is not permitted to report this
   // content.
   return FALSE;
-}
-
-/**
- * Implements hook_init().
- */
-function mollom_init() {
-  // When on an administration page, verify the Mollom keys.
-  if ((arg(0) == 'admin' && arg(1) == 'reports') ||
-      (arg(0) == 'admin' && arg(1) == 'config' && arg(2) == 'content' && arg(3) == 'mollom') &&
-      $_SERVER['REQUEST_METHOD'] == 'GET' &&
-      user_access('administer mollom')) {
-    // Verify that the keys have been configured.
-    $status = _mollom_status(TRUE);
-    if ($status !== TRUE) {
-      // Display the appropriate error message.
-      if (!$status['keys']) {
-        drupal_set_message(t('The Mollom API keys are not configured yet. Visit the <a href="@settings-url">Mollom settings page</a> to configure your keys.', array('@settings-url' => url('admin/config/content/mollom/settings'))), 'error');
-      }
-      elseif ($status['keys valid'] === NETWORK_ERROR) {
-        drupal_set_message(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'), 'error');
-      }
-      elseif ($status['keys valid'] === MOLLOM_ERROR) {
-        drupal_set_message(t('The configured Mollom API keys are invalid. Visit the <a href="@settings-url">Mollom settings page</a> to configure your keys.', array('@settings-url' => url('admin/config/content/mollom/settings'))), 'error');
-      }
-    }
-  }
-  if (empty($_POST) && variable_get('mollom_testing_mode', 0) && user_access('administer mollom')) {
-    $message = t('Mollom testing mode is still enabled. Visit the <a href="@settings-url">Mollom settings page</a> to disable developer mode.', array(
-      '@settings-url' => url('admin/config/content/mollom/settings'),
-    ));
-    drupal_set_message($message, 'warning');
-  }
 }
 
 /**
@@ -576,6 +562,20 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
   $status = _mollom_status();
   if ($status !== TRUE) {
     return;
+  }
+
+  // @todo Show this message on all protected forms, regardless of permissions.
+  if (empty($_POST) && variable_get('mollom_testing_mode', 0)) {
+    $admin_message = '';
+    if (user_access('administer mollom') && $_GET['q'] != 'admin/config/content/mollom/settings') {
+      $admin_message = t('Visit the <a href="@settings-url">Mollom settings page</a> to disable it.', array(
+        '@settings-url' => url('admin/config/content/mollom/settings'),
+      ));
+    }
+    $message = t('Mollom testing mode is still enabled. !admin-message', array(
+      '!admin-message' => $admin_message,
+    ));
+    drupal_set_message($message, 'warning');
   }
 
   // Site administrators don't have their content checked with Mollom.
@@ -1007,7 +1007,7 @@ function _mollom_get_openid($account) {
  *
  * @param $reset
  *   (optional) Boolean whether to reset the stored state and re-check.
- *   Defaults to FALSE.
+ *   Defaults to FALSE. Only re-checked once per request.
  *
  * @return
  *   TRUE if the module is considered operable, or an associative array
@@ -1020,6 +1020,7 @@ function _mollom_get_openid($account) {
 function _mollom_status($reset = FALSE) {
   // Load stored status.
   $status = variable_get('mollom_status', array(
+    'keys' => FALSE,
     'keys valid' => FALSE,
   ));
 
@@ -1031,18 +1032,20 @@ function _mollom_status($reset = FALSE) {
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
     $status['keys valid'] = mollom('mollom.verifyKey');
+  }
+
+  // In case of an error, indicate whether we have a non-empty server list.
+  if ($status['keys valid'] !== TRUE) {
+    $servers = variable_get('mollom_servers', array());
+    $status['servers'] = !empty($servers);
+  }
+
+  // Update stored status upon reset.
+  if ($reset) {
     variable_set('mollom_status', $status);
   }
 
-  if ($status['keys valid'] === TRUE) {
-    return TRUE;
-  }
-
-  // In case of an error, also indicate whether we have a non-empty server list.
-  $servers = variable_get('mollom_servers', array());
-  $status['servers'] = !empty($servers);
-
-  return $status;
+  return ($status['keys valid'] === TRUE ? TRUE : $status);
 }
 
 /**
@@ -1050,6 +1053,10 @@ function _mollom_status($reset = FALSE) {
  */
 function _mollom_fallback() {
   $fallback = variable_get('mollom_fallback', MOLLOM_FALLBACK_BLOCK);
+  // @todo Prevents mollom_admin_settings() from implementing a proper form
+  //   validation. Add !empty($_POST) to this condition + manually invoke from
+  //   mollom_process_form() on GET requests? Or don't call it from mollom()?
+  //   Anything, but just don't mix FAPI logic into XML-RPC logic.
   if ($fallback == MOLLOM_FALLBACK_BLOCK) {
     form_set_error('mollom', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
   }
