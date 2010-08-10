@@ -73,17 +73,17 @@ function mollom_requirements($phase = 'runtime', $check = TRUE) {
  */
 function mollom_schema() {
   $schema['mollom'] = array(
-    'description' => 'Tracks content spam statuses.',
+    'description' => 'Stores Mollom responses for content.',
     'fields' => array(
       'entity' => array(
-        'description' => 'The entity type of the content.',
+        'description' => 'Entity type of the content.',
         'type' => 'varchar',
         'length' => 32,
         'not null' => TRUE,
         'default' => '',
       ),
       'did' => array(
-        'description' => 'Unique data ID of the content.',
+        'description' => 'Unique entity ID of the content.',
         'type' => 'varchar',
         'length' => 32,
         'not null' => TRUE,
@@ -97,27 +97,35 @@ function mollom_schema() {
         'default' => '',
       ),
       'changed' => array(
-        'description' => 'The Unix timestamp when the data was changed.',
+        'description' => 'Unix timestamp when the data was changed.',
         'type' => 'int',
         'not null' => TRUE,
         'default' => 0,
       ),
-      'quality' => array(
-        'description' => "A quality rating assigned to the content to tell whether or not it's spam. Experimental; Mollom might return inconsistent values.",
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
+      // Server response columns are NULL by default, because any default value
+      // would have an unintended meaning. Also, values are stored in individual
+      // columns, so as to be able to join and filter/sort on these values for
+      // improved content moderation.
+      'spam' => array(
+        'description' => 'Text analysis spam check result.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => FALSE,
       ),
-      'reputation' => array(
-        'description' => "The reputation of the author. Experimental; Mollom might return inconsistent values.",
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
+      'quality' => array(
+        'description' => 'Text analysis quality check result.',
+        'type' => 'float',
+        'size' => 'tiny',
+        'not null' => FALSE,
+      ),
+      'profanity' => array(
+        'description' => 'Text analysis profanity check result.',
+        'type' => 'float',
+        'size' => 'tiny',
+        'not null' => FALSE,
       ),
       'languages' => array(
-        'description' => "A space-delimited language codes the content might be written in. Experimental; Mollom might return inconsistent values.",
+        'description' => 'Text analysis language check result.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
@@ -129,40 +137,40 @@ function mollom_schema() {
   );
 
   $schema['mollom_form'] = array(
-    'description' => 'Stores configuration for forms protected by Mollom.',
+    'description' => 'Stores configuration of forms protected by Mollom.',
     'fields' => array(
       'form_id' => array(
-        'description' => 'The $form_id of the form being protected.',
+        'description' => 'The protected form ID.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'mode' => array(
-        'description' => 'The configured protection mode to use for the form.',
+        'description' => 'Protection mode for the form.',
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
         'default' => 0,
       ),
+      'checks' => array(
+        'description' => 'Text analyis checks to perform.',
+        'type' => 'text',
+        'not null' => FALSE,
+        'serialize' => TRUE,
+      ),
       'enabled_fields' => array(
-        'description' => 'A list of form elements configured for textual analysis.',
+        'description' => 'Form elements to analyze.',
         'type' => 'text',
         'not null' => FALSE,
         'serialize' => TRUE,
       ),
       'module' => array(
-        'description' => 'The module name the $form_id belongs to.',
+        'description' => 'Module name owning the form.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
-      ),
-      'data' => array(
-        'description' => "Serialized data containing the form's Mollom options.",
-        'type' => 'text',
-        'not null' => TRUE,
-        'serialize' => TRUE,
       ),
     ),
     'primary key' => array('form_id'),
@@ -226,7 +234,7 @@ function mollom_update_3() {
  * Add a reputation field to the mollom table.
  */
 function mollom_update_4() {
-  db_add_field('mollom', 'reputation', array('type' => 'varchar', 'length' => 255, 'not null' => TRUE, 'default' => ''));
+  // Unused. Removed in mollom_update_7005().
 }
 
 /**
@@ -245,7 +253,6 @@ function mollom_update_6105() {
         'default' => '',
       ),
       'mode' => array(
-        'description' => 'The configured protection mode to use for the form.',
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
@@ -256,7 +263,6 @@ function mollom_update_6105() {
         'serialize' => TRUE,
       ),
       'module' => array(
-        'description' => 'The module name the $form_id belongs to.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
@@ -307,7 +313,6 @@ function mollom_update_6106() {
   }
   // Add the 'entity' column.
   db_add_field('mollom', 'entity', array(
-    'description' => 'The entity type of the content.',
     'type' => 'varchar',
     'length' => 32,
     'not null' => TRUE,
@@ -342,7 +347,6 @@ function mollom_update_6106() {
   // @todo We do not change the type to 'int' here to still support named
   //   identifiers. Reconsider this.
   db_change_field('mollom', 'did', 'did', array(
-    'description' => 'Unique data ID of the content.',
     'type' => 'varchar',
     'length' => 32,
     'not null' => TRUE,
@@ -450,27 +454,85 @@ function mollom_update_7002() {
 }
 
 /**
- * Add {mollom}.data to store the individual form configuration.
+ * Add {mollom_form}.data to store the individual form configuration.
  */
 function mollom_update_7003() {
-  //@todo Migrate {mollom}.enabled_fields to this data.
-  if (!db_field_exists('mollom_form', 'data')) {
-    // First add the {mollom_form}.data as a nullable field.
-    db_add_field('mollom_form', 'data', array(
+  // Removed in mollom_update_7004().
+}
+
+/**
+ * Replace {mollom_form}.data with {mollom_form}.checks.
+ */
+function mollom_update_7004() {
+  // Add {mollom_form}.checks.
+  if (!db_field_exists('mollom_form', 'checks')) {
+    db_add_field('mollom_form', 'checks', array(
       'type' => 'text',
-      'serialized' => TRUE,
+      'not null' => FALSE,
+      'serialize' => TRUE,
     ));
-    // Update {mollom_form}.data to equal an empty serialized array.
+    // Default all checks to 'spam', including CAPTCHA-only rows, so spam
+    // checking is enabled by default when switching the protection mode.
     db_update('mollom_form')
       ->fields(array(
-        'data' => serialize(array()),
+        'checks' => serialize(array('spam')),
       ))
       ->execute();
-    // Change the {mollom_form}.data field to not allow nullable values.
-    db_change_field('mollom_form', 'data', 'data', array(
-      'type' => 'text',
-      'not null' => TRUE,
-      'serialized' => TRUE,
-    ));
   }
+  // Migrate {mollom_form}.data to {mollom_form}.checks.
+  if (db_field_exists('mollom_form', 'data')) {
+    // Add profanity checking flag where enabled.
+    db_update('mollom_form')
+      ->fields(array(
+        'checks' => serialize(array('spam', 'profanity'))
+      ))
+      ->condition('data', serialize(array('profanity' => '1')))
+      ->execute();
+    // Remove {mollom_form}.data.
+    db_drop_field('mollom_form', 'data');
+  }
+}
+
+/**
+ * Clean up and complete server response columns in {mollom}.
+ */
+function mollom_update_7005() {
+  // Remove 'reputation' column introduced in mollom_update_4(); unused.
+  if (db_field_exists('mollom', 'reputation')) {
+    db_drop_field('mollom', 'reputation');
+  }
+
+  // Add {mollom}.spam.
+  db_add_field('mollom', 'spam', array(
+    'type' => 'int',
+    'size' => 'tiny',
+    'not null' => FALSE,
+  ));
+  // Fill {mollom}.spam with approximate values based on {mollom}.quality.
+  db_update('mollom')
+    ->fields(array('spam' => MOLLOM_ANALYSIS_SPAM))
+    ->condition('quality', 0.5, '<')
+    ->execute();
+  db_update('mollom')
+    ->fields(array('spam' => MOLLOM_ANALYSIS_UNSURE))
+    ->condition('quality', 0.5, '=')
+    ->execute();
+  db_update('mollom')
+    ->fields(array('spam' => MOLLOM_ANALYSIS_HAM))
+    ->condition('quality', 0.5, '>')
+    ->execute();
+
+  // Change {mollom}.quality from varchar into float.
+  db_change_field('mollom', 'quality', 'quality', array(
+    'type' => 'float',
+    'size' => 'tiny',
+    'not null' => FALSE,
+  ));
+
+  // Add {mollom}.profanity.
+  db_add_field('mollom', 'profanity', array(
+    'type' => 'float',
+    'size' => 'tiny',
+    'not null' => FALSE,
+  ));
 }

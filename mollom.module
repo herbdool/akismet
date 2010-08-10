@@ -727,12 +727,12 @@ function mollom_form_info($form_id, $module) {
     $form_info = array();
   }
 
-  // Ensure basic properties for all forms.
+  // Ensure default properties.
   $form_info += array(
     'form_id' => $form_id,
+    'title' => $form_id,
     'module' => $module,
     'entity' => NULL,
-    'title' => $form_id,
     'mode' => NULL,
     'bypass access' => array(),
     'elements' => array(),
@@ -747,23 +747,45 @@ function mollom_form_info($form_id, $module) {
 }
 
 /**
+ * Creates a bare Mollom form configuration.
+ *
+ * @param $form_id
+ *   (optional) The form id to create the Mollom form configuration for.
+ */
+function mollom_form_new($form_id = NULL) {
+  $mollom_form = array();
+  if (isset($form_id)) {
+    $form_list = mollom_form_list();
+    $mollom_form = mollom_form_info($form_id, $form_list[$form_id]['module']);
+  }
+  // Ensure default properties are defined.
+  $mollom_form += array(
+    'form_id' => $form_id,
+    'title' => $form_id,
+    'mode' => NULL,
+    'checks' => array(),
+    'enabled_fields' => array(),
+  );
+  // Enable all fields for textual analysis by default.
+  if (!empty($mollom_form['elements'])) {
+    $mollom_form['checks'] = array('spam');
+    $mollom_form['enabled_fields'] = array_keys($mollom_form['elements']);
+  }
+
+  return $mollom_form;
+}
+
+/**
  * Menu argument loader; Loads Mollom configuration and form information for a given form id.
  */
 function mollom_form_load($form_id) {
   $mollom_form = db_query_range('SELECT * FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchAssoc();
   if ($mollom_form) {
+    $mollom_form['checks'] = unserialize($mollom_form['checks']);
     $mollom_form['enabled_fields'] = unserialize($mollom_form['enabled_fields']);
-    $mollom_form['data'] = unserialize($mollom_form['data']);
 
     // Attach form registry information.
     $mollom_form += mollom_form_info($form_id, $mollom_form['module']);
-
-    // Ensure default values (partially for administrative configuration).
-    $mollom_form += array(
-      'form_id' => $form_id,
-      'title' => $form_id,
-      'elements' => array(),
-    );
   }
   return $mollom_form;
 }
@@ -1138,9 +1160,9 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
       'require_captcha' => $element['#mollom_form']['mode'] == MOLLOM_MODE_CAPTCHA,
       'passed_captcha' => FALSE,
       'entity' => $element['#mollom_form']['entity'],
+      'checks' => $element['#mollom_form']['checks'],
       'enabled_fields' => $element['#mollom_form']['enabled_fields'],
       'mapping' => $element['#mollom_form']['mapping'],
-      'data' => $element['#mollom_form']['data'],
       'response' => array(
         'session_id' => '',
       ),
@@ -1224,9 +1246,8 @@ function mollom_validate_analysis(&$form, &$form_state) {
   if (isset($data['post_id'])) {
     unset($data['post_id']);
   }
-  if (!empty($form_state['mollom']['response']['session_id'])) {
-    $data['session_id'] = $form_state['mollom']['response']['session_id'];
-  }
+  $data['session_id'] = $form_state['mollom']['response']['session_id'];
+  $data['checks'] = implode(',', $form_state['mollom']['checks']);
   $result = mollom('mollom.checkContent', $data);
 
   // Trigger global fallback behavior if there is no result.
@@ -1241,44 +1262,51 @@ function mollom_validate_analysis(&$form, &$form_state) {
   $GLOBALS['mollom_form'] = $form['mollom']['#mollom_form'];
 
   // Check the profanity threshold of the content.
-  if (!empty($form_state['mollom']['data']['profanity']) && $result['profanity'] >= 0.5) {
+  if (isset($result['profanity']) && $result['profanity'] >= 0.5) {
     form_set_error('mollom', t('Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.'));
     watchdog('mollom', 'Profanity: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
   }
 
-  switch ($result['spam']) {
-    case MOLLOM_ANALYSIS_HAM:
-      watchdog('mollom', 'Ham: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
-      break;
+  if (isset($result['spam'])) {
+    switch ($result['spam']) {
+      case MOLLOM_ANALYSIS_HAM:
+        watchdog('mollom', 'Ham: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
+        break;
 
-    case MOLLOM_ANALYSIS_SPAM:
-      form_set_error('mollom', t('Your submission has triggered the spam filter and will not be accepted.'));
-      watchdog('mollom', 'Spam: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
-      break;
+      case MOLLOM_ANALYSIS_SPAM:
+        form_set_error('mollom', t('Your submission has triggered the spam filter and will not be accepted.'));
+        watchdog('mollom', 'Spam: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
+        break;
 
-    default:
-      // Fall back to a CAPTCHA.
-      form_set_error('mollom', t("To complete this form, please complete the word verification below."));
-      watchdog('mollom', 'Unsure: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
+      case MOLLOM_ANALYSIS_UNSURE:
+        // Fall back to a CAPTCHA.
+        form_set_error('mollom', t("To complete this form, please complete the word verification below."));
+        watchdog('mollom', 'Unsure: <pre>@message</pre>Result: <pre>@result</pre>', array('@message' => print_r($data, TRUE), '@result' => print_r($result, TRUE)));
 
-      $form_state['mollom']['require_captcha'] = TRUE;
-      $form['mollom']['captcha']['#access'] = TRUE;
-      $form['mollom']['captcha']['#required'] = TRUE;
+        $form_state['mollom']['require_captcha'] = TRUE;
+        $form['mollom']['captcha']['#access'] = TRUE;
+        $form['mollom']['captcha']['#required'] = TRUE;
 
-      $captcha_data = array(
-        'author_ip' => $data['author_ip'],
-        'session_id' => $result['session_id'],
-      );
-      $captcha = mollom_get_captcha('image', $captcha_data);
+        $captcha_data = array(
+          'author_ip' => $data['author_ip'],
+          'session_id' => $result['session_id'],
+        );
+        $captcha = mollom_get_captcha('image', $captcha_data);
 
-      // If we get a response, add the image CAPTCHA to the form element.
-      if (isset($captcha['response']['session_id']) && !empty($captcha['markup'])) {
-        $form_state['mollom']['response']['session_id'] = $captcha['response']['session_id'];
-        $form['mollom']['session_id']['#value'] = $captcha['response']['session_id'];
-        $form['mollom']['captcha']['#field_prefix'] = $captcha['markup'];
-        $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
-      }
-      break;
+        // If we get a response, add the image CAPTCHA to the form element.
+        if (isset($captcha['response']['session_id']) && !empty($captcha['markup'])) {
+          $form_state['mollom']['response']['session_id'] = $captcha['response']['session_id'];
+          $form['mollom']['session_id']['#value'] = $captcha['response']['session_id'];
+          $form['mollom']['captcha']['#field_prefix'] = $captcha['markup'];
+          $GLOBALS['mollom_response'] = $form_state['mollom']['response'];
+        }
+        break;
+
+      default:
+        // If we end up here, something went totally wrong.
+        _mollom_fallback();
+        break;
+    }
   }
 }
 

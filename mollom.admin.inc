@@ -11,9 +11,9 @@
  */
 function mollom_admin_form_list() {
   $modes = array(
-    MOLLOM_MODE_DISABLED => t('No protection'),
-    MOLLOM_MODE_CAPTCHA => t('CAPTCHA only'),
-    MOLLOM_MODE_ANALYSIS => t('Text analysis and CAPTCHA backup'),
+    MOLLOM_MODE_DISABLED => t('None'),
+    MOLLOM_MODE_CAPTCHA => t('CAPTCHA'),
+    MOLLOM_MODE_ANALYSIS => t('Text analysis'),
   );
 
   $header = array(
@@ -94,6 +94,12 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
       $mollom_form = $form_state['storage']['mollom_form'];
     }
   }
+  // When adding a new form configuration, passing form_id via path argument.
+  elseif (is_string($mollom_form)) {
+    $mollom_form = mollom_form_new($mollom_form);
+    $form_state['storage']['step'] = 'configure';
+    $form_state['storage']['mollom_form'] = $mollom_form;
+  }
   // Otherwise, we are editing an existing form configuration.
   else {
     $form_state['storage']['step'] = 'configure';
@@ -121,55 +127,50 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
       break;
 
     case 'configure':
-      $form['#after_build'][] = 'mollom_admin_configure_form_after_build';
+      drupal_set_title(t('Configure %form-title protection', array('%form-title' => $mollom_form['title'])), PASS_THROUGH);
 
       // Display a list of fields for textual analysis (last step).
       $form['mollom']['form_id'] = array(
         '#type' => 'value',
         '#value' => $mollom_form['form_id'],
       );
-      $form['mollom']['form_title'] = array(
-        '#type' => 'item',
-        '#title' => t('Form'),
-        '#markup' => $mollom_form['title'],
-      );
+
+      $modes = array();
+      // Textual analysis, if any elements are available.
+      if (!empty($mollom_form['elements'])) {
+        $modes[MOLLOM_MODE_ANALYSIS] = t('Text analysis');
+      }
+      // CAPTCHA-only, always available.
+      $modes[MOLLOM_MODE_CAPTCHA] = t('CAPTCHA');
+
       $form['mollom']['mode'] = array(
         '#type' => 'radios',
-        '#title' => t('Spam blocking'),
-        '#options' => array(
-          MOLLOM_MODE_CAPTCHA => t('CAPTCHA only'),
-        ),
+        '#title' => t('Protection mode'),
+        '#options' => $modes,
         '#default_value' => $mollom_form['mode'],
       );
 
-      // Expose any individual form options from $mollom_form['data'].
-      $form['mollom']['data']['#tree'] = TRUE;
-      $form['mollom']['data']['profanity'] = array(
-        '#type' => 'radios',
-        '#title' => t('Profanity blocking (beta)'),
-        '#options' => array(t('Disabled'), t('Enabled')),
-        '#default_value' => isset($mollom_form['data']['profanity']) ? $mollom_form['data']['profanity'] : 0,
-        '#states' => array(
-          'visible' => array(
-            ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
-          ),
-        ),
-      );
-
       if (!empty($mollom_form['elements'])) {
-        // Add the text analysis protection mode as first, suggested option.
-        $form['mollom']['mode']['#options'] = array(
-          MOLLOM_MODE_ANALYSIS => t('Text analysis and CAPTCHA backup'),
-        ) + $form['mollom']['mode']['#options'];
         // If not re-configuring an existing protection, make it the default.
-        if (!isset($form['mollom']['mode']['#default_value'])) {
+        if (!isset($mollom_form['mode'])) {
           $form['mollom']['mode']['#default_value'] = MOLLOM_MODE_ANALYSIS;
         }
 
-        // @todo Actually belongs to MOLLOM_MODE_ANALYSIS only.
-        $form['mollom']['mode']['#description'] = t('If %text-analysis-option is selected, a CAPTCHA will only be displayed if Mollom is unsure about the content.', array(
-          '%text-analysis-option' => $form['mollom']['mode']['#options'][MOLLOM_MODE_ANALYSIS],
-        ));
+        // Textual analysis filters.
+        $form['mollom']['checks'] = array(
+          '#type' => 'checkboxes',
+          '#title' => t('Analyze text for'),
+          '#options' => array(
+            'spam' => t('Spam'),
+            'profanity' => t('Profanity'),
+          ),
+          '#default_value' => $mollom_form['checks'],
+          '#states' => array(
+            'visible' => array(
+              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
+            ),
+          ),
+        );
 
         // Form elements defined by hook_mollom_form_info() use the
         // 'parent][child' syntax, which Form API also uses internally for
@@ -182,7 +183,6 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         // This would lead to a form validation error, because it is a valid key.
         // By encoding them, we prevent this from happening:
         //   '#name' => 'mollom[enabled_fields][parent%5D%5Bchild]'
-        // @todo Use PHP5 functions in D7 (e.g. array_combine()).
         $elements = array();
         foreach ($mollom_form['elements'] as $key => $value) {
           $elements[rawurlencode($key)] = $value;
@@ -193,13 +193,12 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         }
         $form['mollom']['enabled_fields'] = array(
           '#type' => 'checkboxes',
-          '#title' => t('Fields to analyze for spam or profanity'),
+          '#title' => t('Text fields to analyze'),
           '#options' => $elements,
           '#default_value' => $enabled_fields,
-          '#required' => $mollom_form['mode'] == MOLLOM_MODE_ANALYSIS,
           '#states' => array(
-            'invisible' => array(
-              'select[name="mollom[mode]"]' => array('value' => '1'),
+            'visible' => array(
+              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
             ),
           ),
         );
@@ -222,41 +221,38 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
 }
 
 /**
- * #after_build callback for mollom_admin_configure_form().
- */
-function mollom_admin_configure_form_after_build($form, &$form_state) {
-  // Make field checkboxes required, if protection mode is textual analysis.
-  // Accounts for different add and edit form builds and rebuilds.
-  $form['mollom']['enabled_fields']['#required'] = ($form_state['values']['mollom']['mode'] == MOLLOM_MODE_ANALYSIS);
-
-  return $form;
-}
-
-/**
  * Form submit handler for 'Next' button on Mollom form configuration form.
  */
 function mollom_admin_configure_form_next_submit($form, &$form_state) {
   $form_id = $form_state['values']['mollom']['form_id'];
-
-  // Load form information into $form_state for configuration.
-  $form_list = mollom_form_list();
-  $mollom_form = mollom_form_info($form_id, $form_list[$form_id]['module']);
-
-  // Enable all fields for textual analysis by default.
-  if (!empty($mollom_form['elements'])) {
-    $mollom_form['enabled_fields'] = array_keys($mollom_form['elements']);
-  }
-  else {
-    $mollom_form['enabled_fields'] = array();
-  }
-  $form_state['storage']['mollom_form'] = $mollom_form;
-
-  $form_state['storage']['step'] = 'configure';
-  $form_state['rebuild'] = TRUE;
+  $form_state['redirect'] = $_GET['q'] . '/' . $form_id;
 }
 
 /**
- * Form submit handler for Mollom form configuration form.
+ * Form validation handler for mollom_admin_configure_form().
+ */
+function mollom_admin_configure_form_validate(&$form, &$form_state) {
+  // For the 'configure' step, output custom #required form element errors for
+  // 'checks' and 'enabled_fields', as their labels do not work with the default
+  // #required form error message.
+  if ($form_state['storage']['step'] == 'configure') {
+    // Make field checkboxes required, if protection mode is textual analysis.
+    // @see http://drupal.org/node/875722
+    $required = ($form_state['values']['mollom']['mode'] == MOLLOM_MODE_ANALYSIS);
+    $form['mollom']['checks']['#required'] = $required;
+    $form['mollom']['enabled_fields']['#required'] = $required;
+
+    if ($required && !array_filter($form_state['values']['mollom']['checks'])) {
+      form_error($form['mollom']['checks'], t('At least one text analysis check is required.'));
+    }
+    if ($required && !array_filter($form_state['values']['mollom']['enabled_fields'])) {
+      form_error($form['mollom']['enabled_fields'], t('At least one field is required for text analysis.'));
+    }
+  }
+}
+
+/**
+ * Form submit handler for mollom_admin_configure_form().
  */
 function mollom_admin_configure_form_submit($form, &$form_state) {
   $mollom_form = $form_state['values']['mollom'];
@@ -265,6 +261,8 @@ function mollom_admin_configure_form_submit($form, &$form_state) {
   // Update form information in $form_state for potential rebuilds.
   $form_state['storage']['mollom_form'] = $mollom_form;
 
+  // Only store a list of enabled textual analysis checks.
+  $mollom_form['checks'] = array_keys(array_filter($mollom_form['checks']));
   // Prepare selected fields for storage.
   $enabled_fields = array();
   foreach (array_keys(array_filter($mollom_form['enabled_fields'])) as $field) {

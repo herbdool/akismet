@@ -274,7 +274,9 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * @param $mode
    *   The Mollom protection mode for the form.
    * @param $fields
-   *   (optional) A list of form elements to enable for text analysis.
+   *   (optional) A list of form elements to enable for text analysis. If
+   *   omitted and the form registers individual elements, all fields are
+   *   enabled by default.
    * @param $edit
    *   (optional) An array of POST data to pass through to drupalPost() when
    *   configuring the form's protection.
@@ -305,6 +307,11 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Process the enabled fields.
     $form_list = mollom_form_list();
     $form_info = mollom_form_info($form_id, $form_list[$form_id]['module']);
+    if (!empty($form_info['elements'])) {
+      $edit += array(
+        'mollom[checks][spam]' => TRUE,
+      );
+    }
     foreach (array_keys($form_info['elements']) as $field) {
       if (!isset($fields) || in_array($field, $fields)) {
         // If the user specified all fields by default or to include this
@@ -824,11 +831,14 @@ class MollomResponseTestCase extends MollomWebTestCase {
     );
 
     // Ensure proper response for 'ham' submissions.
+    // By default (i.e., omitting 'checks') we expect spam and quality checking
+    // only.
     $data['post_body'] = 'ham';
     $result = mollom('mollom.checkContent', $data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_HAM);
     $this->assertSame('quality', $result['quality'], 1);
+    $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
     $session_id = $this->assertSessionID($result['session_id']);
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
@@ -838,6 +848,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_SPAM);
     $this->assertSame('quality', $result['quality'], 0);
+    $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
     $session_id = $this->assertSessionID($result['session_id']);
 
     // Ensure proper response for 'unsure' submissions, re-using session_id.
@@ -847,6 +858,28 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
     $this->assertSame('quality', $result['quality'], 0.5);
+    $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
+    $session_id = $this->assertSessionID($result['session_id']);
+
+    // Additionally enable profanity checking.
+    $data['post_body'] = 'spam profanity';
+    $data['checks'] = 'spam,quality,profanity';
+    $data['session_id'] = $session_id;
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('quality', $result['quality'], 0);
+    $this->assertSame('profanity', $result['profanity'], 1);
+    $session_id = $this->assertSessionID($result['session_id']);
+
+    // Disable spam checking, only do profanity checking.
+    $data['checks'] = 'profanity';
+    $data['session_id'] = $session_id;
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertTrue(!isset($result['spam']), 'spam not returned.');
+    $this->assertTrue(!isset($result['quality']), 'quality not returned.');
+    $this->assertSame('profanity', $result['profanity'], 1);
     $session_id = $this->assertSessionID($result['session_id']);
   }
 
@@ -1356,27 +1389,31 @@ class MollomProfanityTestCase extends MollomWebTestCase {
    */
   function testProfanityFiltering() {
     // Protect Mollom test form but do not enable the profanity filter.
-    $config_edit = array('mollom[data][profanity]' => 0);
-    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, array('title', 'body'), $config_edit);
+    $edit_config = array(
+      'mollom[checks][profanity]' => FALSE,
+    );
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
     $this->drupalLogout();
 
     // Assert that the profanity filter is disabled.
-    $post_edit = array(
+    $edit = array(
       'title' => 'Joomla lover unite!',
-      'body' => 'This is a post just for Joomla lovers. If you love Joomla, this is the content for you!',
+      'body' => 'This is a post just for unsure Joomla lovers. If you love Joomla, this is the profanity for you!',
     );
-    $this->drupalPost('mollom-test/form', $post_edit, 'Submit');
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
     $this->assertNoText($this->profanity_message);
 
     // Enable the profanity filter setting for this form.
     $this->drupalLogin($this->admin_user);
-    $config_edit['mollom[data][profanity]'] = 1;
-    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, array('title', 'body'), $config_edit);
+    $edit_config = array(
+      'mollom[checks][profanity]' => 1,
+    );
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
     $this->drupalLogout();
 
     // Assert that the profanity filter now blocks this content.
-    $this->drupalPost('mollom-test/form', $post_edit, 'Submit');
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->profanity_message);
   }
@@ -1415,6 +1452,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     $this->assertText('Mollom test form');
     $edit = array(
       'mollom[mode]' => MOLLOM_MODE_ANALYSIS,
+      'mollom[checks][spam]' => TRUE,
       'mollom[enabled_fields][title]' => TRUE,
       'mollom[enabled_fields][body]' => TRUE,
       'mollom[enabled_fields][exclude]' => FALSE,
@@ -1559,7 +1597,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Next'));
     $this->assertText($form_info['user_register_form']['title']);
-    $this->assertNoText(t('Fields to analyze'));
+    $this->assertNoText(t('Text fields to analyze'));
     $this->drupalPost(NULL, array(), t('Save'));
 
     // Verify that user registration form was protected.
@@ -1577,7 +1615,10 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
         $this->assertText($info['title']);
         // Verify that forms specifying elements have all possible elements
         // preselected for textual analysis.
+        $edit = array();
         if (!empty($info['elements'])) {
+          $edit['mollom[checks][spam]'] = TRUE;
+
           foreach ($info['elements'] as $field => $label) {
             $field = rawurlencode($field);
             $this->assertFieldByName("mollom[enabled_fields][$field]", TRUE);
@@ -1585,9 +1626,10 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
         }
         // Verify that CAPTCHA-only forms contain no configurable fields.
         else {
-          $this->assertNoText(t('Fields to analyze for spam or profanity'));
+          $this->assertNoText(t('Analyze text for'));
+          $this->assertNoText(t('Text fields to analyze'));
         }
-        $this->drupalPost(NULL, array(), t('Save'));
+        $this->drupalPost(NULL, $edit, t('Save'));
         $this->assertText(t('The form protection has been added.'));
       }
     }
@@ -2283,7 +2325,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('entity', $data->entity, $new_data->entity);
     $this->assertSame('id', $data->did, $new_data->did);
     $this->assertNotSame('session_id', $data->session, $new_data->session);
-    $this->assertNotSame('quality', $data->quality, $new_data->quality);
+    $this->assertSame('quality', $data->quality, $new_data->quality);
     $count = db_query("SELECT COUNT(1) FROM {mollom}")->fetchField();
     $this->assertEqual($count, 1, t('Stored data in {mollom} was updated.'));
   }

@@ -48,59 +48,84 @@ function mollom_test_check_content($data) {
   $storage[] = $data;
   variable_set(__FUNCTION__, $storage);
 
-  // Check post_title and post_body to determine whether to return ham, spam, or
-  // unsure as response.
-  $spam = FALSE;
-  $ham = FALSE;
+  $response = array();
 
-  foreach (array('post_title', 'post_body') as $key) {
-    if (!isset($data[$key])) {
-      continue;
+  // Spam filter: Check post_title and post_body for ham, spam, or unsure.
+  if (!isset($data['checks']) || strpos($data['checks'], 'spam') !== FALSE) {
+    $spam = FALSE;
+    $ham = FALSE;
+    foreach (array('post_title', 'post_body') as $key) {
+      if (!isset($data[$key])) {
+        continue;
+      }
+      // 'spam' always has precedence.
+      if (strpos($data[$key], 'spam') !== FALSE) {
+        $spam = TRUE;
+      }
+      // Otherwise, check for 'ham'.
+      elseif (strpos($data[$key], 'ham') !== FALSE) {
+        $ham = TRUE;
+      }
+      // Lastly, take a forced 'unsure' into account.
+      elseif (strpos($data[$key], 'unsure') !== FALSE) {
+        $spam = TRUE;
+        $ham = TRUE;
+      }
     }
-    // 'spam' always has precedence.
-    if (strpos($data[$key], 'spam') !== FALSE) {
-      $spam = TRUE;
+    if ($spam && $ham) {
+      $response['spam'] = MOLLOM_ANALYSIS_UNSURE;
+      $quality = 0.5;
     }
-    // Otherwise, check for 'ham'.
-    elseif (strpos($data[$key], 'ham') !== FALSE) {
-      $ham = TRUE;
+    elseif ($spam) {
+      $response['spam'] = MOLLOM_ANALYSIS_SPAM;
+      $quality = 0;
     }
-    // Lastly, take a forced 'unsure' into account.
-    elseif (strpos($data[$key], 'unsure') !== FALSE) {
-      $spam = TRUE;
-      $ham = TRUE;
+    elseif ($ham) {
+      $response['spam'] = MOLLOM_ANALYSIS_HAM;
+      $quality = 1;
     }
+    else {
+      $response['spam'] = MOLLOM_ANALYSIS_UNKNOWN;
+      $quality = NULL;
+    }
+  }
 
-    // If the message contains 'Joomla', give it a profanity score of 0.8.
+  // Quality filter.
+  if (!isset($data['checks']) || strpos($data['checks'], 'quality') !== FALSE) {
+    if (isset($quality)) {
+      $response['quality'] = $quality;
+    }
+    // @todo No idea how quality is calculated during testing without spam
+    //   results above.
+    else {
+      $response['quality'] = 0;
+    }
+  }
+
+  // Profanity filter.
+  if (isset($data['checks']) && strpos($data['checks'], 'profanity') !== FALSE) {
     $profanity = 0.0;
-    if (strpos($data[$key], 'Joomla') !== FALSE) {
-      $profanity = 0.8;
+    foreach (array('post_title', 'post_body') as $key) {
+      if (!isset($data[$key])) {
+        continue;
+      }
+      // @todo Client/server testing value mismatch.
+      if (strpos($data[$key], 'profanity') !== FALSE) {
+        $profanity = 0.8;
+      }
     }
+    $response['profanity'] = $profanity;
   }
-  if ($spam && $ham) {
-    $response = MOLLOM_ANALYSIS_UNSURE;
-    $quality = 0.5;
-  }
-  elseif ($spam) {
-    $response = MOLLOM_ANALYSIS_SPAM;
-    $quality = 0;
-  }
-  elseif ($ham) {
-    $response = MOLLOM_ANALYSIS_HAM;
-    $quality = 1;
+
+  if (!empty($data['session_id'])) {
+    $response['session_id'] = $data['session_id'];
   }
   else {
-    $response = MOLLOM_ANALYSIS_UNKNOWN;
-    $quality = NULL;
+    drupal_session_start();
+    $response['session_id'] = session_id();
   }
 
-  drupal_session_start();
-  return array(
-    'session_id' => !empty($data['session_id']) ? $data['session_id'] : session_id(),
-    'spam' => $response,
-    'quality' => $quality,
-    'profanity' => $profanity,
-  );
+  return $response;
 }
 
 /**
