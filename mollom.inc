@@ -71,7 +71,7 @@ function _mollom_retrieve_server_list() {
 
   // Use the list of servers to retrieve a list of servers from mollom.com:
   foreach ($servers as $server) {
-    $result = xmlrpc($server . '/' . MOLLOM_API_VERSION, 'mollom.getServerList', _mollom_authentication());
+    $result = xmlrpc($server . '/' . MOLLOM_API_VERSION, array('mollom.getServerList' => array(_mollom_authentication())));
     if (!xmlrpc_error()) {
       return $result;
     }

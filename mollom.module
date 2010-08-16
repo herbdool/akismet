@@ -882,14 +882,14 @@ function mollom_form_get_values($form_values, $fields, $mapping) {
     // $mapping with the actual form element value, and continue to the next
     // field. Also unset this field from $exclude_fields, so we can process the
     // remaining mappings below.
-    if (isset($exclude_fields[$field])) {
+    if (isset($exclude_fields[$field]) && drupal_validate_utf8($value)) {
       $mapping[$exclude_fields[$field]] = $value;
       unset($exclude_fields[$field]);
       continue;
     }
     // Only add form element values that are not empty.
     if (isset($value)) {
-      if (is_string($value) && drupal_strlen($value)) {
+      if (is_string($value) && drupal_validate_utf8($value) && drupal_strlen($value)) {
         $post_body[$field] = $value;
       }
       // Recurse into nested values (e.g. multiple value fields).
@@ -897,7 +897,9 @@ function mollom_form_get_values($form_values, $fields, $mapping) {
         // Ensure we have a flat array to implode(); form values of
         // field_attach_form() use several subkeys.
         _mollom_flatten_form_values($value);
-        $post_body[$field] = implode("\n", $value);
+        if (($value = implode("\n", $value)) && drupal_validate_utf8($value)) {
+          $post_body[$field] = $value;
+        }
       }
     }
   }
@@ -913,7 +915,7 @@ function mollom_form_get_values($form_values, $fields, $mapping) {
     foreach ($parents as $key) {
       $value = isset($value[$key]) ? $value[$key] : NULL;
     }
-    if (isset($value)) {
+    if (isset($value) && drupal_validate_utf8($value)) {
       $mapping[$property] = $value;
     }
   }
@@ -1451,7 +1453,9 @@ function mollom($method, $data = array()) {
     // servers in the list.
     reset($servers);
     while ($server = current($servers)) {
-      $result = xmlrpc($server . '/' . MOLLOM_API_VERSION, $method, $data + _mollom_authentication());
+      $result = xmlrpc($server . '/' . MOLLOM_API_VERSION, array(
+        $method => array($data + _mollom_authentication()),
+      ));
 
       if ($result === FALSE && ($error = xmlrpc_error())) {
         if ($error->code === MOLLOM_REFRESH) {
