@@ -1253,7 +1253,8 @@ function mollom_validate_analysis(&$form, &$form_state) {
   $result = mollom('mollom.checkContent', $data);
 
   // Trigger global fallback behavior if there is no result.
-  if (!isset($result['session_id']) || !isset($result['spam'])) {
+  // @todo Isn't mollom() invoking _mollom_fallback() already?
+  if (!isset($result['session_id'])) {
     return _mollom_fallback();
   }
 

@@ -881,6 +881,16 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
     $this->assertSame('profanity', $result['profanity'], 1);
     $session_id = $this->assertSessionID($result['session_id']);
+
+    // Pass arbitrary string to profanity checking.
+    $data['post_body'] = $this->randomString(12);
+    $data['session_id'] = $session_id;
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertTrue(!isset($result['spam']), 'spam not returned.');
+    $this->assertTrue(!isset($result['quality']), 'quality not returned.');
+    $this->assertSame('profanity', $result['profanity'], 0);
+    $session_id = $this->assertSessionID($result['session_id']);
   }
 
   /**
@@ -1412,10 +1422,19 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
     $this->drupalLogout();
 
-    // Assert that the profanity filter now blocks this content.
+    // Verify that the profanity filter now blocks this content.
     $this->drupalPost('mollom-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->profanity_message);
+
+    // Verify that we are able to post after removing profanity, as the error
+    // message suggests.
+    // @todo Doesn't really make sense in testing mode, and even more so, when
+    //   posting to the local fake server.
+    $edit['body'] = 'This is a post just for unsure Joomla lovers.';
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $this->assertText('Successful form submission.');
+    $this->assertNoText($this->profanity_message);
   }
 }
 
