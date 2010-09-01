@@ -1417,6 +1417,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     // Enable the profanity filter setting for this form.
     $this->drupalLogin($this->admin_user);
     $edit_config = array(
+      'mollom[checks][spam]' => FALSE,
       'mollom[checks][profanity]' => 1,
     );
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
