@@ -13,11 +13,23 @@ function mollom_test_xmlrpc() {
   return array(
     // $data contains a variable amount of properties, so we cannot specify a
     // signature.
+    'mollom.getServerList' => 'mollom_test_get_server_list',
     'mollom.verifyKey' => 'mollom_test_verify_key',
     'mollom.checkContent' => 'mollom_test_check_content',
     'mollom.getImageCaptcha' => 'mollom_test_get_captcha',
     'mollom.checkCaptcha' => 'mollom_test_check_captcha',
  );
+}
+
+/**
+ * XML-RPC callback for mollom.getServerList to retrieve new server list.
+ */
+function mollom_test_get_server_list($data) {
+  $storage = variable_get(__FUNCTION__, array());
+  $storage[] = $data;
+  variable_set(__FUNCTION__, $storage);
+
+  return array($GLOBALS['base_url'] . '/xmlrpc.php?version=');
 }
 
 /**
@@ -106,12 +118,8 @@ function mollom_test_check_content($data) {
   if (isset($data['checks']) && strpos($data['checks'], 'profanity') !== FALSE) {
     $profanity = 0.0;
     foreach (array('post_title', 'post_body') as $key) {
-      if (!isset($data[$key])) {
-        continue;
-      }
-      // @todo Client/server testing value mismatch.
-      if (strpos($data[$key], 'profanity') !== FALSE) {
-        $profanity = 0.8;
+      if (isset($data[$key]) && strpos($data[$key], 'profanity') !== FALSE) {
+        $profanity = 1.0;
       }
     }
     $response['profanity'] = $profanity;

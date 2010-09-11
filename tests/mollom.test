@@ -994,7 +994,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
    */
   function testBypassAccess() {
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form');
+    $this->setProtection('comment_node_article_form');
     $this->drupalLogout();
 
     $node = $this->drupalCreateNode(array('body' => array(LANGUAGE_NONE => array(array('value' => 'node body'))), 'type' => 'article'));
@@ -1791,7 +1791,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   function testCaptchaProtectedCommentForm() {
     // Enable Mollom CAPTCHA protection for comments.
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form', MOLLOM_MODE_CAPTCHA);
+    $this->setProtection('comment_node_article_form', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
 
     // Request the comment reply form. There should be a CAPTCHA form.
@@ -1829,7 +1829,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   function testTextAnalysisProtectedCommentForm() {
     // Enable Mollom text-classification for comments.
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form');
+    $this->setProtection('comment_node_article_form');
     $this->drupalLogout();
 
     // Request the comment reply form.  Initially, there should be no CAPTCHA.
@@ -2204,7 +2204,7 @@ class MollomDataTestCase extends MollomWebTestCase {
    */
   function testAnalysis() {
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form');
+    $this->setProtection('comment_node_article_form');
 
     // Make comment preview optional.
     $edit = array(
@@ -2391,7 +2391,7 @@ class MollomReportTestCase extends MollomWebTestCase {
    */
   function testReportComment() {
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form');
+    $this->setProtection('comment_node_article_form');
     $this->drupalLogout();
 
     $this->node = $this->drupalCreateNode(array('type' => 'article'));
@@ -2429,7 +2429,7 @@ class MollomReportTestCase extends MollomWebTestCase {
    */
   function testMassReportComments() {
     $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_form');
+    $this->setProtection('comment_node_article_form');
     $this->drupalLogout();
 
     $this->node = $this->drupalCreateNode(array('type' => 'article'));
