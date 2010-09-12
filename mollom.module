@@ -763,7 +763,7 @@ function mollom_form_new($form_id = NULL) {
     }
     $mollom_form += mollom_form_info($form_id, $form_list[$form_id]['module']);
   }
-  // Ensure default properties are defined.
+  // Ensure default properties.
   $mollom_form += array(
     'form_id' => $form_id,
     'title' => $form_id,
@@ -1040,7 +1040,7 @@ function _mollom_get_openid($account) {
  *
  * @param $reset
  *   (optional) Boolean whether to reset the stored state and re-check.
- *   Defaults to FALSE. Only re-checked once per request.
+ *   Defaults to FALSE.
  *
  * @return
  *   TRUE if the module is considered operable, or an associative array
@@ -1049,6 +1049,10 @@ function _mollom_get_openid($account) {
  *   - keys valid: TRUE if Mollom API keys are valid, or the error code as
  *     returned by Mollom servers.
  *   - servers: Boolean whether there is a non-empty list of Mollom servers.
+ *
+ * @see mollom_init()
+ * @see mollom_admin_settings()
+ * @see mollom_requirements()
  */
 function _mollom_status($reset = FALSE) {
   // Load stored status.
@@ -1947,10 +1951,8 @@ function node_mollom_form_info($form_id) {
 
   $type = node_type_get_type($nodetype);
   $form_info = array(
-    'title' => t('@name form', array('@name' => $type->name)),
     // @todo This is incompatible with node access.
     'bypass access' => array('bypass node access', 'edit any ' . $type->type . ' content'),
-    'entity' => 'node',
     'bundle' => $type->type,
     'elements' => array(),
     'mapping' => array(
@@ -2102,10 +2104,8 @@ function user_mollom_form_info($form_id) {
   switch ($form_id) {
     case 'user_register_form':
       $form_info = array(
-        'title' => t('User registration form'),
         'mode' => MOLLOM_MODE_CAPTCHA,
         'bypass access' => array('administer users'),
-        'entity' => 'user',
         'mapping' => array(
           'post_id' => 'uid',
           'author_name' => 'name',
@@ -2116,10 +2116,8 @@ function user_mollom_form_info($form_id) {
 
     case 'user_pass':
       $form_info = array(
-        'title' => t('User password request form'),
         'mode' => MOLLOM_MODE_CAPTCHA,
         'bypass access' => array('administer users'),
-        'entity' => 'user',
         'mapping' => array(
           'post_id' => 'uid',
           'author_name' => 'name',
@@ -2182,7 +2180,6 @@ function contact_mollom_form_info($form_id) {
   switch ($form_id) {
     case 'contact_site_form':
       $form_info = array(
-        'title' => t('Site-wide contact form'),
         'mode' => MOLLOM_MODE_ANALYSIS,
         'bypass access' => array('administer site-wide contact form'),
         'mail ids' => array('contact_page_mail'),
@@ -2200,7 +2197,6 @@ function contact_mollom_form_info($form_id) {
 
     case 'contact_personal_form':
       $form_info = array(
-        'title' => t('User contact form'),
         'mode' => MOLLOM_MODE_ANALYSIS,
         'bypass access' => array('administer users'),
         'mail ids' => array('contact_user_mail'),

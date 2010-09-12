@@ -502,26 +502,6 @@ function mollom_update_7005() {
     db_drop_field('mollom', 'reputation');
   }
 
-  // Add {mollom}.spam.
-  db_add_field('mollom', 'spam', array(
-    'type' => 'int',
-    'size' => 'tiny',
-    'not null' => FALSE,
-  ));
-  // Fill {mollom}.spam with approximate values based on {mollom}.quality.
-  db_update('mollom')
-    ->fields(array('spam' => MOLLOM_ANALYSIS_SPAM))
-    ->condition('quality', 0.5, '<')
-    ->execute();
-  db_update('mollom')
-    ->fields(array('spam' => MOLLOM_ANALYSIS_UNSURE))
-    ->condition('quality', 0.5, '=')
-    ->execute();
-  db_update('mollom')
-    ->fields(array('spam' => MOLLOM_ANALYSIS_HAM))
-    ->condition('quality', 0.5, '>')
-    ->execute();
-
   // Change {mollom}.quality from varchar into float.
   db_change_field('mollom', 'quality', 'quality', array(
     'type' => 'float',
@@ -529,10 +509,39 @@ function mollom_update_7005() {
     'not null' => FALSE,
   ));
 
+  // Add {mollom}.spam.
+  if (!db_field_exists('mollom', 'spam')) {
+    db_add_field('mollom', 'spam', array(
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+    // Fill {mollom}.spam with approximate values based on {mollom}.quality.
+    // Note that this is just to have some values. 'quality' and 'spam' are
+    // completely unrelated otherwise.
+    // MOLLOM_ANALYSIS_SPAM
+    db_update('mollom')
+      ->fields(array('spam' => 2))
+      ->condition('quality', 0.5, '<')
+      ->execute();
+    // MOLLOM_ANALYSIS_UNSURE
+    db_update('mollom')
+      ->fields(array('spam' => 3))
+      ->condition('quality', 0.5, '=')
+      ->execute();
+    // MOLLOM_ANALYSIS_HAM
+    db_update('mollom')
+      ->fields(array('spam' => 1))
+      ->condition('quality', 0.5, '>')
+      ->execute();
+  }
+
   // Add {mollom}.profanity.
-  db_add_field('mollom', 'profanity', array(
-    'type' => 'float',
-    'size' => 'tiny',
-    'not null' => FALSE,
-  ));
+  if (!db_field_exists('mollom', 'profanity')) {
+    db_add_field('mollom', 'profanity', array(
+      'type' => 'float',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+  }
 }

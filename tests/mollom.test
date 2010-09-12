@@ -752,7 +752,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->drupalLogin($this->web_user);
     $this->drupalGet('comment/reply/' . $node->nid);
     $edit = array(
-      'comment_body[und][0][value]' => $this->randomName(),
+      'comment_body[und][0][value]' => 'spam',
     );
     $this->drupalPost(NULL, $edit, t('Preview'));
     $this->drupalPost(NULL, array(), t('Save'));
@@ -1978,7 +1978,10 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertPrivacyLink();
 
     // Try to save a comment that is 'unsure' and make sure there is a CAPTCHA.
-    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'unsure'), t('Save'));
+    $edit = array(
+      'comment_body[und][0][value]' => 'unsure',
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertCaptchaField();
     $session_id = $this->assertSessionIDInForm();
     $this->assertPrivacyLink();
@@ -1993,8 +1996,8 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 
     // Correctly solving the CAPTCHA should accept the form submission.
     $this->postCorrectCaptcha(NULL, array(), t('Save'));
-    $this->assertRaw('<p>unsure</p>', t('A comment that may contain spam was found.'));
-    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'unsure'))->fetchField();
+    $this->assertRaw('<p>' . $edit['comment_body[und][0][value]'] . '</p>', t('A comment that may contain spam was found.'));
+    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['comment_body[und][0][value]']))->fetchField();
     $this->assertMollomData('comment', $cid, $session_id);
 
     // Try to save a new 'spam' comment; it should be rejected, with no CAPTCHA
