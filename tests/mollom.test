@@ -558,6 +558,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   (optional) The XML-RPC method name to retrieve submitted values from.
    *   Defaults to 'mollom.checkContent'.
    *
+   * @see MollomWebTestCase::resetServerRecords()
    * @see mollom_test_xmlrpc()
    */
   protected function getServerRecord($method = 'mollom.checkContent') {
@@ -572,6 +573,26 @@ class MollomWebTestCase extends DrupalWebTestCase {
     variable_set($function, $storage);
 
     return $return;
+  }
+
+  /**
+   * Resets recorded XML-RPC values.
+   *
+   * @param $method
+   *   (optional) The XML-RPC method name to reset records of. Defaults to
+   *   'mollom.checkContent'.
+   *
+   * @see MollomWebTestCase::getServerRecord()
+   * @see mollom_test_xmlrpc()
+   */
+  protected function resetServerRecords($method = 'mollom.checkContent') {
+    // Map the XML-RPC method name to the corresponding function callback name.
+    drupal_load('module', 'mollom_test');
+    $method_function_map = mollom_test_xmlrpc();
+    $function = $method_function_map[$method];
+
+    // Delete the variable.
+    variable_del($function);
   }
 
   /**
@@ -872,7 +893,19 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertSame('profanity', $result['profanity'], 1);
     $session_id = $this->assertSessionID($result['session_id']);
 
+    // Change the string to contain profanity only.
+    $data['post_body'] = 'profanity';
+    $data['checks'] = 'spam,quality,profanity';
+    $data['session_id'] = $session_id;
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
+    $this->assertSame('quality', $result['quality'], 0);
+    $this->assertSame('profanity', $result['profanity'], 1);
+    $session_id = $this->assertSessionID($result['session_id']);
+
     // Disable spam checking, only do profanity checking.
+    $data['post_body'] = 'spam profanity';
     $data['checks'] = 'profanity';
     $data['session_id'] = $session_id;
     $result = mollom('mollom.checkContent', $data);
@@ -891,6 +924,50 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
     $this->assertSame('profanity', $result['profanity'], 0);
     $session_id = $this->assertSessionID($result['session_id']);
+  }
+
+  /**
+   * Tests results of mollom.checkContent() across requests for a single session.
+   */
+  function testCheckContentSession() {
+    $data = array(
+      'author_name' => $this->admin_user->name,
+      'author_mail' => $this->admin_user->mail,
+      'author_id' => $this->admin_user->uid,
+      'author_ip' => ip_address(),
+    );
+
+    // Sequence: Post unsure spam, correct CAPTCHA, change post into spam,
+    // expect it to be ham (due to correct CAPTCHA).
+    $data['post_body'] = 'unsure';
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
+    $data['session_id'] = $this->assertSessionID($result['session_id']);
+
+    $captcha_data = array(
+      'session_id' => $data['session_id'],
+      'author_ip' => $data['author_ip'],
+    );
+    $result = mollom('mollom.getImageCaptcha', $captcha_data);
+    $this->assertMollomWatchdogMessages();
+    $data['session_id'] = $this->assertSessionID($result['session_id']);
+
+    $captcha_data = array(
+      'session_id' => $data['session_id'],
+      'author_ip' => $data['author_ip'],
+      'author_id' => $data['author_id'],
+      'captcha_result' => 'correct',
+    );
+    $result = mollom('mollom.checkCaptcha', $captcha_data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertIdentical($result, TRUE, t('CAPTCHA response was correct.'));
+
+    $data['post_body'] = 'spam';
+    $result = mollom('mollom.checkContent', $data);
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_HAM);
+    $data['session_id'] = $this->assertSessionID($result['session_id']);
   }
 
   /**
@@ -1379,27 +1456,26 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
 class MollomProfanityTestCase extends MollomWebTestCase {
   public static function getInfo() {
     return array(
-      'name' => 'Profanity filtering',
-      'description' => 'Verify that forms can be properly protected and unprotected.',
+      'name' => 'Profanity checking',
+      'description' => 'Tests form protection with text analysis checking for profanity.',
       'group' => 'Mollom',
     );
   }
 
   function setUp() {
     parent::setUp('mollom_test');
-    // Re-route Mollom communication to this testing site.
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
 
-    $this->drupalLogin($this->admin_user);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments', 'post comments without approval'));
   }
 
   /**
-   * Test the different levels of profanity filtering. With our test Mollom
-   * server, the profanity keyword is 'Joomla'.
+   * Tests text analysis profanity checking.
    */
-  function testProfanityFiltering() {
-    // Protect Mollom test form but do not enable the profanity filter.
+  function testProfanity() {
+    // Protect Mollom test form but do not enable profanity checking.
+    $this->drupalLogin($this->admin_user);
     $edit_config = array(
+      'mollom[checks][spam]' => TRUE,
       'mollom[checks][profanity]' => FALSE,
     );
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
@@ -1414,11 +1490,11 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
     $this->assertNoText($this->profanity_message);
 
-    // Enable the profanity filter setting for this form.
+    // Enable profanity checking, disable spam checking.
     $this->drupalLogin($this->admin_user);
     $edit_config = array(
       'mollom[checks][spam]' => FALSE,
-      'mollom[checks][profanity]' => 1,
+      'mollom[checks][profanity]' => TRUE,
     );
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
     $this->drupalLogout();
@@ -1430,12 +1506,75 @@ class MollomProfanityTestCase extends MollomWebTestCase {
 
     // Verify that we are able to post after removing profanity, as the error
     // message suggests.
-    // @todo Doesn't really make sense in testing mode, and even more so, when
-    //   posting to the local fake server.
     $edit['body'] = 'This is a post just for unsure Joomla lovers.';
     $this->drupalPost('mollom-test/form', $edit, 'Submit');
     $this->assertText('Successful form submission.');
     $this->assertNoText($this->profanity_message);
+  }
+
+  /**
+   * Tests text analysis with both profanity and spam checking.
+   */
+  function testProfanitySpam() {
+    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+    $node = $this->drupalCreateNode(array('type' => 'article'));
+    $langcode = LANGUAGE_NONE;
+
+    // Enable spam and profanity checking for the article node comment form.
+    $this->drupalLogin($this->admin_user);
+    $edit_config = array(
+      'mollom[checks][profanity]' => TRUE,
+      'mollom[checks][spam]' => TRUE,
+    );
+    $this->setProtection('comment_node_article_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
+    $this->drupalLogout();
+
+    // Sequence: Post profanity (ham), remove profanity (still ham), and expect
+    // that to be accepted.
+    $edit = array(
+      'subject' => $this->randomName(),
+    );
+    $this->drupalGet("node/{$node->nid}");
+    $this->assertNoCaptchaField();
+    $this->assertPrivacyLink();
+
+    $edit["comment_body[$langcode][0][value]"] = 'profanity ham';
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->assertText($this->profanity_message);
+    $this->assertNoText(t('Your comment has been posted.'));
+    $session_id = $this->assertSessionIDInForm();
+
+    $edit["comment_body[$langcode][0][value]"] = 'not profane ham';
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->assertNoText($this->profanity_message);
+    $this->assertText(t('Your comment has been posted.'));
+    $this->assertRaw('<p>' . $edit["comment_body[$langcode][0][value]"] . '</p>', t('Comment previously containing profanity was found.'));
+    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['subject']))->fetchField();
+    $this->assertMollomData('comment', $cid, $session_id);
+
+    // Sequence: Post unsure spam (not profanity), post profanity along with
+    // correct CAPTCHA, and expect that to be rejected.
+    $this->web_user = $this->drupalCreateUser();
+    $this->drupalLogin($this->web_user);
+    $edit = array(
+      'subject' => $this->randomName(),
+    );
+    $this->drupalGet("node/{$node->nid}");
+    $this->assertNoCaptchaField();
+    $this->assertPrivacyLink();
+
+    $edit["comment_body[$langcode][0][value]"] = 'unsure';
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->assertCaptchaField();
+    $this->assertNoText($this->profanity_message);
+    $this->assertNoText(t('Your comment has been posted.'));
+    $session_id = $this->assertSessionIDInForm();
+
+    $edit["comment_body[$langcode][0][value]"] = 'unsure profanity';
+    $this->postCorrectCaptcha(NULL, $edit, t('Save'));
+    $this->assertNoCaptchaField();
+    $this->assertText($this->profanity_message);
+    $this->assertNoText(t('Your comment has been posted.'));
   }
 }
 
@@ -1844,18 +1983,18 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $session_id = $this->assertSessionIDInForm();
     $this->assertPrivacyLink();
 
-    // Try to submit the form by using an invalid CAPTCHA. At this point,
-    // the submission should be rejected and a new CAPTCHA generated (even
-    // if the text of the comment is changed to ham).
-    $this->postIncorrectCaptcha(NULL, array('comment_body[und][0][value]' => 'ham'), t('Save'));
+    // Try to submit the form by solving the CAPTCHA incorrectly. At this point,
+    // the submission should be blocked and a new CAPTCHA generated, but only if
+    // the comment is still neither ham or spam.
+    $this->postIncorrectCaptcha(NULL, array(), t('Save'));
+    $this->assertCaptchaField();
     $session_id = $this->assertSessionIDInForm();
     $this->assertPrivacyLink();
 
-    // Now try using a valid CAPTCHA. The CAPTCHA form should no longer
-    // be present.
+    // Correctly solving the CAPTCHA should accept the form submission.
     $this->postCorrectCaptcha(NULL, array(), t('Save'));
-    $this->assertRaw('<p>ham</p>', t('A comment that is known to be ham appears on the screen after it is submitted.'));
-    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'ham'))->fetchField();
+    $this->assertRaw('<p>unsure</p>', t('A comment that may contain spam was found.'));
+    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'unsure'))->fetchField();
     $this->assertMollomData('comment', $cid, $session_id);
 
     // Try to save a new 'spam' comment; it should be rejected, with no CAPTCHA
@@ -2263,6 +2402,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
 
     // Log out and post a comment as anonymous user.
+    $this->resetServerRecords();
     $this->drupalLogout();
     $this->drupalGet('node/' . $node->nid);
     $this->clickLink(t('Add new comment'));
@@ -2295,6 +2435,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('author_id', $data['author_id'], NULL);
 
     // Log in admin user and edit comment containing spam.
+    $this->resetServerRecords();
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('comment/' . $comment->cid . '/edit');
     // Post without modification.
