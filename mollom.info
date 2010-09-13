@@ -2,9 +2,11 @@
 name = Mollom
 description = Protects forms against spam.
 core = 7.x
+configure = admin/config/content/mollom
+scripts[] = mollom.js
+stylesheets[all][] = mollom.css
 files[] = mollom.module
 files[] = mollom.admin.inc
 files[] = mollom.pages.inc
 files[] = mollom.install
 files[] = tests/mollom.test
-configure = admin/config/content/mollom

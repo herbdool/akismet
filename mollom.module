@@ -172,9 +172,6 @@ function mollom_init() {
       drupal_set_message($requirements['mollom']['description'], 'error');
     }
   }
-  if (strpos($_GET['q'], 'admin/reports/event/') === 0) {
-    drupal_add_css(drupal_get_path('module', 'mollom') . '/mollom.css');
-  }
 }
 
 /**
@@ -1229,10 +1226,6 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   elseif (!$form_state['mollom']['require_captcha'] || $form_state['mollom']['passed_captcha']) {
     $element['captcha']['#access'] = FALSE;
   }
-
-  // Add the JavaScript to switch to an audio CAPTCHA.
-  drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.js');
-  drupal_add_css(drupal_get_path('module', 'mollom') . '/mollom.css');
 
   // Make Mollom form and session information available to entirely different
   // functions.
