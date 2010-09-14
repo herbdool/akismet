@@ -10,6 +10,11 @@
  * Menu callback; Displays a list of forms configured for Mollom.
  */
 function mollom_admin_form_list() {
+  // This page is no form, but we want the testing mode warning to appear on it,
+  // too. We therefore pretend there was a form.
+  $form = $form_state = array();
+  mollom_form_alter($form, $form_state, 'mollom_admin_form_list');
+
   $modes = array(
     MOLLOM_MODE_DISABLED => t('None'),
     MOLLOM_MODE_CAPTCHA => t('CAPTCHA'),

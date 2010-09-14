@@ -823,7 +823,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertNoText('The configured Mollom API keys are invalid.');
 
     // Verify presence of testing mode warning.
-    $this->drupalGet('admin/config/content/mollom/blacklist');
+    $this->drupalGet('admin/config/content/mollom');
     $this->assertText('Mollom testing mode is still enabled.');
   }
 }
