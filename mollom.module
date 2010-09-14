@@ -594,20 +594,8 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
   }
 
   // Remind of enabled testing mode on all protected forms.
-  if (!isset($forms['testing']) && variable_get('mollom_testing_mode', 0) && empty($_POST) && (isset($forms['protected'][$form_id]) || strpos($_GET['q'], 'admin/config/content/mollom') === 0)) {
-    // Re-use the static form cache variable to only output this warning once.
-    $forms['testing'] = TRUE;
-
-    $admin_message = '';
-    if (user_access('administer mollom') && $_GET['q'] != 'admin/config/content/mollom/settings') {
-      $admin_message = t('Visit the <a href="@settings-url">Mollom settings page</a> to disable it.', array(
-        '@settings-url' => url('admin/config/content/mollom/settings'),
-      ));
-    }
-    $message = t('Mollom testing mode is still enabled. !admin-message', array(
-      '!admin-message' => $admin_message,
-    ));
-    drupal_set_message($message, 'warning');
+  if (isset($forms['protected'][$form_id]) || strpos($_GET['q'], 'admin/config/content/mollom') === 0) {
+    _mollom_testing_mode_warning();
   }
 
   // Site administrators don't have their content checked with Mollom.
@@ -1112,6 +1100,30 @@ function _mollom_status($reset = FALSE) {
   }
 
   return ($status['keys valid'] === TRUE ? TRUE : $status);
+}
+
+/**
+ * Outputs a warning message about enabled testing mode (once).
+ */
+function _mollom_testing_mode_warning() {
+  $warned = &drupal_static(__FUNCTION__);
+  if (isset($warned)) {
+    return;
+  }
+  $warned = TRUE;
+
+  if (variable_get('mollom_testing_mode', 0) && empty($_POST)) {
+    $admin_message = '';
+    if (user_access('administer mollom') && $_GET['q'] != 'admin/config/content/mollom/settings') {
+      $admin_message = t('Visit the <a href="@settings-url">Mollom settings page</a> to disable it.', array(
+        '@settings-url' => url('admin/config/content/mollom/settings'),
+      ));
+    }
+    $message = t('Mollom testing mode is still enabled. !admin-message', array(
+      '!admin-message' => $admin_message,
+    ));
+    drupal_set_message($message, 'warning');
+  }
 }
 
 /**
