@@ -321,16 +321,11 @@ function mollom_admin_unprotect_form_submit($form, &$form_state) {
 function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
   $form['#tree'] = TRUE;
 
-  // Select options and translation of internal values for rendering.
+  // Translate internal reason values for rendering and select list in form.
   $contexts = array(
     'everything' => t('All fields'),
     'links' => t('Links'),
     'author' => t('Author name'),
-  );
-  $reasons = array(
-    'spam' => t('Spam'),
-    'profanity' => t('Profanity'),
-    'unwanted' => t('Unwanted'),
   );
 
   $form['blacklist'] = array();
@@ -344,13 +339,17 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
       $row = array(
         'context' => array('#markup' => check_plain($contexts[$entry['context']])),
         'text' => array('#markup' => check_plain($entry['text'])),
-        'reason' => array('#markup' => check_plain($reasons[$entry['reason']])),
-        'text' => array('#markup' => check_plain($entry['text'])),
+      );
+      $delete_url_parts = array(
+        'admin/config/content/mollom/blacklist/delete',
+        base64_encode($entry['text']),
+        $entry['context'],
+        $entry['reason'],
       );
       $row['actions']['delete'] = array(
         '#type' => 'link',
         '#title' => t('delete'),
-        '#href' => 'admin/config/content/mollom/blacklist/delete/' .  base64_encode($entry['text']),
+        '#href' => implode('/', $delete_url_parts),
         '#options' => array(
           'query' => drupal_get_destination(),
         ),
@@ -372,10 +371,8 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
     '#maxlength' => 64,
   );
   $form['entry']['reason'] = array(
-    '#type' => 'select',
-    '#options' => $reasons,
-    '#default_value' => $type,
-    '#required' => TRUE,
+    '#type' => 'value',
+    '#value' => $type,
   );
   $form['entry']['actions'] = array(
     '#type' => 'actions',
@@ -411,26 +408,23 @@ function theme_mollom_admin_blacklist_form($variables) {
   $header = array(
     t('Context'),
     t('Text'),
-    t('Reason'),
     '',
   );
   $rows = array();
+
+  $rows[] = array(
+    drupal_render($form['entry']['context']),
+    drupal_render($form['entry']['text']),
+    drupal_render($form['entry']['actions']),
+  );
 
   foreach (element_children($form['blacklist']) as $id) {
     $rows[] = array(
       drupal_render($form['blacklist'][$id]['context']),
       drupal_render($form['blacklist'][$id]['text']),
-      drupal_render($form['blacklist'][$id]['reason']),
       drupal_render($form['blacklist'][$id]['actions']),
     );
   }
-
-  $rows[] = array(
-    drupal_render($form['entry']['context']),
-    drupal_render($form['entry']['text']),
-    drupal_render($form['entry']['reason']),
-    drupal_render($form['entry']['actions']),
-  );
 
   // This table is never empty due to the form.
   $output  = theme('table', array('header' => $header, 'rows' => $rows));
@@ -442,15 +436,34 @@ function theme_mollom_admin_blacklist_form($variables) {
 /**
  * Form builder; Builds the confirmation form for deleting a blacklist item.
  *
+ * @param $key
+ *   The blacklist entry text to remove, base64-encoded.
+ * @param $context
+ *   The context of the blacklist entry.
+ * @param $reason
+ *   The reason of the blacklist entry.
+ *
  * @ingroup forms
  * @see mollom_admin_blacklist_delete_submit()
  */
-function mollom_admin_blacklist_delete($form, &$form_state, $key) {
-  $form['#mollom-blacklist-text'] = base64_decode($key);
+function mollom_admin_blacklist_delete($form, &$form_state, $key, $context, $reason) {
+  $text = base64_decode($key);
+  $form['text'] = array(
+    '#type' => 'value',
+    '#value' => $text,
+  );
+  $form['context'] = array(
+    '#type' => 'value',
+    '#value' => $context,
+  );
+  $form['reason'] = array(
+    '#type' => 'value',
+    '#value' => $reason,
+  );
 
   return confirm_form(
     $form,
-    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $form['#mollom-blacklist-text'])),
+    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $text)),
     'admin/config/content/mollom/blacklist',
     t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
@@ -461,7 +474,12 @@ function mollom_admin_blacklist_delete($form, &$form_state, $key) {
  * Form submit handler to delete an entry from the blacklist.
  */
 function mollom_admin_blacklist_delete_submit($form, &$form_state) {
-  $result = mollom('mollom.removeBlacklistText', array('text' => $form['#mollom-blacklist-text']));
+  $data = array(
+    'text' => $form_state['values']['text'],
+    'context' => $form_state['values']['context'],
+    'reason' => $form_state['values']['reason'],
+  );
+  $result = mollom('mollom.removeBlacklistText', $data);
 
   if ($result === TRUE) {
     drupal_set_message(t('The entry was removed from the blacklist.'));
