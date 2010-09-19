@@ -545,3 +545,42 @@ function mollom_update_7005() {
     ));
   }
 }
+
+/**
+ * Update for changed comment form IDs.
+ *
+ * Since we are not able to know, on which nodes the comment form is actually
+ * enabled, we can only protect all possible comment forms.
+ */
+function mollom_update_7006() {
+  // Skip this update in case comment_form is not protected.
+  $mollom_form = db_query('SELECT * FROM {mollom_form} WHERE form_id = :form_id', array(':form_id' => 'comment_form'))->fetchAssoc();
+  if (!$mollom_form) {
+    return;
+  }
+  // Retrieve available node types.
+  $types = db_query('SELECT type FROM {node_type}');
+  // Check first for manually performed updates or re-configuration.
+  $form_ids = array();
+  foreach ($types as $type) {
+    $form_ids["comment_node_{$type->type}_form"] = $type->type;
+  }
+  if ($form_ids) {
+    $existing = db_query('SELECT form_id FROM {mollom_form} WHERE form_id IN (:form_ids)', array(':form_ids' => array_keys($form_ids)));
+    foreach ($existing as $row) {
+      unset($form_ids[$row->form_id]);
+    }
+  }
+  // Duplicate comment_form row into comment_node_TYPE_form rows by
+  // inserting settings for any remaining node types.
+  foreach ($form_ids as $form_id => $type) {
+    $mollom_form['form_id'] = $form_id;
+    db_insert('mollom_form')
+      ->fields($mollom_form)
+      ->execute();
+  }
+  // Delete the obselete row.
+  db_delete('mollom_form')
+    ->condition('form_id', 'comment_form')
+    ->execute();
+}
