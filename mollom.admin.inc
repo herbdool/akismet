@@ -340,18 +340,16 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
         'context' => array('#markup' => check_plain($contexts[$entry['context']])),
         'text' => array('#markup' => check_plain($entry['text'])),
       );
-      $delete_url_parts = array(
-        'admin/config/content/mollom/blacklist/delete',
-        base64_encode($entry['text']),
-        $entry['context'],
-        $entry['reason'],
-      );
       $row['actions']['delete'] = array(
         '#type' => 'link',
         '#title' => t('delete'),
-        '#href' => implode('/', $delete_url_parts),
+        '#href' => 'admin/config/content/mollom/blacklist/delete',
         '#options' => array(
-          'query' => drupal_get_destination(),
+          'query' => array(
+            'text' => $entry['text'],
+            'context' => $entry['context'],
+            'reason' => $entry['reason'],
+          ) + drupal_get_destination(),
         ),
       );
       $form['blacklist'][$id] = $row;
@@ -466,24 +464,23 @@ function theme_mollom_admin_blacklist_form($variables) {
  * @ingroup forms
  * @see mollom_admin_blacklist_delete_submit()
  */
-function mollom_admin_blacklist_delete($form, &$form_state, $key, $context, $reason) {
-  $text = base64_decode($key);
+function mollom_admin_blacklist_delete($form, &$form_state) {
   $form['text'] = array(
     '#type' => 'value',
-    '#value' => $text,
+    '#value' => $_GET['text'],
   );
   $form['context'] = array(
     '#type' => 'value',
-    '#value' => $context,
+    '#value' => $_GET['context'],
   );
   $form['reason'] = array(
     '#type' => 'value',
-    '#value' => $reason,
+    '#value' => $_GET['reason'],
   );
 
   return confirm_form(
     $form,
-    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $text)),
+    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $_GET['text'])),
     'admin/config/content/mollom/blacklist',
     t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
