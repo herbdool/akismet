@@ -503,11 +503,22 @@ function mollom_update_7005() {
   }
 
   // Change {mollom}.quality from varchar into float.
+  // Since some data rows are using an empty string to denote no 'quality'
+  // value, we need to insert a temporary value that is converted to NULL
+  // afterwards.
+  db_update('mollom')
+    ->fields(array('quality' => 9))
+    ->condition('quality', '')
+    ->execute();
   db_change_field('mollom', 'quality', 'quality', array(
     'type' => 'float',
     'size' => 'tiny',
     'not null' => FALSE,
   ));
+  db_update('mollom')
+    ->fields(array('quality' => NULL))
+    ->condition('quality', 9)
+    ->execute();
 
   // Add {mollom}.spam.
   if (!db_field_exists('mollom', 'spam')) {
@@ -549,8 +560,9 @@ function mollom_update_7005() {
 /**
  * Update for changed comment form IDs.
  *
- * Since we are not able to know, on which nodes the comment form is actually
- * enabled, we can only protect all possible comment forms.
+ * The comment form will be protected for all node types, since it is not
+ * possible to determine, on which nodes or node types comments are actually
+ * enabled.
  */
 function mollom_update_7006() {
   // Skip this update in case comment_form is not protected.
