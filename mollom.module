@@ -326,6 +326,8 @@ function _mollom_access($permission = FALSE) {
  *   The entity type of the data to report.
  * @param $id
  *   The entity id of the data to report.
+ *
+ * @todo Revamp this based on new {mollom}.form_id info.
  */
 function mollom_report_access($entity, $id) {
   // The special entity 'session' means that $id is a Mollom session_id, which
@@ -433,30 +435,31 @@ function mollom_data_load($entity, $id) {
  *   The entity type of the data to save.
  * @param $id
  *   The entity id the data belongs to.
+ * @param $form_id
+ *   The form ID the session data belongs to.
+ * @param $response
+ *   An associative array of session data returned by Mollom.
  *
  * @todo Remove usage of global $mollom variable.
  */
-function mollom_data_save($entity, $id) {
+function mollom_data_save($entity, $id, $form_id, $response) {
   // Nothing to do, if we do not have a valid Mollom response.
   if (empty($GLOBALS['mollom']['response']['session_id'])) {
     return FALSE;
   }
-  $data = $GLOBALS['mollom']['response'];
-  $data['session'] = $data['session_id'];
-  $data['entity'] = $entity;
-  $data['did'] = $id;
-  $data['changed'] = REQUEST_TIME;
+  $data = array(
+    'entity' => $entity,
+    'did' => $id,
+    'form_id' => $form_id,
+    'session' => $response['session_id'],
+    'changed' => time(),
+  );
+  $data += $response;
 
   // Convert languages into a string.
   if (!empty($data['languages'])) {
     $data['languages'] = implode(' ', $data['languages']);
   }
-  // Merge in default values that may not exist in the response.
-  $data += array(
-    'languages' => '',
-    'quality' => '',
-    'reputation' => '',
-  );
 
   $update = db_query_range("SELECT 'did' FROM {mollom} WHERE entity = :entity AND did = :did", 0, 1, array(':entity' => $entity, ':did' => $id))->fetchField();
   drupal_write_record('mollom', $data, $update ? $update : array());
@@ -1491,7 +1494,7 @@ function mollom_form_submit($form, &$form_state) {
     $data = mollom_form_get_values($form_state['values'], array(), $form_state['mollom']['mapping']);
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($data['post_id'])) {
-      mollom_data_save($form_state['mollom']['entity'], $data['post_id']);
+      mollom_data_save($form_state['mollom']['entity'], $data['post_id'], $form_state['mollom']['form_id'], $form_state['mollom']['response']);
     }
   }
   // Remove Mollom session information from form state to account for unforeseen
@@ -1936,7 +1939,7 @@ function mollom_get_captcha($type, array $data = array()) {
  * form submissions.
  */
 function mollom_mail_alter(&$message) {
-  // Attached the Mollom report link to any mails with IDs specified from the
+  // Attaches the Mollom report link to any mails with IDs specified from the
   // submitted form's hook_mollom_form_info(). This should ensure that the
   // report link is added to mails sent by actual users and not any mails sent
   // by Drupal since they should never be reported as spam.
@@ -1950,9 +1953,10 @@ function mollom_mail_alter(&$message) {
  */
 function mollom_mail_add_report_link(&$message) {
   if (!empty($GLOBALS['mollom']['response']['session_id'])) {
-    mollom_data_save('session', $GLOBALS['mollom']['response']['session_id']);
+    $mollom = $GLOBALS['mollom'];
+    mollom_data_save('session', $mollom['response']['session_id'], $mollom['form_id'], $mollom['response']);
     $report_link = t('Report as inappropriate: @link', array(
-      '@link' => url('mollom/report/session/' . $GLOBALS['mollom']['response']['session_id'], array('absolute' => TRUE)),
+      '@link' => url('mollom/report/session/' . $mollom['response']['session_id'], array('absolute' => TRUE)),
     ));
     $message['body'][] = $report_link;
   }
@@ -1978,6 +1982,13 @@ function node_mollom_form_list() {
     );
   }
   return $forms;
+}
+
+/**
+ * Implements hook_node_delete().
+ */
+function mollom_node_delete($node) {
+  mollom_data_delete('node', $node->nid);
 }
 
 /**
@@ -2085,6 +2096,13 @@ function comment_mollom_form_info($form_id) {
   );
 
   return $form_info;
+}
+
+/**
+ * Implements hook_comment_delete().
+ */
+function mollom_comment_delete($comment) {
+  mollom_data_delete('comment', $comment->cid);
 }
 
 /**
