@@ -580,7 +580,7 @@ function mollom_data_report_multiple($entity, array $ids, $feedback) {
  * necessary.
  */
 function mollom_form_alter(&$form, &$form_state, $form_id) {
-  $forms = &drupal_static(__FUNCTION__);
+  $forms = &drupal_static('mollom_form_cache');
 
   // Skip installation and update forms.
   if (defined('MAINTENANCE_MODE')) {
@@ -682,6 +682,7 @@ function mollom_form_cache($reset = FALSE) {
     // This catches both 'mollom_form_cache' as well as mollom_form_load()'s
     // 'mollom:form:*' entries.
     cache_clear_all('mollom', 'cache', TRUE);
+    drupal_static_reset('mollom_form_cache');
     return;
   }
 
@@ -845,6 +846,23 @@ function mollom_form_save(&$mollom_form) {
   mollom_form_cache(TRUE);
 
   return $status;
+}
+
+/**
+ * Deletes a Mollom form configuration.
+ */
+function mollom_form_delete($form_id) {
+  $mollom_form = mollom_form_load($form_id);
+
+  db_delete('mollom_form')
+    ->condition('form_id', $form_id)
+    ->execute();
+
+  // Allow modules to react on saved form configurations.
+  module_invoke_all('mollom_form_delete', $mollom_form);
+
+  // Flush cached Mollom forms and the Mollom form mapping cache.
+  mollom_form_cache(TRUE);
 }
 
 /**

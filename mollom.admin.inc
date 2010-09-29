@@ -307,7 +307,9 @@ function mollom_admin_unprotect_form($form, &$form_state, $mollom_form) {
  * Form submit handler for mollom_admin_unprotect_form().
  */
 function mollom_admin_unprotect_form_submit($form, &$form_state) {
-  db_delete('mollom_form')->condition('form_id', $form_state['values']['mollom']['form_id'])->execute();
+  mollom_form_delete($form_state['values']['mollom']['form_id']);
+
+  drupal_set_message(t('The form protection has been removed.'));
 
   $form_state['redirect'] = 'admin/config/content/mollom';
 }
