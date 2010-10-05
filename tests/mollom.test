@@ -1530,7 +1530,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp('mollom_test');
 
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments', 'post comments without approval'));
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments', 'skip comment approval'));
   }
 
   /**
@@ -2481,7 +2481,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $edit = array(
       DRUPAL_ANONYMOUS_RID . '[access comments]' => TRUE,
       DRUPAL_ANONYMOUS_RID . '[post comments]' => TRUE,
-      DRUPAL_ANONYMOUS_RID . '[post comments without approval]' => TRUE,
+      DRUPAL_ANONYMOUS_RID . '[skip comment approval]' => TRUE,
     );
     $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
 
