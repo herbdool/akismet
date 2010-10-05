@@ -410,59 +410,50 @@ function mollom_cron() {
  *   The entity id to retrieve data for.
  */
 function mollom_data_load($entity, $id) {
-  return db_query_range('SELECT * FROM {mollom} WHERE entity = :entity AND did = :did', 0, 1, array(':entity' => $entity, ':did' => $id))->fetchObject();
+  return db_query_range('SELECT * FROM {mollom} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
 }
 
 /**
  * Save Mollom validation data to the database.
  *
  * Based on the specified entity type and id, this function stores the
- * validation results returned by Mollom in the database. The stored data
- * is an associative array containing Mollom session information for the posted
- * content:
- * - session: The session ID returned by the Mollom server.
- * - quality: A quality rating assigned to the content to tell whether or not
- *   it's spam.
- * - languages: An array containing language codes the content might be
- *   written in.
+ * validation results returned by Mollom in the database.
  *
  * The special $entity type "session" may be used for mails and messages, which
  * originate from form submissions protected by Mollom, and can be reported by
  * anyone; $id is expected to be a Mollom session id instead of an entity id
  * then.
  *
- * @param $entity
- *   The entity type of the data to save.
- * @param $id
- *   The entity id the data belongs to.
- * @param $form_id
- *   The form ID the session data belongs to.
- * @param $response
- *   An associative array of session data returned by Mollom.
- *
- * @todo Remove usage of global $mollom variable.
+ * @param $data
+ *   An object containing Mollom session data for the entity, containing at
+ *   least the following properties:
+ *   - entity: The entity type of the data to save.
+ *   - id: The entity ID the data belongs to.
+ *   - form_id: The form ID the session data belongs to.
+ *   - session_id: The session ID returned by Mollom.
+ *   And optionally:
+ *   - spam: A spam check result integer returned by Mollom, which can be
+ *     MOLLOM_ANALYSIS_SPAM, MOLLOM_ANALYSIS_UNSURE, or MOLLOM_ANALYSIS_HAM.
+ *   - quality: A rating of the content's quality, in the range of 0 and 1.0.
+ *   - profanity: A profanity check rating returned by Mollom, in the range of
+ *     0 and 1.0.
+ *   - languages: An array containing language codes the content might be
+ *     written in.
  */
-function mollom_data_save($entity, $id, $form_id, $response) {
-  // Nothing to do, if we do not have a valid Mollom response.
-  if (empty($GLOBALS['mollom']['response']['session_id'])) {
-    return FALSE;
-  }
-  $data = array(
-    'entity' => $entity,
-    'did' => $id,
-    'form_id' => $form_id,
-    'session' => $response['session_id'],
-    'changed' => time(),
-  );
-  $data += $response;
-
-  // Convert languages into a string.
-  if (!empty($data['languages'])) {
-    $data['languages'] = implode(' ', $data['languages']);
+function mollom_data_save($data) {
+  $data->changed = REQUEST_TIME;
+  // Convert languages array into a string.
+  // @todo This conversion and data handling is not correct; needs work.
+  if (isset($data->languages) && is_array($data->languages)) {
+    $data->languages = implode(' ', $data->languages);
   }
 
-  $update = db_query_range("SELECT 'did' FROM {mollom} WHERE entity = :entity AND did = :did", 0, 1, array(':entity' => $entity, ':did' => $id))->fetchField();
+  $update = db_query_range("SELECT 'id' FROM {mollom} WHERE entity = :entity AND id = :id", 0, 1, array(
+    ':entity' => $data->entity,
+    ':id' => $data->id,
+  ))->fetchField();
   drupal_write_record('mollom', $data, $update ? $update : array());
+
   return $data;
 }
 
@@ -487,7 +478,7 @@ function mollom_data_delete($entity, $id) {
  *   An array of entity ids to delete data for.
  */
 function mollom_data_delete_multiple($entity, array $ids) {
-  return db_delete('mollom')->condition('entity', $entity)->condition('did', $ids)->execute();
+  return db_delete('mollom')->condition('entity', $entity)->condition('id', $ids)->execute();
 }
 
 /**
@@ -565,8 +556,8 @@ function mollom_data_report_multiple($entity, array $ids, $feedback) {
     // Load the Mollom session data.
     $data = mollom_data_load($entity, $id);
     // Send feedback, if we have session data.
-    if (isset($data->session)) {
-      $result = _mollom_send_feedback($data->session, $feedback);
+    if (isset($data->session_id)) {
+      $result = _mollom_send_feedback($data->session_id, $feedback);
       $return = $return && $result;
     }
   }
@@ -1509,10 +1500,14 @@ function mollom_form_submit($form, &$form_state) {
     // new entity id value into $form_state['values'], so we need to rebuild the
     // data mapping. We do not care for the actual fields, only for the value of
     // the mapped post_id.
-    $data = mollom_form_get_values($form_state['values'], array(), $form_state['mollom']['mapping']);
+    $values = mollom_form_get_values($form_state['values'], array(), $form_state['mollom']['mapping']);
     // We only consider non-empty and non-zero values as valid entity ids.
-    if (!empty($data['post_id'])) {
-      mollom_data_save($form_state['mollom']['entity'], $data['post_id'], $form_state['mollom']['form_id'], $form_state['mollom']['response']);
+    if (!empty($values['post_id'])) {
+      $data = (object) $form_state['mollom']['response'];
+      $data->entity = $form_state['mollom']['entity'];
+      $data->id = $values['post_id'];
+      $data->form_id = $form_state['mollom']['form_id'];
+      mollom_data_save($data);
     }
   }
   // Remove Mollom session information from form state to account for unforeseen
@@ -1972,9 +1967,13 @@ function mollom_mail_alter(&$message) {
 function mollom_mail_add_report_link(&$message) {
   if (!empty($GLOBALS['mollom']['response']['session_id'])) {
     $mollom = $GLOBALS['mollom'];
-    mollom_data_save('session', $mollom['response']['session_id'], $mollom['form_id'], $mollom['response']);
+    $data = (object) $mollom['response'];
+    $data->entity = 'session';
+    $data->id = $mollom['response']['session_id'];
+    $data->form_id = $mollom['form_id'];
+    mollom_data_save($data);
     $report_link = t('Report as inappropriate: @link', array(
-      '@link' => url('mollom/report/session/' . $mollom['response']['session_id'], array('absolute' => TRUE)),
+      '@link' => url("mollom/report/{$data->entity}/{$data->id}", array('absolute' => TRUE)),
     ));
     $message['body'][] = $report_link;
   }

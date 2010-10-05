@@ -82,15 +82,15 @@ function mollom_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
-      'did' => array(
+      'id' => array(
         'description' => 'Unique entity ID of the content.',
         'type' => 'varchar',
         'length' => 32,
         'not null' => TRUE,
         'default' => '',
       ),
-      'session' => array(
-        'description' => "Session hash returned by Mollom.",
+      'session_id' => array(
+        'description' => 'Session hash returned by Mollom.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
@@ -139,8 +139,8 @@ function mollom_schema() {
         'default' => '',
       ),
     ),
-    'indexes' => array('session' => array('session')),
-    'primary key' => array('entity', 'did'),
+    'indexes' => array('session_id' => array('session_id')),
+    'primary key' => array('entity', 'id'),
     'foreign keys' => array(
       'mollom_form_id' => array(
         'table' => 'mollom_form',
@@ -722,4 +722,32 @@ function mollom_update_7007() {
         ->execute();
     }
   }
+}
+
+/**
+ * Rename {mollom}.did to .id, and {mollom}.session to .session_id.
+ */
+function mollom_update_7008() {
+  if (!db_field_exists('mollom', 'id')) {
+    db_change_field('mollom', 'did', 'id', array(
+      'description' => 'Unique entity ID of the content.',
+      'type' => 'varchar',
+      'length' => 32,
+      'not null' => TRUE,
+      'default' => '',
+    ));
+  }
+  if (!db_field_exists('mollom', 'session_id')) {
+    db_change_field('mollom', 'session', 'session_id', array(
+      'description' => 'Session hash returned by Mollom.',
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => TRUE,
+      'default' => '',
+    ));
+  }
+  db_drop_primary_key('mollom');
+  db_add_primary_key('mollom', array('entity', 'id'));
+  db_drop_index('mollom', 'session');
+  db_add_index('mollom', 'session_id', array('session_id'));
 }
