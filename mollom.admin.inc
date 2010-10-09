@@ -13,9 +13,8 @@ function mollom_admin_form_list() {
   _mollom_testing_mode_warning();
 
   $modes = array(
-    MOLLOM_MODE_DISABLED => t('None'),
-    MOLLOM_MODE_CAPTCHA => t('CAPTCHA'),
     MOLLOM_MODE_ANALYSIS => t('Text analysis'),
+    MOLLOM_MODE_CAPTCHA => t('CAPTCHA'),
   );
 
   $header = array(
@@ -29,7 +28,10 @@ function mollom_admin_form_list() {
     $mollom_form = mollom_form_load($form_id);
     $rows[] = array(
       $mollom_form['title'],
-      $modes[$mollom_form['mode']],
+      t('!protection-mode (@discard)', array(
+        '!protection-mode' => $modes[$mollom_form['mode']],
+        '@discard' => $mollom_form['discard'] ? t('discard') : t('retain'),
+      )),
       l(t('Configure'), 'admin/config/content/mollom/manage/' . $form_id),
       l(t('Unprotect'), 'admin/config/content/mollom/unprotect/' . $form_id),
     );
@@ -149,7 +151,7 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         '#type' => 'radios',
         '#title' => t('Protection mode'),
         '#options' => $modes,
-        '#default_value' => $mollom_form['mode'],
+        '#default_value' => isset($mollom_form['mode']) ? $mollom_form['mode'] : key($modes),
       );
 
       if (!empty($mollom_form['elements'])) {
@@ -167,6 +169,24 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
             'profanity' => t('Profanity'),
           ),
           '#default_value' => $mollom_form['checks'],
+          '#states' => array(
+            'visible' => array(
+              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
+            ),
+          ),
+        );
+
+        $form['mollom']['discard'] = array(
+          '#type' => 'radios',
+          '#title' => t('When a post is blocked'),
+          '#default_value' => $mollom_form['discard'],
+          '#options' => array(
+            1 => t('Automatically discard'),
+            0 => t('Retain for manual moderation'),
+          ),
+          // Only possible for forms supporting moderation of unpublished posts.
+          '#access' => !empty($mollom_form['moderation callback']),
+          // Only possible for forms protected via text analysis.
           '#states' => array(
             'visible' => array(
               ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),

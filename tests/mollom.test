@@ -89,11 +89,16 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $this->resetSessionID();
     $this->messages = array();
 
+    // @see DrupalWebTestCase::setUp()
+    $modules = func_get_args();
+    if (isset($modules[0]) && is_array($modules[0])) {
+      $modules = $modules[0];
+    }
+
     // If not explicitly disabled by a test, setup with Mollom and default admin
     // user.
     if (empty($this->disableDefaultSetup)) {
       // Call parent::setUp() allowing Mollom test cases to pass further modules.
-      $modules = func_get_args();
       $modules[] = 'mollom';
       $modules[] = 'dblog';
       parent::setUp($modules);
@@ -108,7 +113,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
       ));
     }
     else {
-      $modules = func_get_args();
       $modules[] = 'dblog';
       parent::setUp($modules);
     }
@@ -637,8 +641,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * @see MollomWebTestCase->assertSessionID()
    * @see DrupalWebTestCase->drupalPost()
    */
-  protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL) {
-    $output = parent::drupalPost($path, $edit, $submit, $options, $headers, $form_html_id);
+  protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL, $extra_post = NULL) {
+    $output = parent::drupalPost($path, $edit, $submit, $options, $headers, $form_html_id, $extra_post);
     $options += array('watchdog' => TRUE);
     $this->assertMollomWatchdogMessages($options['watchdog']);
     return $output;
@@ -1103,7 +1107,10 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->drupalGet('node/' . $node->nid);
     $this->clickLink('edit');
 
-    $this->drupalPost(NULL, array('subject' => '', 'comment_body[und][0][value]' => 'spam'), t('Preview'));
+    $edit = array(
+      'comment_body[und][0][value]' => 'spam',
+    );
+    $this->drupalPost(NULL, $edit, t('Preview'));
     $this->assertNoText($this->spam_message);
 
     $this->drupalPost(NULL, array(), t('Save'));
@@ -1618,7 +1625,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->assertMollomData('comment', $cid, $session_id);
 
     // Sequence: Post unsure spam (not profanity), post profanity along with
-    // correct CAPTCHA, and expect that to be rejected.
+    // correct CAPTCHA, and expect that to be discarded.
     $this->web_user = $this->drupalCreateUser();
     $this->drupalLogin($this->web_user);
     $edit = array(
@@ -2087,7 +2094,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['comment_body[und][0][value]']))->fetchField();
     $this->assertMollomData('comment', $cid, $session_id);
 
-    // Try to save a new 'spam' comment; it should be rejected, with no CAPTCHA
+    // Try to save a new 'spam' comment; it should be discarded, with no CAPTCHA
     // appearing on the page.
     $this->resetSessionID();
     $this->drupalGet('comment/reply/' . $this->node->nid);
@@ -2098,7 +2105,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
-    // Try to save again; it should be rejected, with no CAPTCHA.
+    // Try to save again; it should be discarded, with no CAPTCHA.
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
     $session_id = $this->assertSessionIDInForm();
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
@@ -2145,6 +2152,8 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 }
 
 class MollomContactFormTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
   public static function getInfo() {
     return array(
       'name' => 'Contact form protection',
@@ -2154,7 +2163,15 @@ class MollomContactFormTestCase extends MollomWebTestCase {
   }
 
   function setUp() {
-    parent::setUp('contact');
+    $this->disableDefaultSetup = TRUE;
+    parent::setUp(array('contact', 'mollom'));
+    $this->setKeys();
+    $this->assertValidKeys();
+
+    $this->admin_user = $this->drupalCreateUser(array(
+      'access administration pages',
+      'administer mollom',
+    ));
 
     $this->web_user = $this->drupalCreateUser(array('access site-wide contact form', 'access user profiles', 'access user contact forms'));
   }
@@ -2604,6 +2621,144 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('platform_version', $data['platform_version'], $info['platform_version']);
     $this->assertSame('client_name', $data['client_name'], $info['client_name']);
     $this->assertSame('client_version', $data['client_version'], $info['client_version']);
+  }
+}
+
+/**
+ * Tests text analysis functionality.
+ *
+ * @todo Verify that no button captions appear in the data that is sent for
+ *   analyis; i.e., no "Add" string for mollom_test_form.
+ */
+class MollomAnalysisTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Text analysis',
+      'description' => 'Tests text analysis functionality.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    // @todo This is the new default setUp() procedure for all new tests, which
+    //   should be moved into MollomWebTestCase::setUp() after cleaning up the
+    //   tests.
+    $this->disableDefaultSetup = TRUE;
+    parent::setUp(array('mollom', 'mollom_test'));
+    $this->setKeys();
+    $this->assertValidKeys();
+
+    $this->admin_user = $this->drupalCreateUser(array(
+      'access administration pages',
+      'administer mollom',
+    ));
+    $this->web_user = $this->drupalCreateUser(array());
+  }
+
+  /**
+   * Tests accepting bad posts and moderating them.
+   */
+  function testDiscardModeration() {
+    $this->drupalLogin($this->admin_user);
+    // Verify that mollom_basic_test_form cannot be configured to put posts into
+    // moderation queue.
+    $this->drupalGet('admin/config/content/mollom/manage/mollom_basic_elements_test_form');
+    $this->assertNoFieldByName('mollom[discard]');
+    // Configure mollom_test_form to accept bad posts.
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
+      'mollom[checks][profanity]' => TRUE,
+      'mollom[discard]' => 0,
+    ));
+    $this->drupalLogout();
+
+    // Verify that we are able to post spam and the post is unpublished.
+    $edit = array(
+      'title' => $this->randomString(),
+      'body' => 'spam profanity',
+    );
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $mid = $this->assertTestSubmitData();
+    $data = $this->assertMollomData('mollom_test', $mid);
+    $record = mollom_test_load($mid);
+    $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
+    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('profanity', $data->profanity, 1);
+    $this->assertSame('moderate', $data->moderate, 1);
+
+    // Verify that editing the post does neither change the session data, nor
+    // the publishing status.
+    $edit = array(
+      'title' => $this->randomString(),
+      'body' => 'spam profanity spam profanity',
+    );
+    $this->drupalPost(NULL, $edit, 'Submit');
+    $mid = $this->assertTestSubmitData($mid);
+    $data = $this->assertMollomData('mollom_test', $mid);
+    $record = mollom_test_load($mid);
+    $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
+    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('profanity', $data->profanity, 1);
+    $this->assertSame('moderate', $data->moderate, 1);
+
+    // Verify that publishing the post changes the session data accordingly.
+    $this->drupalLogin($this->admin_user);
+    $edit = array(
+      'status' => TRUE,
+    );
+    $this->drupalPost('mollom-test/form/' . $mid, $edit, 'Submit');
+    $mid = $this->assertTestSubmitData($mid);
+    $data = $this->assertMollomData('mollom_test', $mid);
+    $record = mollom_test_load($mid);
+    $this->assertEqual($record['status'], 1, t('Published test post found.'));
+    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('profanity', $data->profanity, 1);
+    $this->assertSame('moderate', $data->moderate, 0);
+
+    // Verify that neither ham or unsure spam posts, nor non-profane posts are
+    // marked for moderation.
+    $this->drupalLogout();
+    $expectations = array(
+      'ham' => array('spam' => MOLLOM_ANALYSIS_HAM, 'profanity' => 0),
+      'unsure' => array('spam' => MOLLOM_ANALYSIS_UNSURE, 'profanity' => 0),
+      $this->randomString() => array('spam' => MOLLOM_ANALYSIS_UNSURE, 'profanity' => 0),
+    );
+    foreach ($expectations as $body => $expected) {
+      $edit = array(
+        'title' => $this->randomString(),
+        'body' => $body,
+      );
+      $this->drupalPost('mollom-test/form', $edit, 'Submit');
+      if ($expected['spam'] == MOLLOM_ANALYSIS_UNSURE) {
+        $this->postCorrectCaptcha(NULL, array(), 'Submit');
+      }
+      $mid = $this->assertTestSubmitData();
+      $data = $this->assertMollomData('mollom_test', $mid);
+      $record = mollom_test_load($mid);
+      $this->assertEqual($record['status'], 1, t('Published test post %body found.', array('%body' => $body)));
+      $this->assertSame('spam', $data->spam, $expected['spam']);
+      $this->assertSame('profanity', $data->profanity, $expected['profanity']);
+      $this->assertSame('moderate', $data->moderate, 0);
+    }
+  }
+
+  /**
+   * Asserts a successful mollom_test_form submission.
+   *
+   * @param $old_mid
+   *   (optional) The existing test record id to assert.
+   */
+  protected function assertTestSubmitData($old_mid = NULL) {
+    $this->assertText('Successful form submission.');
+    $mid = $this->getFieldValueByName('mid');
+    if (isset($old_mid)) {
+      $this->assertSame('Test record id', $mid, $old_mid);
+    }
+    else {
+      $this->assertTrue($mid > 0, t('Test record id @id found.', array('@id' => $mid)));
+    }
+    return $mid;
   }
 }
 
