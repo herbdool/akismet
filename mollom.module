@@ -571,8 +571,6 @@ function mollom_data_report_multiple($entity, array $ids, $feedback) {
  * necessary.
  */
 function mollom_form_alter(&$form, &$form_state, $form_id) {
-  $forms = &drupal_static('mollom_form_cache');
-
   // Skip installation and update forms.
   if (defined('MAINTENANCE_MODE')) {
     return;
@@ -584,9 +582,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
   }
 
   // Retrieve a list of all protected forms once.
-  if (!isset($forms)) {
-    $forms = mollom_form_cache();
-  }
+  $forms = mollom_form_cache();
 
   // Remind of enabled testing mode on all protected forms.
   if (isset($forms['protected'][$form_id]) || strpos($_GET['q'], 'admin/config/content/mollom') === 0) {
@@ -669,16 +665,23 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
  *     and therefore have an identical 'post_id' mapping.
  */
 function mollom_form_cache($reset = FALSE) {
+  $forms = &drupal_static(__FUNCTION__);
+
   if ($reset) {
     // This catches both 'mollom_form_cache' as well as mollom_form_load()'s
     // 'mollom:form:*' entries.
     cache_clear_all('mollom', 'cache', TRUE);
-    drupal_static_reset('mollom_form_cache');
+    unset($forms);
     return;
   }
 
+  if (isset($forms)) {
+    return $forms;
+  }
+
   if ($cache = cache_get('mollom_form_cache')) {
-    return $cache->data;
+    $forms = $cache->data;
+    return $forms;
   }
 
   $forms['protected'] = db_query("SELECT form_id, module FROM {mollom_form}")->fetchAllKeyed();
