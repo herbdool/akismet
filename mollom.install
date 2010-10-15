@@ -682,9 +682,9 @@ function mollom_update_7007() {
     foreach ($result as $row) {
       $ids[$row->type][] = $row->did;
     }
-    foreach ($ids as $type => $cids) {
+    foreach ($ids as $type => $nids) {
       db_update('mollom')
-        ->fields(array('form_id' => "node_{$type}_form"))
+        ->fields(array('form_id' => "{$type}_node_form"))
         ->condition('entity', 'node')
         ->condition('did', $nids)
         ->execute();
