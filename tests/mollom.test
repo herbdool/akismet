@@ -2658,9 +2658,9 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Tests accepting bad posts and moderating them.
+   * Tests retaining bad posts and moderating them.
    */
-  function testDiscardModeration() {
+  function testRetain() {
     $this->drupalLogin($this->admin_user);
     // Verify that mollom_basic_test_form cannot be configured to put posts into
     // moderation queue.

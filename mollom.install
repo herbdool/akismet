@@ -182,7 +182,7 @@ function mollom_schema() {
         'serialize' => TRUE,
       ),
       'discard' => array(
-        'description' => 'Whether to discard (1) or moderate (0) bad posts.',
+        'description' => 'Whether to discard (1) or retain (0) bad posts.',
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
@@ -773,7 +773,7 @@ function mollom_update_7008() {
 function mollom_update_7009() {
   if (!db_field_exists('mollom_form', 'discard')) {
     db_add_field('mollom_form', 'discard', array(
-      'description' => 'Whether to discard (1) or moderate (0) bad posts.',
+      'description' => 'Whether to discard (1) or retain (0) bad posts.',
       'type' => 'int',
       'size' => 'tiny',
       'not null' => TRUE,
