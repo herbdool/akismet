@@ -2049,6 +2049,26 @@ function mollom_mail_add_report_link(&$message) {
 }
 
 /**
+ * Implements hook_entity_update().
+ */
+function mollom_entity_update($entity, $type) {
+  // If an existing entity is published and we have session data stored for it,
+  // mark the data as moderated.
+  if (!empty($entity->status)) {
+    $id = reset(entity_extract_ids($type, $entity));
+    mollom_data_moderate($type, $id);
+  }
+}
+
+/**
+ * Implements hook_entity_delete().
+ */
+function mollom_entity_delete($entity, $type) {
+  $id = reset(entity_extract_ids($type, $entity));
+  mollom_data_delete($type, $id);
+}
+
+/**
  * @name mollom_node Node module integration for Mollom.
  * @{
  */
@@ -2112,24 +2132,6 @@ function node_mollom_form_info($form_id) {
  */
 function node_mollom_form_moderation(&$form, &$form_state) {
   $form_state['values']['status'] = 0;
-}
-
-/**
- * Implements hook_node_presave().
- */
-function mollom_node_presave($comment) {
-  // If an existing node is published and we have session data stored for it,
-  // mark the data as moderated.
-  if (!empty($node->nid) && $node->status) {
-    mollom_data_moderate('node', $node->nid);
-  }
-}
-
-/**
- * Implements hook_node_delete().
- */
-function mollom_node_delete($node) {
-  mollom_data_delete('node', $node->nid);
 }
 
 /**
@@ -2211,24 +2213,6 @@ function comment_mollom_form_info($form_id) {
  */
 function comment_mollom_form_moderation(&$form, &$form_state) {
   $form_state['values']['status'] = COMMENT_NOT_PUBLISHED;
-}
-
-/**
- * Implements hook_comment_presave().
- */
-function mollom_comment_presave($comment) {
-  // If an existing comment is published and we have session data stored for it,
-  // mark the data as moderated.
-  if (!empty($comment->cid) && $comment->status == COMMENT_PUBLISHED) {
-    mollom_data_moderate('comment', $comment->cid);
-  }
-}
-
-/**
- * Implements hook_comment_delete().
- */
-function mollom_comment_delete($comment) {
-  mollom_data_delete('comment', $comment->cid);
 }
 
 /**
