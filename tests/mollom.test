@@ -98,19 +98,21 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // If not explicitly disabled by a test, setup with Mollom and default admin
     // user.
     if (empty($this->disableDefaultSetup)) {
-      // Call parent::setUp() allowing Mollom test cases to pass further modules.
       $modules[] = 'mollom';
       $modules[] = 'dblog';
       parent::setUp($modules);
 
-      $this->admin_user = $this->drupalCreateUser(array(
-        'administer mollom',
+      $permissions = array(
         'access administration pages',
+        'administer mollom',
         'administer content types',
-        'administer comments',
         'administer permissions',
         'administer users',
-      ));
+      );
+      if (module_exists('comment')) {
+        $permissions[] = 'administer comments';
+      }
+      $this->admin_user = $this->drupalCreateUser($permissions);
     }
     else {
       $modules[] = 'dblog';
@@ -1976,6 +1978,72 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
     $this->assertText(t('Your account is currently pending approval by the site administrator.'));
     $this->assertTrue(user_load_by_name($name), t('The user who attempted to register appears in the database when the CAPTCHA is valid.'));
+  }
+}
+
+/**
+ * Tests Profile module integration.
+ */
+class MollomProfileFormsTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Profile integration',
+      'description' => 'Tests Profile module integration.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('profile'));
+  }
+
+  /**
+   * Tests Profile module integration with user registration form.
+   */
+  function testProfileRegistration() {
+    $this->drupalLogin($this->admin_user);
+
+    // Allow registration by site visitors without administrator approval.
+    variable_set('user_register', USER_REGISTER_VISITORS);
+
+    // Add the three supported profile field types.
+    $fields = array();
+    foreach (array('textfield', 'textarea', 'url', 'list') as $type) {
+      $name = 'profile_' . drupal_strtolower($this->randomName());
+      $title = $this->randomString();
+      $edit = array(
+        'category' => 'Registration',
+        'title' => $title,
+        'name' => $name,
+        'register' => 1,
+      );
+      $fields[$name] = $edit + array(
+        'type' => $type,
+      );
+      $this->drupalPost('admin/config/people/profile/add/' . $type, $edit, t('Save field'));
+    }
+
+    // Enable text analysis protection for user registration form.
+    $this->setProtection('user_register_form', MOLLOM_MODE_ANALYSIS);
+    $this->drupalLogout();
+
+    $this->drupalGet('user/register');
+    $this->assertNoCaptchaField();
+
+    $name = $this->randomName();
+    $edit = array(
+      'name' => $name,
+      'mail' => $name . '@example.com',
+    );
+    foreach ($fields as $key => $field) {
+      $edit[$key] = ($field['type'] != 'url' ? 'unsure' : 'http://example.com/unsure');
+    }
+    $this->drupalPost(NULL, $edit, t('Create new account'));
+    $this->postCorrectCaptcha(NULL, array(), t('Create new account'));
+    $this->assertText(t('A welcome message with further instructions has been sent to your e-mail address.'));
+    $this->assertTrue(user_load_by_name($name), t('New user was found in database.'));
   }
 }
 
