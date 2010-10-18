@@ -2029,18 +2029,21 @@ class MollomProfileFormsTestCase extends MollomWebTestCase {
     $this->setProtection('user_register_form', MOLLOM_MODE_ANALYSIS);
     $this->drupalLogout();
 
-    $this->drupalGet('user/register');
-    $this->assertNoCaptchaField();
-
-    $name = $this->randomName();
-    $edit = array(
-      'name' => $name,
-      'mail' => $name . '@example.com',
-    );
+    // Test each supported field separately.
     foreach ($fields as $key => $field) {
-      $edit[$key] = ($field['type'] != 'url' ? 'unsure' : 'http://example.com/unsure');
+      $this->drupalGet('user/register');
+      $this->assertNoCaptchaField();
+
+      $name = $this->randomName();
+      $edit = array(
+        'name' => $name,
+        'mail' => $name . '@example.com',
+        $key => $field['type'] != 'url' ? 'unsure' : 'http://example.com/unsure',
+      );
+      $this->drupalPost(NULL, $edit, t('Create new account'));
+      $this->assertCaptchaField();
     }
-    $this->drupalPost(NULL, $edit, t('Create new account'));
+
     $this->postCorrectCaptcha(NULL, array(), t('Create new account'));
     $this->assertText(t('A welcome message with further instructions has been sent to your e-mail address.'));
     $this->assertTrue(user_load_by_name($name), t('New user was found in database.'));
