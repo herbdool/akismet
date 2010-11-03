@@ -25,10 +25,30 @@ function mollom_admin_form_list() {
     t('Protection mode'),
     array('data' => t('Operations'), 'colspan' => 2),
   );
-  $rows = array();
   $result = db_query('SELECT form_id FROM {mollom_form}')->fetchCol();
+  $forms = array();
+  $module_info = system_get_info('module');
   foreach ($result as $form_id) {
-    $mollom_form = mollom_form_load($form_id);
+    $forms[$form_id] = mollom_form_load($form_id);
+    // system_get_info() only supports enabled modules. Default to the module's
+    // machine name in case it is disabled.
+    $module = $forms[$form_id]['module'];
+    if (!isset($module_info[$module])) {
+      $module_info[$module]['name'] = $module;
+    }
+    $forms[$form_id]['title'] = t('!module: !form-title', array(
+      '!form-title' => $forms[$form_id]['title'],
+      '!module' => t($module_info[$module]['name']),
+    ));
+  }
+
+  // Sort forms by title (including module name prefix).
+  // @todo D7: Move into common.inc.
+  module_load_include('inc', 'system', 'system.admin');
+  uasort($forms, 'system_sort_by_title');
+
+  $rows = array();
+  foreach ($forms as $form_id => $mollom_form) {
     $row = array();
     $row[] = $mollom_form['title'];
     if ($mollom_form['mode'] == MOLLOM_MODE_ANALYSIS) {
@@ -83,21 +103,26 @@ function mollom_admin_form_options() {
   }
 
   // Load module information.
-  $modules = module_implements('mollom_form_info');
-  $modules = db_query("SELECT name, info FROM {system} WHERE type = :type AND name IN (:name)", array(':type' => 'module', ':name' => $modules))->fetchAllKeyed();
-  foreach ($modules as $name => $info) {
-    $module_info = unserialize($info);
-    $modules[$name] = t($module_info['name']);
-  }
+  $module_info = system_get_info('module');
 
   // Transform form information into an associative array suitable for #options.
+  $options = array();
   foreach ($form_list as $form_id => $info) {
-    $form_list[$form_id] = $modules[$info['module']] . ': ' . $info['title'];
+    // system_get_info() only supports enabled modules. Default to the module's
+    // machine name in case it is disabled.
+    $module = $info['module'];
+    if (!isset($module_info[$module])) {
+      $module_info[$module]['name'] = $module;
+    }
+    $options[$form_id] = t('!module: !form-title', array(
+      '!form-title' => $info['title'],
+      '!module' => t($module_info[$module]['name']),
+    ));
   }
   // Sort form options by title.
-  asort($form_list);
+  asort($options);
 
-  return $form_list;
+  return $options;
 }
 
 /**
