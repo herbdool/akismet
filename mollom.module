@@ -2411,7 +2411,7 @@ function contact_mollom_form_info($form_id) {
     case 'contact_site_form':
       $form_info = array(
         'mode' => MOLLOM_MODE_ANALYSIS,
-        'bypass access' => array('administer site-wide contact form'),
+        'bypass access' => array('administer contact forms'),
         'mail ids' => array('contact_page_mail'),
         'elements' => array(
           'subject' => t('Subject'),
