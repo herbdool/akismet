@@ -43,9 +43,7 @@ function mollom_admin_form_list() {
   }
 
   // Sort forms by title (including module name prefix).
-  // @todo D7: Move into common.inc.
-  module_load_include('inc', 'system', 'system.admin');
-  uasort($forms, 'system_sort_by_title');
+  uasort($forms, 'drupal_sort_title');
 
   $rows = array();
   foreach ($forms as $form_id => $mollom_form) {
