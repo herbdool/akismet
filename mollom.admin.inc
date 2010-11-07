@@ -196,11 +196,12 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
 
       $all_permissions = array();
       foreach (module_implements('permission') as $module) {
-        $module_permissions = module_invoke($module, 'permission');
-        foreach ($module_permissions as &$info) {
-          $info += array('module' => $module);
+        if ($module_permissions = module_invoke($module, 'permission')) {
+          foreach ($module_permissions as &$info) {
+            $info += array('module' => $module);
+          }
+          $all_permissions += $module_permissions;
         }
-        $all_permissions += $module_permissions;
       }
       // Prepend Mollom's global permission to the list.
       array_unshift($mollom_form['bypass access'], 'bypass mollom protection');
