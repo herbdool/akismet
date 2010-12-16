@@ -1324,7 +1324,7 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
  * the same blacklist. You can configure a custom key to avoid this.
  */
 class MollomBlacklistTestCase extends MollomWebTestCase {
-  #protected $profile = 'testing';
+  protected $profile = 'testing';
 
   public static function getInfo() {
     return array(
@@ -2009,7 +2009,7 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
  * Tests Profile module integration.
  */
 class MollomProfileFormsTestCase extends MollomWebTestCase {
-  #protected $profile = 'testing';
+  protected $profile = 'testing';
 
   public static function getInfo() {
     return array(
@@ -2247,7 +2247,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 }
 
 class MollomContactFormTestCase extends MollomWebTestCase {
-  #protected $profile = 'testing';
+  protected $profile = 'testing';
 
   public static function getInfo() {
     return array(
@@ -2788,7 +2788,7 @@ class MollomDataTestCase extends MollomWebTestCase {
  *   analyis; i.e., no "Add" string for mollom_test_form.
  */
 class MollomAnalysisTestCase extends MollomWebTestCase {
-  #protected $profile = 'testing';
+  protected $profile = 'testing';
 
   public static function getInfo() {
     return array(
