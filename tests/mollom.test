@@ -2358,7 +2358,7 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     // Report the mail to Mollom.
     $this->drupalGet($report_link['url']);
     $edit = array(
-      'feedback' => 'spam',
+      'mollom[feedback]' => 'spam',
     );
     $this->drupalPost(NULL, $edit, t('Delete'));
     $this->assertText(t('The content was successfully reported as inappropriate.'));
