@@ -2113,7 +2113,7 @@ function mollom_entity_update($entity, $type) {
   // If an existing entity is published and we have session data stored for it,
   // mark the data as moderated.
   if (!empty($entity->status)) {
-    $id = reset(entity_extract_ids($type, $entity));
+    list($id) = entity_extract_ids($type, $entity);
     mollom_data_moderate($type, $id);
   }
 }
@@ -2122,7 +2122,7 @@ function mollom_entity_update($entity, $type) {
  * Implements hook_entity_delete().
  */
 function mollom_entity_delete($entity, $type) {
-  $id = reset(entity_extract_ids($type, $entity));
+  list($id) = entity_extract_ids($type, $entity);
   mollom_data_delete($type, $id);
 }
 
