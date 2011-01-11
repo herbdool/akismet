@@ -1992,6 +1992,9 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     $this->setProtection('user_register_form', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
 
+    // Retrieve initial count of registered users.
+    $count_initial = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+
     // Validate that the user registration form has a CAPTCHA text field.
     $this->drupalGet('user/register');
     $this->assertCaptchaField();
@@ -2005,6 +2008,10 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     );
     $this->postIncorrectCaptcha('user/register', $edit, t('Create new account'));
     $this->assertFalse(user_load_by_name($name), t('The user who attempted to register cannot be found in the database when the CAPTCHA is invalid.'));
+
+    // Verify that user count is still the same.
+    $count_new = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+    $this->assertEqual($count_initial, $count_new, t('No new user record has been created.'));
 
     // Try to register with a valid CAPTCHA. Make sure the user was able
     // to successfully register.
