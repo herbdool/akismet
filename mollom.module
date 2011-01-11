@@ -1907,12 +1907,11 @@ function _mollom_get_version() {
   }
 
   // Retrieve Drupal distribution and installation profile information.
-  include_once DRUPAL_ROOT . '/includes/install.inc';
   $profile = drupal_get_profile();
-  $profile_info = install_profile_info($profile);
-  if (empty($profile_info['version'])) {
-    $profile_info['version'] = VERSION;
-  }
+  $profile_info = system_get_info('module', $profile) + array(
+    'distribution_name' => 'Drupal',
+    'version' => VERSION,
+  );
 
   // Retrieve Mollom module information.
   $mollom_info = db_query("SELECT info FROM {system} WHERE type = 'module' AND name = 'mollom'")->fetchField();
