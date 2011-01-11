@@ -281,7 +281,7 @@ function mollom_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_reports_page'),
     'access callback' => '_mollom_access',
-    'access arguments' => array('administer mollom'),
+    'access arguments' => array('access mollom statistics'),
     'file' => 'mollom.admin.inc',
   );
 
@@ -372,6 +372,9 @@ function mollom_permission() {
     ),
     'bypass mollom protection' => array(
       'title' => t('Bypass Mollom protection on forms'),
+    ),
+    'access mollom statistics' => array(
+      'title' => t('View Mollom statistics'),
     ),
   );
 }
