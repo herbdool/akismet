@@ -1409,62 +1409,71 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     // Blacklist a word.
     // @todo As of now, only non-numeric, lower-case text seems to be supported.
     $term = drupal_strtolower(preg_replace('/[^a-zA-Z]/', '', $this->randomName()));
-    $result = mollom('mollom.addBlacklistText', array(
+    $data = array(
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'contains',
-    ));
+    );
+    $result = mollom('mollom.addBlacklistText', $data);
     $this->assertIdentical($result, TRUE, t('The text was blacklisted.'));
 
     // Check whether posts containing the blacklisted word are properly blocked.
-    $result = mollom('mollom.checkContent', array(
+    $data = array(
       'post_body' => $term,
-    ));
+    );
+    $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Identical match was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $data = array(
       'post_body' => "When the term is present, the post should get blocked: " . $term,
-    ));
+    );
+    $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Exact match was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $data = array(
       'post_body' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
-    ));
+    );
+    $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
-    $result = mollom('mollom.addBlacklistText', array(
+    $data = array(
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'exact',
-    ));
+    );
+    $result = mollom('mollom.addBlacklistText', $data);
     $this->assertTrue($result, t('The text was blacklisted.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $data = array(
       'post_body' => "When match is 'exact', it has to be exact: " . $term,
-    ));
+    );
+    $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Exact match was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $data = array(
       'post_body' => "When match is 'exact', it has to be exact: abc{$term}def",
-    ));
+    );
+    $result = mollom('mollom.checkContent', $data);
     $this->assertNotEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial match was not blocked.'));
 
-    $result = mollom('mollom.removeBlacklistText', array(
+    $data = array(
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
-    ));
+    );
+    $result = mollom('mollom.removeBlacklistText', $data);
     $this->assertTrue($result, t('The blacklisted text was removed.'));
 
     // Try to remove a non-existing entry.
-    $result = mollom('mollom.removeBlacklistText', array(
+    $data = array(
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
-    ));
+    );
+    $result = mollom('mollom.removeBlacklistText', $data);
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
     $this->assertNotIdentical($result, TRUE, t('Error response for a non-existing blacklist text found.'));
   }
