@@ -1689,9 +1689,6 @@ function mollom_form_submit($form, &$form_state) {
       mollom_data_save($data);
     }
   }
-  // Remove Mollom session information from form state to account for unforeseen
-  // new builds of the form.
-  unset($form_state['mollom']);
 }
 
 /**
