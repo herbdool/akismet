@@ -457,6 +457,13 @@ function mollom_data_save($data) {
   ))->fetchField();
   drupal_write_record('mollom', $data, $update ? $update : array());
 
+  if (!$update) {
+    module_invoke_all('mollom_data_insert', $data);
+  }
+  else {
+    module_invoke_all('mollom_data_update', $data);
+  }
+
   return $data;
 }
 
@@ -504,6 +511,10 @@ function mollom_data_delete($entity, $id) {
  *   An array of entity ids to delete data for.
  */
 function mollom_data_delete_multiple($entity, array $ids) {
+  foreach ($ids as $id) {
+    $data = mollom_data_load($entity, $id);
+    module_invoke_all('mollom_data_delete', $data);
+  }
   return db_delete('mollom')->condition('entity', $entity)->condition('id', $ids)->execute();
 }
 
@@ -1686,7 +1697,7 @@ function mollom_form_submit($form, &$form_state) {
       $data->form_id = $form_state['mollom']['form_id'];
       // Set the moderation flag for forms accepting bad posts.
       $data->moderate = $form_state['mollom']['require_moderation'];
-      mollom_data_save($data);
+      $form_state['mollom']['data'] = mollom_data_save($data);
     }
   }
 }
