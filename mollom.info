@@ -1,6 +1,6 @@
 ; $Id$
 name = Mollom
-description = Protects forms against spam.
+description = Automatically moderates user-submitted content and protects your site from spam and profanity.
 core = 7.x
 configure = admin/config/content/mollom
 scripts[] = mollom.js
