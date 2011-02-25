@@ -1,4 +1,3 @@
-# $Id$
 # LANGUAGE translation of mollom (7.x-1.x-dev)
 # Copyright (c) 2010
 # Generated from files:
