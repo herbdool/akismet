@@ -231,7 +231,7 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         // Textual analysis filters.
         $form['mollom']['checks'] = array(
           '#type' => 'checkboxes',
-          '#title' => t('Analyze text for'),
+          '#title' => t('Text analysis checks'),
           '#options' => array(
             'spam' => t('Spam'),
             'profanity' => t('Profanity'),
@@ -268,6 +268,24 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
           '#title' => t('Text fields to analyze'),
           '#options' => $elements,
           '#default_value' => $enabled_fields,
+          '#states' => array(
+            'visible' => array(
+              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
+            ),
+          ),
+        );
+
+        $form['mollom']['strictness'] = array(
+          '#type' => 'radios',
+          '#title' => t('Text analysis accuracy'),
+          '#options' => array(
+            'strict' => t('Strict'),
+            'normal' => t('Normal'),
+            'relaxed' => t('Relaxed'),
+          ),
+          '#default_value' => $mollom_form['strictness'],
+          // Only possible for forms protected via text analysis.
+          '#access' => $modes[MOLLOM_MODE_ANALYSIS],
           '#states' => array(
             'visible' => array(
               ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),

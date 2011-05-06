@@ -193,6 +193,13 @@ function mollom_schema() {
         'not null' => FALSE,
         'serialize' => TRUE,
       ),
+      'strictness' => array(
+        'description' => 'Strictness of text analysis checks.',
+        'type' => 'varchar',
+        'length' => 8,
+        'not null' => TRUE,
+        'default' => 'medium',
+      ),
       'module' => array(
         'description' => 'Module name owning the form.',
         'type' => 'varchar',
@@ -787,6 +794,21 @@ function mollom_update_7009() {
       'size' => 'tiny',
       'not null' => TRUE,
       'default' => 0,
+    ));
+  }
+}
+
+/**
+ * Add {mollom_form}.strictness column.
+ */
+function mollom_update_7010() {
+  if (!db_field_exists('mollom_form', 'strictness')) {
+    db_add_field('mollom_form', 'strictness', array(
+      'description' => 'Strictness of text analysis checks.',
+      'type' => 'varchar',
+      'length' => 8,
+      'not null' => TRUE,
+      'default' => 'normal',
     ));
   }
 }
