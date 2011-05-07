@@ -190,7 +190,7 @@ function mollom_menu() {
   );
 
   $items['admin/config/content/mollom'] = array(
-    'title' => 'Mollom spam blocking and content moderation',
+    'title' => 'Mollom content moderation',
     'description' => 'Configure how the Mollom service moderates user-submitted content such as spam and profanity.',
     'page callback' => 'mollom_admin_form_list',
     'access arguments' => array('administer mollom'),
