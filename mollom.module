@@ -658,7 +658,19 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
       // Append a submit handler to store Mollom session data. Requires that
       // the primary submit handler has run already, so a potential 'post_id'
       // mapping can be retrieved from $form_state['values'].
-      $form['#submit'][] = 'mollom_form_submit';
+      // @todo Core: node_form_submit() uses a button-level submit handler,
+      //   which invokes form-level submit handlers before the node/entity is
+      //   saved, so $form_state does not contain the new node ID yet. There is
+      //   no #post_submit property or form processing phase, we could rely on.
+      //   Potentially applies to other contrib entities, too.
+      // @see http://drupal.org/node/1150756
+      if (isset($form_state['build_info']['base_form_id']) && $form_state['build_info']['base_form_id'] == 'node_form') {
+        $form_submit_key = &$form['actions']['submit'];
+      }
+      else {
+        $form_submit_key = &$form;
+      }
+      $form_submit_key['#submit'][] = 'mollom_form_submit';
 
       // Add link to privacy policy on forms protected via textual analysis,
       // if enabled.
