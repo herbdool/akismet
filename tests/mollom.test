@@ -89,7 +89,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $this->messages = array();
 
     $modules = func_get_args();
-    $modules = $modules[0];
+    $modules = (isset($modules[0]) ? $modules[0] : array());
 
     // If not explicitly disabled by a test, setup with Mollom and default admin
     // user.
