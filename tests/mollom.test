@@ -2325,37 +2325,6 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Ensure a comment can be updated by a moderator.
-   */
-  function testCommentUpdate() {
-    // Enable Mollom CAPTCHA protection for comments.
-    $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_node_article_form', MOLLOM_MODE_CAPTCHA);
-    $this->drupalLogout();
-
-    // Submit a comment.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $this->node->nid);
-    $session_id = $this->assertSessionIDInForm();
-    $edit = array(
-      'comment_body[und][0][value]' => 'spam',
-      'mollom[captcha]' => 'correct',
-    );
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('Your comment has been posted.'));
-    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
-
-    // Edit the comment.
-    $this->drupalLogin($this->admin_user);
-    $edit = array(
-      'comment_body[und][0][value]' => 'ham',
-    );
-    $this->drupalPost('comment/' . $cid . '/edit', $edit, t('Save'));
-    $this->assertText(t('Your comment has been posted.'));
-  }
-
-  /**
    * Return the number of comments for a node of the given node ID.  We
    * can't use comment_num_all() here, because that is statically cached
    * and therefore will not work correctly with the SimpleTest browser.
@@ -2916,6 +2885,92 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('platform_version', $data['platform_version'], $info['platform_version']);
     $this->assertSame('client_name', $data['client_name'], $info['client_name']);
     $this->assertSame('client_version', $data['client_version'], $info['client_version']);
+  }
+}
+
+/**
+ * Verify that Mollom data can be created, read, updated, and deleted.
+ */
+class MollomDataCRUDTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Data CRUD',
+      'description' => 'Verify that Mollom data can be created, read, updated, and deleted.',
+      'group' => 'Mollom',
+    );
+  }
+
+  /**
+   * Verify that Mollom data can be updated.
+   *
+   * Also verifies that the combined primary/unique database schema index is
+   * properly accounted for; i.e., two entities having the same ID but different
+   * types must not considered the same.
+   */
+  function testUpdate() {
+    // Create a first data record.
+    $data1 = (object) array(
+      'entity' => 'type1',
+      'id' => 123,
+      'form_id' => 'type1_form',
+      'session_id' => 'type1-session-id',
+    );
+    mollom_data_save($data1);
+    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
+
+    // Create a second data record; same ID, different entity type.
+    $data2 = (object) array(
+      'entity' => 'type2',
+      'id' => 123,
+      'form_id' => 'type2_form',
+      'session_id' => 'type2-session-id',
+    );
+    mollom_data_save($data2);
+    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+
+    // Update the first data record.
+    $data1->session_id = 'new-session-id-type1';
+    mollom_data_save($data1);
+
+    // Verify that both records are correct.
+    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
+    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+  }
+
+  /**
+   * Verify that Mollom data can be deleted.
+   */
+  function testDelete() {
+    // Create a data record.
+    $data1 = (object) array(
+      'entity' => 'type1',
+      'id' => 123,
+      'form_id' => 'type1_form',
+      'session_id' => 'type1-session-id',
+    );
+    mollom_data_save($data1);
+
+    // Create a second data record; same ID, different entity type.
+    $data2 = (object) array(
+      'entity' => 'type2',
+      'id' => 123,
+      'form_id' => 'type2_form',
+      'session_id' => 'type2-session-id',
+    );
+    mollom_data_save($data2);
+
+    // Verify that both records exist.
+    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
+    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+
+    // Delete the first data record.
+    mollom_data_delete($data1->entity, $data1->id);
+
+    // Verify that only the second record remained and was not changed.
+    $this->assertNoMollomData($data1->entity, $data1->id);
+    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
   }
 }
 

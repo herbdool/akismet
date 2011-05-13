@@ -454,7 +454,7 @@ function mollom_data_save($data) {
     ':entity' => $data->entity,
     ':id' => $data->id,
   ))->fetchField();
-  drupal_write_record('mollom', $data, $update ? $update : array());
+  drupal_write_record('mollom', $data, $update ? array('entity', $update) : array());
 
   if (!$update) {
     module_invoke_all('mollom_data_insert', $data);
