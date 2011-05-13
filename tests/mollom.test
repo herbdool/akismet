@@ -1708,6 +1708,8 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
    * Tests configuration of form fields for textual analysis.
    */
   function testFormFieldsConfiguration() {
+    $form_info = mollom_form_info('mollom_test_form', 'mollom_test');
+
     // Protect Mollom test form.
     $this->drupalGet('admin/config/content/mollom/add');
     $edit = array(
@@ -1715,6 +1717,17 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Next'));
     $this->assertText('Mollom test form');
+
+    // Verify that text analysis cannot be enabled without enabling fields.
+    $edit = array(
+      'mollom[mode]' => MOLLOM_MODE_ANALYSIS,
+    );
+    foreach ($form_info['elements'] as $key => $label) {
+      $edit['mollom[enabled_fields][' . rawurlencode($key) . ']'] = FALSE;
+    }
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->assertText(t('At least one field is required for text analysis.'));
+
     $edit = array(
       'mollom[mode]' => MOLLOM_MODE_ANALYSIS,
       'mollom[checks][spam]' => TRUE,
@@ -1761,7 +1774,6 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
 
     // Verify that field configuration contains only available elements.
     $this->drupalGet('admin/config/content/mollom/manage/mollom_test_form');
-    $form_info = mollom_form_info('mollom_test_form', 'mollom_test');
     $fields = $this->xpath('//input[starts-with(@name, "mollom[enabled_fields]")]');
     $elements = array();
     foreach ($fields as $field) {
