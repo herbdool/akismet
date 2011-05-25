@@ -20,14 +20,77 @@
  * - Abstract MOLLOM_ERROR request response handling. REST and XMLRPC use
  *   different ways to express a (local) configuration error. Predefined errors
  *   are used in "upstream" methods and calling code.
- *   - No clue how MOLLOM_REFRESH and MOLLOM_REDIRECT will look in REST yet.
- * - More specific MollomException sub-classes? Instead of setting a
- *   lastResponseCode, there could be MollomRedirectException aso.; however,
- *   exceptions require try/catch blocks in _all_ calling code.
  * - Doing a "verifyKey" with an empty server list leads to two/duplicate and
  *   unnecessary GET site/$id requests, one for the server list, subsequent ones
  *   for whatever/verifyKey. Some resources can be cached.
  */
+
+/**
+ * A catchable Mollom exception.
+ *
+ * The Mollom class internally uses exceptions to handle client-side server
+ * balancing and eventually HTTP request errors within the Mollom::request()
+ * method. All exceptions thrown in the Mollom class and derived classes should
+ * be instances of the MollomException class if they pertain to errors that can
+ * be catched/handled within the class. Other errors should not use the
+ * MollomException class and handled differently.
+ *
+ * No MollomException is supposed to pile up as a user-facing fatal error. All
+ * functions that invoke Mollom::request() have to catch Mollom exceptions.
+ *
+ * @see Mollom::query()
+ * @see Mollom::request()
+ *
+ * @param $arguments
+ *   (optional) A associative array containing additional information about the
+ *   performed request that failed, typically:
+ *   - data: (array) An associative array containing HTTP GET/POST/PUT request
+ *     query parameters sent to the server.
+ *   - response: (mixed) The server response, either as string, or the already
+ *     parsed response, e.g. as an array.
+ */
+class MollomException extends Exception {
+  public $arguments = array();
+
+  function __construct($message = '', $code = 0, Exception $previous = NULL, array $arguments = array()) {
+    parent::__construct($message, $code, $previous);
+    $this->setArguments($arguments);
+  }
+
+  public function setArguments($arguments) {
+    $this->arguments = $arguments;
+    return $this;
+  }
+
+  public function getArguments() {
+    return $this->arguments;
+  }
+}
+
+/**
+ * Mollom authentication error exception.
+ *
+ * Thrown in case API keys or other authentication parameters are invalid.
+ */
+class MollomAuthenticationException extends MollomException {
+}
+
+/**
+ * Mollom server redirect exception.
+ *
+ * Thrown when a Mollom server asks the client to use next server in the server
+ * list.
+ */
+class MollomRedirectException extends MollomException {
+}
+
+/**
+ * Mollom server refresh exception.
+ *
+ * Thrown when a Mollom server asks the client to update the server list.
+ */
+class MollomRefreshException extends MollomException {
+}
 
 /**
  * The base class for Mollom client implementations.
@@ -186,24 +249,40 @@ abstract class Mollom {
     // new server list. We only ever abort, if a server returns MOLLOM_ERROR, in
     // which case there must be a configuration error (e.g., invalid API keys).
     $servers = array();
+    $path = 'site/' . $this->keyPublic;
+    $data = $this->getAuthentication();
     foreach ($this->serversInit as $server) {
-      $result = $this->request('GET', $server, 'site/' . $this->keyPublic, $this->getAuthentication());
-      if ($this->lastResponseCode !== TRUE || !isset($result['site']['servers'])) {
-        // A MOLLOM_ERROR indicates a bogus configuration. In this case, stop
-        // trying, since all servers will fail.
-        if ($this->lastResponseCode == MOLLOM_ERROR) {
-          break;
-        }
-        // Otherwise, skip to the next server.
-        else {
-          continue;
-        }
+      try {
+        $result = $this->request('GET', $server, $path, $data);
       }
-      // Otherwise, we have a valid result.
-      else {
-        $servers = $result['site']['servers'];
+      catch (MollomAuthenticationException $e) {
+        // Bogus configuration. Stop trying, since all servers will fail.
         break;
       }
+      catch (MollomException $e) {
+        // On any other error, skip to the next server.
+        continue;
+      }
+      // Log any other uncatched error, skip to the next server.
+      // @todo Consider to add an $expectedResponseElement parameter directly to
+      //   Mollom::query(), passed on to Mollom::request(), in order to be able
+      //   to detect an unexpected response where the request is performed?
+      if ($this->lastResponseCode !== TRUE || !isset($result['site']['servers'])) {
+        $this->log[] = array(
+          'type' => 'error',
+          'message' => 'Error: @method @uri',
+          'arguments' => array(
+            '@method' => 'GET',
+            '@uri' => $server . '/' . $path,
+          ),
+          'data' => $data,
+          'response' => $result,
+        );
+        continue;
+      }
+      // Otherwise, we have a valid result.
+      $servers = $result['site']['servers'];
+      break;
     }
     return $servers;
   }
@@ -309,13 +388,8 @@ abstract class Mollom {
   }
 
   public function query($method, $path, array $data = array()) {
-    // Enable testing mode.
-    if (variable_get('mollom_testing_mode', 0)) {
-      $data['testing'] = TRUE;
-    }
-
     // Retrieve server list.
-    // @todo Use a magic getter for $this->server?
+    // @todo Use a magic getter for $this->servers?
     $this->getServers();
     // If we get no list, return the error code.
     // @todo Better error handling.
@@ -330,66 +404,82 @@ abstract class Mollom {
     $refresh = FALSE;
     // Send the request to the first server; if that fails, try the other
     // servers in the list.
-    reset($this->servers);
     while ($server = current($this->servers)) {
-      $result = $this->request($method, $server, $path, $data);
+      try {
+        $result = $this->request($method, $server, $path, $data);
+      }
+      catch (MollomRefreshException $e) {
+        // Prevent infinite loops.
+        if (!$refresh) {
+          $refresh = TRUE;
 
-      // Handle non-positive request result.
-      // @todo Make request() throw exceptions instead?
-      if ($this->lastResponseCode !== TRUE) {
-        if ($this->lastResponseCode === MOLLOM_REFRESH) {
-          // Avoid endless loops.
-          if (!$refresh) {
-            $refresh = TRUE;
-
-            // Retrieve a new list of valid Mollom servers.
-            $this->servers = $this->refreshServers();
-            // Update the server list.
-            $this->configServerListSet($this->servers);
-            // If API keys are invalid, the XML-RPC error code is returned.
-            // To reach this, we must have had a server list (and therefore
-            // valid keys) before, so we do not immediately return (like above),
-            // but instead trigger the fallback mode.
-            if (empty($this->servers)) {
-              break;
-            }
-            $this->log[] = array(
-              'type' => 'debug',
-              'message' => 'Refreshed servers: %servers',
-              'arguments' => array(
-                '%servers' => implode(', ', $this->servers),
-              ),
-            );
-            // No reset() required, because:
-            // php -r "$a = array(1, 2, 3); $i = 0; while ($b = current($a)) { var_dump($b); if ($b == 2 && !$i) {$i = 1; $a = array(1, 2, 3); continue; } next($a); }"
-            // => int(1), int(2), int(1), int(2), int(3)
+          // Retrieve a new list of valid Mollom servers.
+          $this->servers = $this->refreshServers();
+          // If API keys are invalid, we won't be able to get a new server list.
+          // To reach this, we must have had a server list (and therefore
+          // valid keys) before, so we do not immediately return, but trigger
+          // the fallback mode instead.
+          if (empty($this->servers)) {
+            break;
           }
-        }
-        elseif ($this->lastResponseCode === MOLLOM_REDIRECT) {
-          // Try the next server in the list.
-          $next = next($this->servers);
-
+          // Update the server list.
+          $this->configServerListSet($this->servers);
           $this->log[] = array(
             'type' => 'debug',
-            'message' => 'Server %server redirected to: %next.',
+            'message' => '@code: Refreshed servers: %servers',
             'arguments' => array(
-              '%server' => $server,
-              '%next' => $next,
+              '@code' => $e->getCode(),
+              '%servers' => implode(', ', $this->servers),
             ),
           );
         }
-        // Instantly return upon a 'real' error.
-        elseif ($this->lastResponseCode === MOLLOM_ERROR) {
-          return MOLLOM_ERROR;
-        }
+      }
+      catch (MollomRedirectException $e) {
+        // Try the next server in the list.
+        $next = next($this->servers);
+
+        $this->log[] = array(
+          'type' => 'debug',
+          'message' => '@code: Server %server redirected to %next.',
+          'arguments' => array(
+            '@code' => $e->getCode(),
+            '%server' => $server,
+            '%next' => $next,
+          ),
+        );
+      }
+      catch (MollomAuthenticationException $e) {
+        $this->log[] = array(
+          'type' => 'error',
+          'message' => 'Error @code: Invalid authentication or configuration.',
+          'arguments' => array(
+            '@code' => $e->getCode(),
+          ),
+        );
+        return MOLLOM_ERROR;
+      }
+      catch (MollomException $e) {
+        $this->log[] = array(
+          'type' => 'debug',
+          'message' => 'Error @code: @method @uri: %message',
+          'arguments' => array(
+            '@code' => $e->getCode(),
+            '@method' => $method,
+            '@uri' => $server . '/' . $path,
+            '%message' => $e->getMessage(),
+          ),
+          'data' => $e->arguments['data'],
+          'response' => $e->arguments['response'],
+        );
         // On any other error, try the next server.
-        else {
-          next($this->servers);
-        }
+        next($this->servers);
+      }
+
+      if ($this->lastResponseCode !== TRUE) {
+        // @todo Handle uncaught exceptions and errors?
       }
       // Positive result.
       else {
-        # _mollom_watchdog_multiple($messages, WATCHDOG_DEBUG);
         return $result;
       }
     }
@@ -403,12 +493,21 @@ abstract class Mollom {
       'type' => 'debug',
       'message' => 'All servers unreachable or returning errors. The server list was emptied.',
     );
-    # _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
 
     return NETWORK_ERROR;
   }
 
   abstract function request1($server, $method, array $data);
+
+  /**
+   * Performs a HTTP request to a Mollom server.
+   *
+   * @throws MollomAuthenticationException
+   * @throws MollomRedirectException
+   * @throws MollomRefreshException
+   * @throws MollomException
+   */
+  abstract function request($method, $server, $path, array $data);
 
   public function getSite($id = NULL) {
     if (!isset($id)) {
@@ -418,12 +517,6 @@ abstract class Mollom {
     // @todo Error handling?
     return isset($result['site']) ? $result['site'] : $result;
   }
-}
-
-/**
- * MollomException class.
- */
-class MollomException extends Exception {
 }
 
 /**
@@ -568,6 +661,9 @@ class MollomDrupalXMLRPC extends MollomDrupal /*implements MollomClientInterface
     }
   }
 
+  function request($method, $server, $path, array $data) {
+  }
+
 }
 
 class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
@@ -576,7 +672,7 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
    */
   const API_VERSION = 'v1';
 
-  public $serversInit = array('http://megatron.mollom.com/mollomresttest/myrest');
+  public $serversInit = array('http://megatron.mollom.com');
 
   function request1($server, $method, array $data) {
     // Map methods to REST paths.
@@ -671,6 +767,9 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
     }
   }
 
+  /**
+   * Implements Mollom::request().
+   */
   function request($method, $server, $path, array $data) {
     // Build the REST request path.
     $path = self::API_VERSION . '/' . $path;
@@ -711,20 +810,22 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
       }
     }
 
-    // 'code' != 0 in the response denotes a MOLLOM_ERROR.
-    if (!$error && isset($dhr->data)) {
-      if (is_array($dhr->data) && isset($dhr->data['code']) && $dhr->data['code'] != 0) {
-        $error = TRUE;
-        // If there is no HTTP error code, take over 'code' from response.
-        if (!isset($dhr->code)) {
-          $dhr->code = (int) $dhr->data['code'];
-        }
-        // If there is no HTTP status message, take over 'message' from response.
-        if (!isset($dhr->error)) {
-          $dhr->error = $dhr->data['message'];
-        }
+    // If a 'code' exists in the response, it has precedence, regardless of a
+    // possible HTTP error code.
+    if (isset($dhr->data) && is_array($dhr->data) && isset($dhr->data['code']) && $dhr->data['code'] != 0) {
+      $error = TRUE;
+      // Replace HTTP status code with 'code' from response.
+      $dhr->code = $dhr->data['code'];
+      // If there is no HTTP status message, take over 'message' from response.
+      // @todo Remove this condition when Mollom sends proper error messages.
+      if (!isset($dhr->error)) {
+        $dhr->error = $dhr->data['message'];
       }
     }
+
+    // Ensure that $dhr->code is an integer.
+    $dhr->code = (int) $dhr->code;
+
     if ($error) {
       $this->lastResponseCode = $dhr->code;
       $this->log[] = array(
@@ -739,6 +840,20 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
         'data' => $data,
         'response' => $dhr->data,
       );
+      $arguments = array(
+        'data' => $data,
+        'response' => $dhr->data,
+      );
+      if ($dhr->code == 1 || $dhr->code == MOLLOM_ERROR || $dhr->code == 401) {
+        throw new MollomAuthenticationException(t('Invalid authentication.'), MOLLOM_ERROR, NULL, $arguments);
+      }
+      if ($dhr->code == 2 || $dhr->code == MOLLOM_REDIRECT || ($dhr->code >= 300 && $dhr->code < 400)) {
+        throw new MollomRedirectException(t('Server redirected to next.'), MOLLOM_REDIRECT, NULL, $arguments);
+      }
+      if ($dhr->code == 3 || $dhr->code == MOLLOM_REFRESH || $dhr->code == 503) {
+        throw new MollomRefreshException(t('Refresh of server list required.'), MOLLOM_REFRESH, NULL, $arguments);
+      }
+      throw new MollomException($dhr->error, $dhr->code, NULL, $arguments);
     }
     else {
       $this->lastResponseCode = TRUE;
@@ -802,9 +917,16 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
     return $a;
   }
 
-  function verifyKey($data) {
-    $result = $this->query('GET', 'site/' . $this->keyPublic);
+  function verifyKey($data = array()) {
     // @todo Error handling?
+    //   ::query() catches known exceptions, but in the end, we'll still get
+    //   either a parsed response or some kind of an error here.
+    //   Possible final errors are:
+    //   - code/lastResponseCode derived from refreshServers(), which can be any, even 0. :(
+    //   - MOLLOM_ERROR in case of an auth/config error.
+    //   - NETWORK_ERROR in case of communication error.
+    //   We also expect a certain element in the response.
+    $result = $this->query('GET', 'site/' . $this->keyPublic);
     return is_array($result) && isset($result['site']) ? TRUE : FALSE;
   }
 
