@@ -12,23 +12,21 @@
  *   The new CAPTCHA type to retrieve, e.g. 'image' or 'audio'.
  * @param $form_build_id
  *   The internal form build id of the form to update the CAPTCHA for.
- * @param $mollom_session_id
- *   The last known Mollom session id contained in the form.
+ * @param $captchaId
+ *   The last known Mollom CAPTCHA ID contained in the form.
  *
  * @return
  *   A JSON array containing:
  *   - content: The HTML markup for the new CAPTCHA.
- *   - session_id: The Mollom session id for the new CAPTCHA.
+ *   - captchaId: The ID for the new CAPTCHA.
  *
  * @todo Add error handling.
  */
-function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
+function mollom_captcha_js($type, $form_build_id, $captchaId) {
   $dummy_state['mollom'] = array(
     'captcha_type' => $type,
-    'response' => array(
-      'session_id' => $mollom_session_id,
-    ),
   );
+  $dummy_state['mollom']['response']['captcha']['captchaId'] = $captchaId;
   $captcha = mollom_get_captcha($dummy_state);
 
   // Update cached session id in the cached $form_state.
@@ -45,18 +43,18 @@ function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
   if (!empty($dummy_state['mollom']['response']['session_id'])) {
     if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
       $form_state = $cache->data;
-      $form_state['mollom']['response']['session_id'] = $dummy_state['mollom']['response']['session_id'];
+      $form_state['mollom']['response']['captcha']['captchaId'] = $dummy_state['mollom']['response']['captcha']['captchaId'];
       // @todo Double-check $cid.
       cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
-      // After successfully updating the cache, replace the original session id.
-      $mollom_session_id = $form_state['mollom']['response']['session_id'];
+      // After successfully updating the cache, replace the original ID.
+      $captchaId = $form_state['mollom']['response']['captcha']['captchaId'];
     }
   }
 
   // Return new content and new session_id via JSON.
   $data = array(
     'content' => $captcha,
-    'session_id' => $mollom_session_id,
+    'captchaId' => $captchaId,
   );
   drupal_json_output($data);
   drupal_exit();

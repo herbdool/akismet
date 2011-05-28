@@ -205,9 +205,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *
    * @param $type
    *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
-   * @param $session_id
-   *   A Mollom session_id of the last request, as contained in the XML-RPC
-   *   response.
+   * @param $id
+   *   The ID of $type in the last request, as returned from Mollom.
    */
   protected function assertResponseID($type, $id) {
     // Check whether watchdog messages indicate a refresh or redirect.
@@ -265,10 +264,13 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   used for future comparisons in case of a server redirect.
    * - The return value of this function is used to invoke assertMollomData(),
    *   to verify that the proper session id was stored in the database.
+   *
+   * @param $type
+   *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
    */
-  protected function assertResponseIDInForm() {
-    $session_id = $this->getFieldValueByName('mollom[session_id]');
-    return $this->assertResponseID('sessionId', $session_id);
+  protected function assertResponseIDInForm($type) {
+    $id = $this->getFieldValueByName('mollom[' . $type . ']');
+    return $this->assertResponseID($type, $id);
   }
 
   /**
@@ -399,14 +401,20 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   The entity type to search for in {mollom}.
    * @param $id
    *   The entity id to search for in {mollom}.
-   * @param $session_id
-   *   (optional) The Mollom session id to assert additionally.
+   * @param $response_type
+   *   (optional) The type of ID to assert; e.g., 'contentId', 'captchaId'.
+   * @param $response_id
+   *   (optional) The ID of $type to assert additionally.
    */
-  protected function assertMollomData($entity, $id, $session_id = NULL) {
+  protected function assertMollomData($entity, $id, $response_type = '', $response_id = NULL) {
     $data = mollom_data_load($entity, $id);
-    $this->assertTrue($data->session_id, t('Mollom session data for %entity @id exists: <pre>@data</pre>', array('%entity' => $entity, '@id' => $id, '@data' => var_export($data, TRUE))));
-    if (isset($session_id)) {
-      $this->assertSame(t('Stored session id'), $data->session_id, $session_id);
+    $this->assertTrue($data->id, t('Mollom session data for %entity @id exists: <pre>@data</pre>', array(
+      '%entity' => $entity,
+      '@id' => $id,
+      '@data' => var_export($data, TRUE),
+    )));
+    if (isset($response_id)) {
+      $this->assertSame(t('Stored session id'), $data->$response_type, $response_id);
     }
     return $data;
   }
@@ -1191,6 +1199,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->web_user = $this->drupalCreateUser(array('edit own comments'));
     $this->drupalLogin($this->web_user);
     $edit = array(
+      'subject' => 'ham',
       'comment_body[und][0][value]' => 'ham',
     );
     $this->drupalPost('comment/reply/' . $node->nid, $edit, t('Preview'));
@@ -1206,6 +1215,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->clickLink('edit');
 
     $edit = array(
+      'subject' => 'spam',
       'comment_body[und][0][value]' => 'spam',
     );
     $this->drupalPost(NULL, $edit, t('Preview'));
@@ -1465,29 +1475,29 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $result = mollom('mollom.checkContent', array(
       'post_body' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Exact URL match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact URL match was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
       'post_body' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial URL match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Partial URL match was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
       'post_body' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('URL with www-prefix was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('URL with www-prefix was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
       'post_body' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('URL with different schema was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('URL with different schema was blocked.'));
 
     // @todo Not implemented yet.
     /*
     $result = mollom('mollom.checkContent', array(
       'post_body' => "When the domain appears on its own, the post should get blocked: www.{$domain}",
     ));
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Plain domain name with www-prefix was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Plain domain name with www-prefix was blocked.'));
     */
 
     $result = mollom('mollom.removeBlacklistURL', array(
@@ -1531,19 +1541,19 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'post_body' => $term,
     );
     $result = mollom('mollom.checkContent', $data);
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Identical match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Identical match was blocked.'));
 
     $data = array(
       'post_body' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = mollom('mollom.checkContent', $data);
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Exact match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
       'post_body' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = mollom('mollom.checkContent', $data);
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
     $data = array(
@@ -1559,13 +1569,13 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'post_body' => "When match is 'exact', it has to be exact: " . $term,
     );
     $result = mollom('mollom.checkContent', $data);
-    $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Exact match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
       'post_body' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = mollom('mollom.checkContent', $data);
-    $this->assertNotEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Partial match was not blocked.'));
+    $this->assertNotEqual($result['spamResult'], 'SPAM', t('Partial match was not blocked.'));
 
     $data = array(
       'text' => $term,
@@ -1741,7 +1751,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->profanity_message);
     $this->assertNoText(t('Your comment has been posted.'));
-    $session_id = $this->assertResponseIDInForm();
+    $contentId = $this->assertResponseIDInForm('contentId');
 
     $edit["comment_body[$langcode][0][value]"] = 'not profane ham';
     $this->drupalPost(NULL, $edit, t('Save'));
@@ -1749,7 +1759,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->assertText(t('Your comment has been posted.'));
     $this->assertRaw('<p>' . $edit["comment_body[$langcode][0][value]"] . '</p>', t('Comment previously containing profanity was found.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['subject']))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, 'contentId', $contentId);
 
     // Sequence: Post unsure spam (not profanity), post profanity along with
     // correct CAPTCHA, and expect that to be discarded.
@@ -1767,7 +1777,8 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->assertCaptchaField();
     $this->assertNoText($this->profanity_message);
     $this->assertNoText(t('Your comment has been posted.'));
-    $session_id = $this->assertResponseIDInForm();
+    $contentId = $this->assertResponseIDInForm('contentId');
+    $captchaId = $this->assertResponseIDInForm('captchaId');
 
     $edit["comment_body[$langcode][0][value]"] = 'unsure profanity';
     $this->postCorrectCaptcha(NULL, $edit, t('Save'));
@@ -2247,7 +2258,7 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
     // Login and submit a node.
     $this->drupalLogin($this->web_user);
     $this->drupalGet('node/add/article');
-    $session_id = $this->assertResponseIDInForm();
+    $captchaId = $this->assertResponseIDInForm('captchaId');
     $edit = array(
       'title' => 'spam',
       'mollom[captcha]' => 'correct',
@@ -2255,7 +2266,7 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->node = $this->drupalGetNodeByTitle($edit['title']);
     $this->assertUrl('node/' . $this->node->nid);
-    $this->assertMollomData('node', $this->node->nid, $session_id);
+    $this->assertMollomData('node', $this->node->nid, 'captchaId', $captchaId);
   }
 
   /**
@@ -2336,21 +2347,21 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->drupalLogin($this->web_user);
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $this->assertResponseIDInForm();
+    $this->assertResponseIDInForm('captchaId');
     $this->assertNoPrivacyLink();
 
     // Try to submit an incorrect answer for the CAPTCHA, without value for
     // required field.
     $this->postIncorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $this->assertResponseIDInForm();
+    $this->assertResponseIDInForm('captchaId');
     $this->assertNoPrivacyLink();
 
     // Try to submit a correct answer for the CAPTCHA, still without required
     // field value.
     $this->postCorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $session_id = $this->assertResponseIDInForm();
+    $captchaId = $this->assertResponseIDInForm('captchaId');
     $this->assertNoPrivacyLink();
 
     // Finally, we should be able to submit a comment.
@@ -2358,13 +2369,14 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertText(t('Your comment has been posted.'));
     $this->assertRaw('<p>spam</p>', t('Spam comment could be posted with correct CAPTCHA.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, 'captchaId', $captchaId);
 
     // Verify we can solve the CAPTCHA directly.
+    $this->resetResponseID();
     $value = 'some more spam';
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $session_id = $this->assertResponseIDInForm();
+    $captchaId = $this->assertResponseIDInForm('captchaId');
     $edit = array(
       'comment_body[und][0][value]' => $value,
       'mollom[captcha]' => 'correct',
@@ -2372,7 +2384,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText(t('Your comment has been posted.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $value))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, 'captchaId', $captchaId);
   }
 
   /**
@@ -2396,7 +2408,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertCaptchaField();
-    $session_id = $this->assertResponseIDInForm();
+    $contentId = $this->assertResponseIDInForm('contentId');
     $this->assertPrivacyLink();
 
     // Try to submit the form by solving the CAPTCHA incorrectly. At this point,
@@ -2404,14 +2416,14 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // the comment is still neither ham or spam.
     $this->postIncorrectCaptcha(NULL, array(), t('Save'));
     $this->assertCaptchaField();
-    $session_id = $this->assertResponseIDInForm();
+    $captchaId = $this->assertResponseIDInForm('captchaId');
     $this->assertPrivacyLink();
 
     // Correctly solving the CAPTCHA should accept the form submission.
     $this->postCorrectCaptcha(NULL, array(), t('Save'));
     $this->assertRaw('<p>' . $edit['comment_body[und][0][value]'] . '</p>', t('A comment that may contain spam was found.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['comment_body[und][0][value]']))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
+    $this->assertMollomData('comment', $cid, 'contentId', $contentId);
 
     // Try to save a new 'spam' comment; it should be discarded, with no CAPTCHA
     // appearing on the page.
@@ -2420,13 +2432,13 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $session_id = $this->assertResponseIDInForm();
+    $contentId = $this->assertResponseIDInForm('contentId');
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
     // Try to save again; it should be discarded, with no CAPTCHA.
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $session_id = $this->assertResponseIDInForm();
+    $contentId = $this->assertResponseIDInForm('contentId');
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
@@ -2780,20 +2792,20 @@ class MollomDataTestCase extends MollomWebTestCase {
     $form_state = array('values' => $values, 'buttons' => array());
     $data = mollom_form_get_values($form_state, $fields, $form_info['mapping']);
 
-    $this->assertSame('post_title', $data['post_title'], $values['subject']);
+    $this->assertSame('postTitle', $data['postTitle'], $values['subject']);
     $body = array(
       $values['message'],
       $values['parent']['child'],
       $values['field_checked'][0]['value'],
       $values['field_checked'][1]['value'],
     );
-    $this->assertSame('post_body', $data['post_body'], implode(" \n", $body));
-    $this->assertSame('author_name', $data['author_name'], $values['name']);
-    $this->assertSame('author_mail', $data['author_mail'], $values['mail']);
-    $this->assertFalse(isset($data['author_url']), t('author_url: Undefined.'));
-    $this->assertFalse(isset($data['author_openid']), t('author_openid: Undefined.'));
-    $this->assertFalse(isset($data['author_id']), t('author_id: Undefined.'));
-    $this->assertSame('author_ip', $data['author_ip'], ip_address());
+    $this->assertSame('postBody', $data['postBody'], implode(" \n", $body));
+    $this->assertSame('authorName', $data['authorName'], $values['name']);
+    $this->assertSame('authorMail', $data['authorMail'], $values['mail']);
+    $this->assertFalse(isset($data['authorUrl']), t('authorUrl: Undefined.'));
+    $this->assertFalse(isset($data['authorOpenid']), t('authorOpenid: Undefined.'));
+    $this->assertFalse(isset($data['authorId']), t('authorId: Undefined.'));
+    $this->assertSame('authorIp', $data['authorIp'], ip_address());
 
     // Verify submitted form values for an registered user.
     $user = $this->admin_user;
@@ -2805,15 +2817,15 @@ class MollomDataTestCase extends MollomWebTestCase {
     $form_state = array('values' => $values, 'buttons' => array());
     $data = mollom_form_get_values($form_state, $fields, $form_info['mapping']);
 
-    $this->assertSame('post_title', $data['post_title'], $values['subject']);
-    $this->assertSame('post_body', $data['post_body'], $values['message']);
-    $this->assertSame('author_name', $data['author_name'], $this->admin_user->name);
-    $this->assertSame('author_mail', $data['author_mail'], $this->admin_user->mail);
-    $this->assertFalse(isset($data['author_url']), t('author_url: Undefined.'));
+    $this->assertSame('postTitle', $data['postTitle'], $values['subject']);
+    $this->assertSame('postBody', $data['postBody'], $values['message']);
+    $this->assertSame('authorName', $data['authorName'], $this->admin_user->name);
+    $this->assertSame('authorMail', $data['authorMail'], $this->admin_user->mail);
+    $this->assertFalse(isset($data['authorUrl']), t('authorUrl: Undefined.'));
     // @todo Test this.
-    $this->assertFalse(isset($data['author_openid']), t('author_openid: Undefined.'));
-    $this->assertSame('author_id', $data['author_id'], $this->admin_user->uid);
-    $this->assertSame('author_ip', $data['author_ip'], ip_address());
+    $this->assertFalse(isset($data['authorOpenid']), t('authorOpenid: Undefined.'));
+    $this->assertSame('authorId', $data['authorId'], $this->admin_user->uid);
+    $this->assertSame('authorIp', $data['authorIp'], ip_address());
 
     // Verify that invalid UTF-8 is detected.
     $values = array(
@@ -2885,11 +2897,11 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
-    $this->assertSame('post_title', $data['post_title'], $edit['subject']);
-    $this->assertSame('post_body', $data['post_body'], $edit['comment_body[und][0][value]']);
-    $this->assertSame('author_name', $data['author_name'], $this->web_user->name);
-    $this->assertSame('author_mail', $data['author_mail'], $this->web_user->mail);
-    $this->assertSame('author_id', $data['author_id'], $this->web_user->uid);
+    $this->assertSame('postTitle', $data['postTitle'], $edit['subject']);
+    $this->assertSame('postBody', $data['postBody'], $edit['comment_body[und][0][value]']);
+    $this->assertSame('authorName', $data['authorName'], $this->web_user->name);
+    $this->assertSame('authorMail', $data['authorMail'], $this->web_user->mail);
+    $this->assertSame('authorId', $data['authorId'], $this->web_user->uid);
     $this->assertSame('strictness', $data['strictness'], 'normal');
 
     $this->PostCorrectCaptcha(NULL, array(), t('Save'));
@@ -2898,7 +2910,7 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord('mollom.checkCaptcha');
-    $this->assertSame('author_id', $data['author_id'], $this->web_user->uid);
+    $this->assertSame('authorId', $data['authorId'], $this->web_user->uid);
 
     // Allow anonymous users to post comments without approval.
     $this->drupalLogin($this->admin_user);
@@ -2933,12 +2945,12 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord();
-    $this->assertSame('post_title', $data['post_title'], $edit['subject']);
-    $this->assertSame('post_body', $data['post_body'], $edit['comment_body[und][0][value]']);
-    $this->assertSame('author_name', $data['author_name'], $edit['name']);
-    $this->assertSame('author_mail', $data['author_mail'], $edit['mail']);
-    $this->assertSame('author_url', $data['author_url'], $edit['homepage']);
-    $this->assertFalse(isset($data['author_id']), t('author_id: Undefined.'));
+    $this->assertSame('postTitle', $data['postTitle'], $edit['subject']);
+    $this->assertSame('postBody', $data['postBody'], $edit['comment_body[und][0][value]']);
+    $this->assertSame('authorName', $data['authorName'], $edit['name']);
+    $this->assertSame('authorMail', $data['authorMail'], $edit['mail']);
+    $this->assertSame('authorUrl', $data['authorUrl'], $edit['homepage']);
+    $this->assertFalse(isset($data['authorId']), t('authorId: Undefined.'));
 
     $this->PostCorrectCaptcha(NULL, array(), t('Save'));
     $comment = db_query('SELECT * FROM {comment} WHERE subject = :subject', array(':subject' => $edit['subject']))->fetchObject();
@@ -2946,7 +2958,7 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Verify that submitted data equals post data.
     $data = $this->getServerRecord('mollom.checkCaptcha');
-    $this->assertFalse(isset($data['author_id']), t('author_id: Undefined.'));
+    $this->assertFalse(isset($data['authorId']), t('authorId: Undefined.'));
 
     // Log in admin user and edit comment containing spam.
     $this->resetServerRecords();
@@ -3120,28 +3132,28 @@ class MollomDataCRUDTestCase extends MollomWebTestCase {
       'entity' => 'type1',
       'id' => 123,
       'form_id' => 'type1_form',
-      'session_id' => 'type1-session-id',
+      'contentId' => 1,
     );
     mollom_data_save($data1);
-    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
+    $this->assertMollomData($data1->entity, $data1->id, 'contentId', $data1->contentId);
 
     // Create a second data record; same ID, different entity type.
     $data2 = (object) array(
       'entity' => 'type2',
       'id' => 123,
       'form_id' => 'type2_form',
-      'session_id' => 'type2-session-id',
+      'contentId' => 2,
     );
     mollom_data_save($data2);
-    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+    $this->assertMollomData($data2->entity, $data2->id, 'contentId', $data2->contentId);
 
     // Update the first data record.
-    $data1->session_id = 'new-session-id-type1';
+    $data1->contentId = 3;
     mollom_data_save($data1);
 
     // Verify that both records are correct.
-    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
-    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+    $this->assertMollomData($data1->entity, $data1->id, 'contentId', $data1->contentId);
+    $this->assertMollomData($data2->entity, $data2->id, 'contentId', $data2->contentId);
   }
 
   /**
@@ -3153,7 +3165,7 @@ class MollomDataCRUDTestCase extends MollomWebTestCase {
       'entity' => 'type1',
       'id' => 123,
       'form_id' => 'type1_form',
-      'session_id' => 'type1-session-id',
+      'contentId' => 1,
     );
     mollom_data_save($data1);
 
@@ -3162,20 +3174,20 @@ class MollomDataCRUDTestCase extends MollomWebTestCase {
       'entity' => 'type2',
       'id' => 123,
       'form_id' => 'type2_form',
-      'session_id' => 'type2-session-id',
+      'contentId' => 2,
     );
     mollom_data_save($data2);
 
     // Verify that both records exist.
-    $this->assertMollomData($data1->entity, $data1->id, $data1->session_id);
-    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+    $this->assertMollomData($data1->entity, $data1->id, 'contentId', $data1->contentId);
+    $this->assertMollomData($data2->entity, $data2->id, 'contentId', $data2->contentId);
 
     // Delete the first data record.
     mollom_data_delete($data1->entity, $data1->id);
 
     // Verify that only the second record remained and was not changed.
     $this->assertNoMollomData($data1->entity, $data1->id);
-    $this->assertMollomData($data2->entity, $data2->id, $data2->session_id);
+    $this->assertMollomData($data2->entity, $data2->id, 'contentId', $data2->contentId);
   }
 }
 
@@ -3238,7 +3250,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
-    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('spam', $data->spam, 1.0);
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -3253,7 +3265,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
-    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('spam', $data->spam, 1.0);
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -3267,7 +3279,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 1, t('Published test post found.'));
-    $this->assertSame('spam', $data->spam, MOLLOM_ANALYSIS_SPAM);
+    $this->assertSame('spam', $data->spam, 1.0);
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 0);
 
@@ -3275,9 +3287,9 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     // marked for moderation.
     $this->drupalLogout();
     $expectations = array(
-      'ham' => array('spam' => MOLLOM_ANALYSIS_HAM, 'profanity' => 0),
-      'unsure' => array('spam' => MOLLOM_ANALYSIS_UNSURE, 'profanity' => 0),
-      $this->randomString() => array('spam' => MOLLOM_ANALYSIS_UNSURE, 'profanity' => 0),
+      'ham' => array('spam' => 0.0, 'spamResult' => 'HAM', 'profanity' => 0),
+      'unsure' => array('spam' => 0.5, 'spamResult' => 'UNSURE', 'profanity' => 0),
+      $this->randomString() => array('spam' => 0.5, 'spamResult' => 'UNSURE', 'profanity' => 0),
     );
     foreach ($expectations as $body => $expected) {
       $edit = array(
@@ -3285,7 +3297,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
         'body' => $body,
       );
       $this->drupalPost('mollom-test/form', $edit, 'Submit');
-      if ($expected['spam'] == MOLLOM_ANALYSIS_UNSURE) {
+      if ($expected['spamResult'] == 'UNSURE') {
         $this->postCorrectCaptcha(NULL, array(), 'Submit');
       }
       $mid = $this->assertTestSubmitData();

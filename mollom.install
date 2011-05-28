@@ -88,12 +88,23 @@ function mollom_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      // @todo Remove, after figuring out how to update.
       'session_id' => array(
         'description' => 'Session hash returned by Mollom.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
+      ),
+      'contentId' => array(
+        'description' => 'Content ID returned by Mollom.',
+        'type' => 'int',
+        'not null' => FALSE,
+      ),
+      'captchaId' => array(
+        'description' => 'CAPTCHA ID returned by Mollom.',
+        'type' => 'int',
+        'not null' => FALSE,
       ),
       'form_id' => array(
         'description' => 'The form_id of the form being protected.',
@@ -121,10 +132,17 @@ function mollom_schema() {
       // improved content moderation.
       'spam' => array(
         'description' => 'Text analysis spam check result.',
-        'type' => 'int',
+        'type' => 'float',
         'size' => 'tiny',
         'not null' => FALSE,
       ),
+      'spamResult' => array(
+        'description' => 'Text analysis final spam classification result.',
+        'type' => 'varchar',
+        'length' => 8,
+        'not null' => FALSE,
+      ),
+      // @todo Add checkCaptcha results 'solved', 'reason'.
       'quality' => array(
         'description' => 'Text analysis quality check result.',
         'type' => 'float',
@@ -584,17 +602,17 @@ function mollom_update_7005() {
     // Fill {mollom}.spam with approximate values based on {mollom}.quality.
     // Note that this is just to have some values. 'quality' and 'spam' are
     // completely unrelated otherwise.
-    // MOLLOM_ANALYSIS_SPAM
+    // MOLLOM_ANALYSIS_SPAM (2)
     db_update('mollom')
       ->fields(array('spam' => 2))
       ->condition('quality', 0.5, '<')
       ->execute();
-    // MOLLOM_ANALYSIS_UNSURE
+    // MOLLOM_ANALYSIS_UNSURE (3)
     db_update('mollom')
       ->fields(array('spam' => 3))
       ->condition('quality', 0.5, '=')
       ->execute();
-    // MOLLOM_ANALYSIS_HAM
+    // MOLLOM_ANALYSIS_HAM (1)
     db_update('mollom')
       ->fields(array('spam' => 1))
       ->condition('quality', 0.5, '>')
@@ -834,3 +852,65 @@ function mollom_update_7011() {
     ->fields(array('strictness' => 'normal'))
     ->execute();
 }
+
+/**
+ * Change {mollom}: Add 'spamResult', change 'spam', replace 'session_id' with 'contentId' and 'captchaId'.
+ */
+function mollom_update_7012() {
+  if (!db_field_exists('mollom', 'spamResult')) {
+    // Add 'spamResult' and convert existing 'spam' integers into 'spamResult'
+    // strings.
+    db_add_field('mollom', 'spamResult', array(
+      'description' => 'Text analysis final spam classification result.',
+      'type' => 'varchar',
+      'length' => 8,
+      'not null' => FALSE,
+    ));
+    db_update('mollom')
+      ->fields(array('spamResult' => 'ham'))
+      ->condition('spam', 1)
+      ->execute();
+    db_update('mollom')
+      ->fields(array('spamResult' => 'spam'))
+      ->condition('spam', 2)
+      ->execute();
+    db_update('mollom')
+      ->fields(array('spamResult' => 'unsure'))
+      ->condition('spam', 3)
+      ->execute();
+
+    // Change 'spam' and convert existing 'spam' integer values into doubles.
+    db_change_field('mollom', 'spam', 'spam', array(
+      'description' => 'Text analysis spam check result.',
+      'type' => 'float',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+    db_update('mollom')
+      ->fields(array('spam' => 0))
+      ->condition('spam', 1)
+      ->execute();
+    db_update('mollom')
+      ->fields(array('spam' => 1))
+      ->condition('spam', 2)
+      ->execute();
+    db_update('mollom')
+      ->fields(array('spam' => 0.5))
+      ->condition('spam', 3)
+      ->execute();
+
+    // Add 'contentId' and 'captchaId'.
+    db_add_field('mollom', 'contentId', array(
+      'description' => 'Content ID returned by Mollom.',
+      'type' => 'int',
+      'not null' => FALSE,
+    ));
+    db_add_field('mollom', 'captchaId', array(
+      'description' => 'CAPTCHA ID returned by Mollom.',
+      'type' => 'int',
+      'not null' => FALSE,
+    ));
+    // @todo Figure out how to update session_id values. (?)
+  }
+}
+
