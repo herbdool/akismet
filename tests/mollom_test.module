@@ -60,7 +60,7 @@ function mollom_test_xmlrpc_verify_key($data) {
   if ($valid) {
     return TRUE;
   }
-  xmlrpc_error(MOLLOM_ERROR);
+  xmlrpc_error(Mollom::AUTH_ERROR);
 }
 
 /**
@@ -96,7 +96,7 @@ function mollom_test_xmlrpc_send_feedback($data) {
   if ($result) {
     return TRUE;
   }
-  xmlrpc_error(MOLLOM_ERROR);
+  xmlrpc_error(Mollom::AUTH_ERROR);
 }
 
 /**

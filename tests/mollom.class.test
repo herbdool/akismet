@@ -149,5 +149,11 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
     $expected = array('checks' => 'spam');
     $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
   }
+
+  /**
+   * Tests Mollom::parseXML().
+   */
+  function testParseXML() {
+  }
 }
 

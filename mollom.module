@@ -21,46 +21,14 @@ define('MOLLOM_MODE_CAPTCHA', 1);
 define('MOLLOM_MODE_ANALYSIS', 2);
 
 /**
- * XML-RPC communication failure fallback mode: Block all submissions of protected forms.
+ * Server communication failure fallback mode: Block all submissions of protected forms.
  */
 define('MOLLOM_FALLBACK_BLOCK', 0);
 
 /**
- * XML-RPC communication failure fallback mode: Accept all submissions of protected forms.
+ * Server communication failure fallback mode: Accept all submissions of protected forms.
  */
 define('MOLLOM_FALLBACK_ACCEPT', 1);
-
-/**
- * XML-RPC communication failure: No servers could be reached.
- *
- * @todo Prefix with MOLLOM_.
- * @todo Move as static into Mollom class.
- */
-define('NETWORK_ERROR', 900);
-
-/**
- * XML-RPC communication failure: Error on Mollom server.
- *
- * @todo Prefix with SERVER_.
- * @todo Move as static into Mollom class.
- */
-define('MOLLOM_ERROR', 1000);
-
-/**
- * XML-RPC communication failure: Mollom server requests client to update its server list.
- *
- * @todo Prefix with SERVER_.
- * @todo Move as static into Mollom class.
- */
-define('MOLLOM_REFRESH', 1100);
-
-/**
- * XML-RPC communication failure: Mollom server defers communication to next server in server list.
- *
- * @todo Prefix with SERVER_.
- * @todo Move as static into Mollom class.
- */
-define('MOLLOM_REDIRECT', 1200);
 
 /**
  * Implements hook_hook_info().
@@ -1823,14 +1791,14 @@ function mollom_form_submit($form, &$form_state) {
 function mollom($method = NULL, $data = array()) {
   // @todo This will use the singleton pattern after full module conversion.
   if (!isset($method)) {
-    $mollom = new MollomDrupalRESTTest();
+    $mollom = new MollomDrupalTestLocal();
     return $mollom;
   }
 
   // @todo Fix method names.
   $method = strtr($method, array('mollom.' => ''));
 
-  $mollom = new MollomDrupalRESTTest();
+  $mollom = new MollomDrupalTestLocal();
   #$mollom = new MollomDrupalXMLRPC();
   $result = $mollom->$method($data);
 //  debug($result);
@@ -1839,7 +1807,7 @@ function mollom($method = NULL, $data = array()) {
 
   // Unless we have a NETWORK_ERROR (indicating that no servers worked), return
   // the result.
-  if ($result !== NETWORK_ERROR) {
+  if ($result !== Mollom::NETWORK_ERROR) {
     return $result;
   }
 
@@ -2036,7 +2004,7 @@ function mollom_get_statistics($refresh = FALSE) {
 
       foreach ($statistics as $statistic) {
         $result = mollom('mollom.getStatistics', array('type' => $statistic));
-        if ($result === NETWORK_ERROR || $result === MOLLOM_ERROR) {
+        if ($result === Mollom::NETWORK_ERROR || $result === Mollom::AUTH_ERROR) {
           // If there was an error, stop fetching statistics and store FALSE
           // in the cache. This will help prevent from making unnecessary
           // requests to Mollom if the service is down or the server cannot

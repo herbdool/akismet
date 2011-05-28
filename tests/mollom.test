@@ -1370,7 +1370,7 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
       // appropriate messages are logged.
       $mollom = mollom();
       $key_is_valid = $mollom->verifyKey();
-      $this->assertIdentical($key_is_valid, NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
+      $this->assertIdentical($key_is_valid, Mollom::NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
       $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
 
       // Verify that Mollom::query() automatically empties the server list and
