@@ -88,7 +88,10 @@ class MollomDrupal extends Mollom {
         $entry['message'] => $entry['arguments'],
       );
       if (isset($entry['data'])) {
-        $message['Request:<pre>@request</pre>'] = array('@request' => $entry['data']);
+        $message['Request: @request<pre>@parameters</pre>'] = array(
+          '@request' => $entry['request'],
+          '@parameters' => $entry['data'],
+        );
       }
       if (isset($entry['response'])) {
         $message['Response:<pre>@response</pre>'] = array('@response' => $entry['response']);
@@ -219,63 +222,39 @@ class MollomDrupal extends Mollom {
     $dhr->code = (int) $dhr->code;
 
     if ($error) {
-      $this->log[] = array(
-        'type' => 'error',
-        'file' => __FILE__,
-        'line' => __LINE__,
-        'class' => __CLASS__,
-        'function' => __FUNCTION__,
-        'message' => 'Error @code: @method @uri: %message',
-        'arguments' => array(
-          '@code' => $dhr->code,
-          '@method' => $method,
-          '@uri' => $server . '/' . $path,
-          '%message' => $dhr->error,
-        ),
-        'data' => $data,
-        'response' => $dhr->data,
-      );
       $arguments = array(
+        'request' => $method . ' ' . $server . '/' . $path,
         'data' => $data,
         'response' => $dhr->data,
       );
       if ($dhr->code <= 0) {
-        $this->lastResponseCode = self::NETWORK_ERROR;
-        throw new MollomNetworkException(t('Network error.'), self::NETWORK_ERROR, NULL, $arguments);
+        throw new MollomNetworkException(t('Network error.'), self::NETWORK_ERROR, NULL, $this, $arguments);
       }
       if ($dhr->code == 1 || $dhr->code == self::AUTH_ERROR || $dhr->code == 401) {
-        $this->lastResponseCode = self::AUTH_ERROR;
-        throw new MollomAuthenticationException(t('Invalid authentication.'), self::AUTH_ERROR, NULL, $arguments);
+        throw new MollomAuthenticationException(t('Invalid authentication.'), self::AUTH_ERROR, NULL, $this, $arguments);
       }
       if ($dhr->code == 2 || $dhr->code == self::REDIRECT_ERROR || ($dhr->code >= 300 && $dhr->code < 400)) {
-        $this->lastResponseCode = self::REDIRECT_ERROR;
-        throw new MollomRedirectException(t('Server redirected to next.'), self::REDIRECT_ERROR, NULL, $arguments);
+        throw new MollomRedirectException(t('Server redirected to next.'), self::REDIRECT_ERROR, NULL, $this, $arguments);
       }
       if ($dhr->code == 3 || $dhr->code == self::REFRESH_ERROR) {
-        $this->lastResponseCode = self::REFRESH_ERROR;
-        throw new MollomRefreshException(t('Refresh of server list required.'), self::REFRESH_ERROR, NULL, $arguments);
+        throw new MollomRefreshException(t('Refresh of server list required.'), self::REFRESH_ERROR, NULL, $this, $arguments);
       }
       if (!$key_exists || $dhr->code >= 500) {
-        $this->lastResponseCode = self::RESPONSE_ERROR;
-        throw new MollomResponseException(t('Unexpected server response.'), self::RESPONSE_ERROR, NULL, $arguments);
+        throw new MollomResponseException(t('Unexpected server response.'), self::RESPONSE_ERROR, NULL, $this, $arguments);
       }
-      $this->lastResponseCode = $dhr->code;
-      throw new MollomException($dhr->error, $dhr->code, NULL, $arguments);
+      throw new MollomException($dhr->error, $dhr->code, NULL, $this, $arguments);
     }
     else {
       $this->lastResponseCode = TRUE;
       $this->log[] = array(
         'type' => 'debug',
-        'file' => __FILE__,
-        'line' => __LINE__,
-        'class' => __CLASS__,
-        'function' => __FUNCTION__,
         'message' => '@code @method @uri',
         'arguments' => array(
           '@code' => $dhr->code,
           '@method' => $method,
-          '@uri' => $server . '/' . $path,
+          '@uri' => $path,
         ),
+        'request' => $method . ' ' . $server . '/' . $path,
         'data' => $data,
         'response' => $dhr->data,
       );

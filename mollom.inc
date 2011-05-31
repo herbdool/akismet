@@ -26,29 +26,76 @@
  * @see Mollom::query()
  * @see Mollom::request()
  *
+ * @param $message
+ *   The Exception message to throw.
+ * @param $code
+ *   The Exception code.
+ * @param $previous
+ *   (optional) The previous Exception, if any.
+ * @param $instance
+ *   The Mollom class instance the Exception is thrown in.
  * @param $arguments
- *   (optional) A associative array containing additional information about the
- *   performed request that failed, typically:
+ *   (optional) A associative array containing information about a performed
+ *   HTTP request that failed:
+ *   - request: (string) The HTTP method and URI of the performed request; e.g.,
+ *     "GET http://server.mollom.com/v1/foo/bar". In case of GET requests, do
+ *     not add query parameters to the URI; pass them in 'data' instead.
  *   - data: (array) An associative array containing HTTP GET/POST/PUT request
- *     query parameters sent to the server.
+ *     query parameters that were sent to the server.
  *   - response: (mixed) The server response, either as string, or the already
- *     parsed response, e.g. as an array.
+ *     parsed response; i.e., an array.
  *
  * @todo Refine exceptions by necessity of having to react differently. All 5xx
  *   HTTP codes, MollomRedirectException, and MollomResponseException should
  *   make the client try the next server.
  */
 class MollomException extends Exception {
+  /**
+   * @var Mollom
+   */
+  protected $mollom;
+
+  /**
+   * The severity of this exception.
+   *
+   * @var string
+   */
+  protected $severity = 'debug';
+
   public $arguments = array();
 
-  function __construct($message = '', $code = 0, Exception $previous = NULL, array $arguments = array()) {
-    // PHP <5.3 throws a fatal error when passing more arguments to Exception.
+  function __construct($message = '', $code = 0, Exception $previous = NULL, Mollom $mollom, array $arguments = array()) {
+    // Fatal error on PHP <5.3 when passing more arguments to Exception.
     if (version_compare(phpversion(), '5.3') >= 0) {
       parent::__construct($message, $code, $previous);
     }
     else {
       parent::__construct($message, $code);
     }
+
+    // Set the error code on the Mollom class.
+    $mollom->lastResponseCode = $code;
+
+    // Log the exception.
+    $message = array(
+      'type' => $this->severity,
+      'message' => 'Error @code: %message',
+      'arguments' => array(
+        '@code' => $code,
+        '%message' => $message,
+      ),
+    );
+    // Add HTTP request information, if available.
+    if (!empty($arguments)) {
+      $message += array(
+        'request' => $arguments['request'],
+        'data' => $arguments['data'],
+        'response' => $arguments['response'],
+      );
+    }
+    $mollom->log[] = $message;
+
+    // @todo Remove?
     $this->setArguments($arguments);
   }
 
@@ -71,6 +118,7 @@ class MollomException extends Exception {
  * @todo Not actively caught anywhere yet.
  */
 class MollomNetworkException extends MollomException {
+  protected $severity = 'error';
 }
 
 /**
@@ -79,6 +127,7 @@ class MollomNetworkException extends MollomException {
  * Thrown in case API keys or other authentication parameters are invalid.
  */
 class MollomAuthenticationException extends MollomException {
+  protected $severity = 'error';
 }
 
 /**
@@ -87,6 +136,7 @@ class MollomAuthenticationException extends MollomException {
  * Thrown when a Mollom server asks the client to update the server list.
  */
 class MollomRefreshException extends MollomException {
+  protected $severity = 'debug';
 }
 
 /**
@@ -96,17 +146,20 @@ class MollomRefreshException extends MollomException {
  * list.
  */
 class MollomRedirectException extends MollomException {
+  protected $severity = 'debug';
 }
 
 /**
  * Mollom server response exception.
  *
  * Thrown when a request to a Mollom server succeeds, but the response does not
- * contain an expected element; e.g., a backend configuration or logic error.
+ * contain an expected element; e.g., a backend configuration or execution
+ * error that possibly exists on one server only.
  *
  * @see Mollom::request()
  */
 class MollomResponseException extends MollomException {
+  protected $severity = 'debug';
 }
 
 /**
@@ -311,8 +364,7 @@ abstract class Mollom {
    */
   public function getAuthentication() {
     if (empty($this->keyPublic) || empty($this->keyPrivate)) {
-      $this->lastResponseCode = self::AUTH_ERROR;
-      throw new MollomAuthenticationException('Missing API keys.');
+      throw new MollomAuthenticationException('Missing API keys.', self::AUTH_ERROR, NULL, $this);
     }
 
     // Generate a timestamp according to the dateTime format.
@@ -395,30 +447,14 @@ abstract class Mollom {
         break;
       }
       catch (MollomException $e) {
-        // On any other known error, skip to the next server.
+        // On any other error and skip to the next server.
         continue;
       }
-      // Log any other uncatched error and skip to the next server.
-      if ($this->lastResponseCode !== TRUE) {
-        $this->log[] = array(
-          'type' => 'error',
-          'file' => __FILE__,
-          'line' => __LINE__,
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'message' => 'Error: @method @uri',
-          'arguments' => array(
-            '@method' => 'GET',
-            '@uri' => $server . '/' . $path,
-          ),
-          'data' => $data,
-          'response' => $result,
-        );
-        continue;
+
+      if (isset($result) && $this->lastResponseCode === TRUE) {
+        $servers = $result['site']['servers'];
+        break;
       }
-      // Otherwise, we have a valid result.
-      $servers = $result['site']['servers'];
-      break;
     }
     return $servers;
   }
@@ -449,9 +485,8 @@ abstract class Mollom {
       $data += $this->getAuthentication();
     }
     catch (MollomAuthenticationException $e) {
-      // Merely catch the exception, move on to error logic below. Relying on
-      // getAuthentication() to set a response code in case no API keys are
-      // configured.
+      // MollomAuthenticationException sets the appropriate error code. Merely
+      // catch the exception, move on to error logic below.
     }
 
     // Initialize refresh variable.
@@ -492,13 +527,8 @@ abstract class Mollom {
           $this->configServerListSet($this->servers);
           $this->log[] = array(
             'type' => 'debug',
-            'file' => __FILE__,
-            'line' => __LINE__,
-            'class' => __CLASS__,
-            'function' => __FUNCTION__,
-            'message' => '@code: Refreshed servers: %servers',
+            'message' => 'Refreshed servers: %servers',
             'arguments' => array(
-              '@code' => $e->getCode(),
               '%servers' => implode(', ', $this->servers),
             ),
           );
@@ -508,15 +538,11 @@ abstract class Mollom {
         // Try the next server in the list.
         $next = next($this->servers);
 
+        // @todo $next may be FALSE, confusing users looking into logs.
         $this->log[] = array(
           'type' => 'debug',
-          'file' => __FILE__,
-          'line' => __LINE__,
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'message' => '@code: Server %server redirected to %next.',
+          'message' => 'Server %server redirected to %next.',
           'arguments' => array(
-            '@code' => $e->getCode(),
             '%server' => $server,
             '%next' => $next,
           ),
@@ -524,40 +550,12 @@ abstract class Mollom {
         continue;
       }
       catch (MollomAuthenticationException $e) {
-        $this->log[] = array(
-          'type' => 'error',
-          'file' => __FILE__,
-          'line' => __LINE__,
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'message' => 'Error @code: Invalid authentication or configuration.',
-          'arguments' => array(
-            '@code' => $e->getCode(),
-          ),
-        );
         // This is an irrecoverable error, so don't try other servers.
         break;
       }
       catch (MollomException $e) {
         // On any other known error, try the next server.
         next($this->servers);
-
-        $this->log[] = array(
-          'type' => 'debug',
-          'file' => __FILE__,
-          'line' => __LINE__,
-          'class' => __CLASS__,
-          'function' => __FUNCTION__,
-          'message' => 'Error @code: @method @uri: %message',
-          'arguments' => array(
-            '@code' => $e->getCode(),
-            '@method' => $method,
-            '@uri' => $server . '/' . $path,
-            '%message' => $e->getMessage(),
-          ),
-          'data' => $e->arguments['data'],
-          'response' => $e->arguments['response'],
-        );
         continue;
       }
 
@@ -579,10 +577,6 @@ abstract class Mollom {
 
       $this->log[] = array(
         'type' => 'error',
-        'file' => __FILE__,
-        'line' => __LINE__,
-        'class' => __CLASS__,
-        'function' => __FUNCTION__,
         'message' => 'All servers unreachable or returning errors. The server list was emptied: %servers',
         'arguments' => array(
           '%servers' => implode(', ', $this->servers ? $this->servers : $this->serversInit),
@@ -861,7 +855,7 @@ abstract class Mollom {
   public function getCaptcha($data = array()) {
     if (!isset($data['type']) || !in_array($data['type'], array('image', 'audio'))) {
       // @todo Error handling?
-      throw new MollomException('Unknown CAPTCHA type.');
+      throw new MollomException('Unknown CAPTCHA type.', 0, NULL, $this);
     }
     if (!empty($data['captchaId'])) {
       $result = $this->query('PUT', 'captcha/' . $data['captchaId'], $data, array('captcha', 'captchaId'));
@@ -875,7 +869,7 @@ abstract class Mollom {
   public function checkCaptcha($data = array()) {
     if (empty($data['captchaId'])) {
       // @todo Error handling?
-      throw new MollomException('Missing CAPTCHA ID.');
+      throw new MollomException('Missing CAPTCHA ID.', 0, NULL, $this);
     }
     $result = $this->query('PUT', 'captcha/' . $data['captchaId'], $data, array('captcha', 'captchaId'));
     return isset($result['captcha']) ? $result['captcha'] : $result;
@@ -887,11 +881,11 @@ abstract class Mollom {
   public function sendFeedback($data = array()) {
     if (empty($data['contentId'])) {
       // @todo Error handling?
-      throw new MollomException('Missing content ID.');
+      throw new MollomException('Missing content ID.', 0, NULL, $this);
     }
     if (empty($data['moderated'])) {
       // @todo Error handling?
-      throw new MollomException('Missing feedback value.');
+      throw new MollomException('Missing feedback value.', 0, NULL, $this);
     }
     $result = $this->query('PUT', 'content/' . $data['contentId'], $data);
     return $this->lastResponseCode === TRUE ? TRUE : FALSE;
@@ -932,7 +926,7 @@ abstract class Mollom {
   public function updateBlacklistEntry($data = array(), $siteId = NULL) {
     if (empty($data['id'])) {
       // @todo Error handling?
-      throw new MollomException('Missing blacklist entry ID.');
+      throw new MollomException('Missing blacklist entry ID.', 0, NULL, $this);
     }
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
