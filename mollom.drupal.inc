@@ -137,7 +137,6 @@ class MollomDrupal extends Mollom {
    */
   protected function request($method, $server, $path, array $data, array $expected = array()) {
     // Build the REST request path.
-    $path = self::API_VERSION . '/' . $path;
     $rest_path = $path;
     $query = NULL;
     if ($data) {
@@ -188,7 +187,7 @@ class MollomDrupal extends Mollom {
 
     // If a 'code' exists in the response, it has precedence, regardless of a
     // possible HTTP error code.
-    if (isset($dhr->data) && is_array($dhr->data) && isset($dhr->data['code']) && $dhr->data['code'] != 0) {
+    if (isset($dhr->data) && is_array($dhr->data) && isset($dhr->data['code']) && $dhr->data['code'] != 200) {
       $error = TRUE;
       // Replace HTTP status code with 'code' from response.
       $dhr->code = $dhr->data['code'];
@@ -231,13 +230,13 @@ class MollomDrupal extends Mollom {
       if ($dhr->code <= 0) {
         throw new MollomNetworkException(t('Network error.'), self::NETWORK_ERROR, NULL, $this, $arguments);
       }
-      if ($dhr->code == 1 || $dhr->code == self::AUTH_ERROR || $dhr->code == 401) {
+      if ($dhr->code == self::AUTH_ERROR || $dhr->code == 401) {
         throw new MollomAuthenticationException(t('Invalid authentication.'), self::AUTH_ERROR, NULL, $this, $arguments);
       }
-      if ($dhr->code == 2 || $dhr->code == self::REDIRECT_ERROR || ($dhr->code >= 300 && $dhr->code < 400)) {
+      if ($dhr->code == self::REDIRECT_ERROR || ($dhr->code >= 300 && $dhr->code < 400)) {
         throw new MollomRedirectException(t('Server redirected to next.'), self::REDIRECT_ERROR, NULL, $this, $arguments);
       }
-      if ($dhr->code == 3 || $dhr->code == self::REFRESH_ERROR) {
+      if ($dhr->code == self::REFRESH_ERROR) {
         throw new MollomRefreshException(t('Refresh of server list required.'), self::REFRESH_ERROR, NULL, $this, $arguments);
       }
       if (!$key_exists || $dhr->code >= 500) {
@@ -273,19 +272,6 @@ class MollomDrupalTest extends MollomDrupal {
    * Overrides Mollom::$serversInit.
    */
   public $serversInit = array('http://megatron.mollom.com');
-
-  /**
-   * @todo Backend: Returned server list contains API version.
-   */
-  protected function refreshServers() {
-    $servers = parent::refreshServers();
-    foreach ($servers as &$server) {
-      if (substr($server, -3) == '/v1') {
-        $server = substr($server, 0, -3);
-      }
-    }
-    return $servers;
-  }
 }
 
 /**

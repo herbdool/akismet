@@ -196,18 +196,35 @@ function mollom_test_rest_deliver($page_callback_result) {
 
   // Append status response parameters.
   // @todo Add support for custom codes (redirect/refresh) + error messages.
-  // @todo Add support for HTTP/resource errors; e.g., 404, 403, etc.
-  if (!isset($page_callback_result)) {
-    $page_callback_result = FALSE;
+  $code = 200;
+  if (!is_array($page_callback_result) && $page_callback_result !== TRUE) {
+    switch ($page_callback_result) {
+      case MENU_NOT_FOUND:
+        $code = 404;
+        $message = 'Not found';
+        break;
+
+      case Mollom::AUTH_ERROR:
+        $code = 1000;
+        $message = 'Authentication failure';
+        break;
+
+      default:
+        $code = 400;
+        $message = 'Bad request';
+        break;
+    }
   }
   $status = array(
-    'code' => $page_callback_result === FALSE ? 1 : 0,
-    'message' => '',
+    'code' => $code,
   );
+  if (isset($message)) {
+    $status['message'] = $message;
+  }
   mollom_test_rest_add_xml($xml, $element, $status);
 
   // Append other response parameters.
-  if ($page_callback_result !== FALSE) {
+  if (is_array($page_callback_result)) {
     mollom_test_rest_add_xml($xml, $element, $page_callback_result);
   }
 
@@ -245,7 +262,7 @@ function mollom_test_rest_add_xml(DOMDocument $doc, DOMNode $parent, $data, $key
  * @param $public_key
  *   The public key of a site. Has to be MOLLOM_TEST_PUBLIC_KEY.
  */
-function mollom_test_rest_site($id) {
+function mollom_test_rest_site($public_key) {
   $data = mollom_test_rest_get_parameters();
   if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
     mollom_test_verify_key($data);
@@ -256,13 +273,14 @@ function mollom_test_rest_site($id) {
   }
   // Verify keys (in case of PUT, again).
   if ($data['publicKey'] !== MOLLOM_TEST_PUBLIC_KEY) {
-    return FALSE;
+    return Mollom::AUTH_ERROR;
   }
 
-  $version = mollom()->getClientInformation();
+  $mollom = mollom();
+  $version = $mollom->getClientInformation();
   $servers = mollom_test_get_server_list($data);
   foreach ($servers as $key => &$url) {
-    $url .= '/mollom-test/rest';
+    $url .= '/mollom-test/rest/' . $mollom::API_VERSION;
   }
 
   $response = array(
@@ -272,14 +290,10 @@ function mollom_test_rest_site($id) {
     'email' => variable_get('site_mail', ''),
     'languages' => array(),
     'subscriptionType' => 'free',
-    'platform' => array(
-      'name' => $version['platformName'],
-      'version' => $version['platformVersion'],
-    ),
-    'client' => array(
-      'name' => $version['clientName'],
-      'version' => $version['clientVersion'],
-    ),
+    'platformName' => $version['platformName'],
+    'platformVersion' => $version['platformVersion'],
+    'clientName' => $version['clientName'],
+    'clientVersion' => $version['clientVersion'],
     'servers' => $servers,
     // @todo Statistics.
   );
@@ -308,10 +322,12 @@ function mollom_test_rest_content($contentId = NULL) {
       $valid = $valid && in_array($data['moderated'], array('spam', 'profanity', 'low-quality', 'unwanted', 'approve', 'escalate', 'delete', 'ignore'));
       return $valid;
     }
+    // Content ID in path must be greater than zero.
     if (empty($contentId)) {
       return FALSE;
     }
-    if (isset($data['contentId']) && $data['contentId'] != $contentId) {
+    // Content ID in request parameters must match the one in path.
+    if (isset($data['id']) && $data['id'] != $contentId) {
       return FALSE;
     }
   }
@@ -333,10 +349,12 @@ function mollom_test_rest_captcha($captchaId = NULL) {
     return FALSE;
   }
   elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    // CAPTCHA ID in path must be greater than zero.
     if (empty($captchaId)) {
       return FALSE;
     }
-    if (isset($data['captchaId']) && $data['captchaId'] != $captchaId) {
+    // CAPTCHA ID in request parameters must match the one in path.
+    if (isset($data['id']) && $data['id'] != $captchaId) {
       return FALSE;
     }
     return array('captcha' => mollom_test_check_captcha($data));
@@ -349,10 +367,13 @@ function mollom_test_rest_captcha($captchaId = NULL) {
 /**
  * REST callback for Blacklist API.
  *
+ * @param $public_key
+ *   The public key of a site.
+ *
  * @todo Abstract actual functionality like other REST handlers.
  */
-function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
-  if (empty($siteId)) {
+function mollom_test_rest_blacklist($public_key, $entryId = NULL, $delete = FALSE) {
+  if (empty($public_key)) {
     return FALSE;
   }
   $data = mollom_test_rest_get_parameters();
@@ -368,7 +389,7 @@ function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
     $data['value'] = drupal_strtolower(trim($data['value']));
   }
 
-  $bin = 'mollom_test_blacklist_' . $siteId;
+  $bin = 'mollom_test_blacklist_' . $public_key;
   $entries = variable_get($bin, array());
 
   if ($_SERVER['REQUEST_METHOD'] == 'GET') {
@@ -391,7 +412,7 @@ function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
         return array('entry' => $entries[$entryId]);
       }
       else {
-        return FALSE;
+        return MENU_NOT_FOUND;
       }
     }
   }
@@ -415,7 +436,7 @@ function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
         return TRUE;
       }
       else {
-        return FALSE;
+        return MENU_NOT_FOUND;
       }
     }
   }
@@ -429,7 +450,7 @@ function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
     }
     // Check that the entry was not deleted.
     if (empty($entries[$entryId])) {
-      return FALSE;
+      return MENU_NOT_FOUND;
     }
     // Entry ID cannot be updated.
     unset($data['id']);
@@ -529,22 +550,22 @@ function mollom_test_check_content($data) {
 
     if ($spam && $ham) {
       $response['spam'] = 0.5;
-      $response['spamResult'] = 'UNSURE';
+      $response['spamResult'] = 'unsure';
       $quality = 0.5;
     }
     elseif ($spam) {
       $response['spam'] = 1.0;
-      $response['spamResult'] = 'SPAM';
+      $response['spamResult'] = 'spam';
       $quality = 0.0;
     }
     elseif ($ham) {
       $response['spam'] = 0.0;
-      $response['spamResult'] = 'HAM';
+      $response['spamResult'] = 'ham';
       $quality = 1.0;
     }
     else {
       $response['spam'] = 0.5;
-      $response['spamResult'] = 'UNSURE';
+      $response['spamResult'] = 'unsure';
       $quality = NULL;
     }
     // In case a previous spam check was unsure and a CAPTCHA was solved, the
@@ -552,7 +573,7 @@ function mollom_test_check_content($data) {
     $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());
     if (!empty($data['captchaId']) && !empty($captcha_sessions[$data['captchaId']])) {
       $response['spam'] = 0.0;
-      $response['spamResult'] = 'HAM';
+      $response['spamResult'] = 'ham';
     }
   }
 
@@ -583,9 +604,9 @@ function mollom_test_check_content($data) {
   }
 
   $storage = variable_get(__FUNCTION__, array());
-  $contentId = (!empty($data['contentId']) ? (int) $data['contentId'] : max(array_keys($storage)) + 1);
+  $contentId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
   $storage[$contentId] = $data;
-  $response['contentId'] = $contentId;
+  $response['id'] = $contentId;
   variable_set(__FUNCTION__, $storage);
 
   return $response;
@@ -628,9 +649,9 @@ function mollom_test_get_captcha($data) {
   $response['url'] = $base_url . '/' . drupal_get_path('module', 'mollom') . '/images/powered-by-mollom-2.gif';
 
   $storage = variable_get(__FUNCTION__, array());
-  $captchaId = (!empty($data['captchaId']) ? (int) $data['captchaId'] : max(array_keys($storage)) + 1);
+  $captchaId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
   $storage[$captchaId] = $data;
-  $response['captchaId'] = $captchaId;
+  $response['id'] = $captchaId;
   variable_set(__FUNCTION__, $storage);
 
   return $response;
@@ -653,9 +674,9 @@ function mollom_test_check_captcha($data) {
   }
 
   $storage = variable_get(__FUNCTION__, array());
-  $captchaId = (!empty($data['captchaId']) ? (int) $data['captchaId'] : max(array_keys($storage)) + 1);
+  $captchaId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
   $storage[$captchaId] = $data;
-  $response['captchaId'] = $captchaId;
+  $response['id'] = $captchaId;
   variable_set(__FUNCTION__, $storage);
 
   $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());

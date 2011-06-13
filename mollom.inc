@@ -436,7 +436,7 @@ abstract class Mollom {
     $expected = array('site', 'servers');
     foreach ($this->serversInit as $server) {
       try {
-        $result = $this->request('GET', $server, $path, $data, $expected);
+        $result = $this->request('GET', $server . '/' . self::API_VERSION, $path, $data, $expected);
       }
       catch (MollomAuthenticationException $e) {
         // Bogus configuration. Stop trying, since all servers will fail.
@@ -842,11 +842,11 @@ abstract class Mollom {
   }
 
   public function checkContent($data = array()) {
-    if (!empty($data['contentId'])) {
-      $result = $this->query('PUT', 'content/' . $data['contentId'], $data, array('content', 'contentId'));
+    if (!empty($data['id'])) {
+      $result = $this->query('PUT', 'content/' . $data['id'], $data, array('content', 'id'));
     }
     else {
-      $result = $this->query('POST', 'content', $data, array('content', 'contentId'));
+      $result = $this->query('POST', 'content', $data, array('content', 'id'));
     }
     return isset($result['content']) ? $result['content'] : $result;
   }
@@ -856,21 +856,21 @@ abstract class Mollom {
       // @todo Error handling?
       throw new MollomException('Unknown CAPTCHA type.', 0, NULL, $this);
     }
-    if (!empty($data['captchaId'])) {
-      $result = $this->query('PUT', 'captcha/' . $data['captchaId'], $data, array('captcha', 'captchaId'));
+    if (!empty($data['id'])) {
+      $result = $this->query('PUT', 'captcha/' . $data['id'], $data, array('captcha', 'id'));
     }
     else {
-      $result = $this->query('POST', 'captcha', $data, array('captcha', 'captchaId'));
+      $result = $this->query('POST', 'captcha', $data, array('captcha', 'id'));
     }
     return isset($result['captcha']) ? $result['captcha'] : $result;
   }
 
   public function checkCaptcha($data = array()) {
-    if (empty($data['captchaId'])) {
+    if (empty($data['id'])) {
       // @todo Error handling?
       throw new MollomException('Missing CAPTCHA ID.', 0, NULL, $this);
     }
-    $result = $this->query('PUT', 'captcha/' . $data['captchaId'], $data, array('captcha', 'captchaId'));
+    $result = $this->query('PUT', 'captcha/' . $data['id'], $data, array('captcha', 'id'));
     return isset($result['captcha']) ? $result['captcha'] : $result;
   }
 
@@ -910,7 +910,7 @@ abstract class Mollom {
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
     }
-    $result = $this->query('GET', 'blacklist/' . $siteId . '/' . $entryId, array(), array('entry'));
+    $result = $this->query('GET', 'blacklist/' . $siteId . '/' . $entryId, array(), array('entry', 'id'));
     return isset($result['entry']) ? $result['entry'] : $result;
   }
 
@@ -918,7 +918,7 @@ abstract class Mollom {
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
     }
-    $result = $this->query('POST', 'blacklist/' . $siteId, $data, array('entry'));
+    $result = $this->query('POST', 'blacklist/' . $siteId, $data, array('entry', 'id'));
     return isset($result['entry']) ? $result['entry'] : $result;
   }
 
@@ -930,7 +930,7 @@ abstract class Mollom {
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
     }
-    $result = $this->query('PUT', 'blacklist/' . $siteId . '/' . $data['id'], $data, array('entry'));
+    $result = $this->query('PUT', 'blacklist/' . $siteId . '/' . $data['id'], $data, array('entry', 'id'));
     return isset($result['entry']) ? $result['entry'] : $result;
   }
 

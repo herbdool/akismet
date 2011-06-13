@@ -971,30 +971,30 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 0.0);
-    $this->assertSame('spamResult', $result['spamResult'], 'HAM');
+    $this->assertSame('spamResult', $result['spamResult'], 'ham');
     $this->assertSame('quality', $result['quality'], 1.0);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
     $data['postBody'] = 'spam';
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 1.0);
-    $this->assertSame('spamResult', $result['spamResult'], 'SPAM');
+    $this->assertSame('spamResult', $result['spamResult'], 'spam');
     $this->assertSame('quality', $result['quality'], 0.0);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Ensure proper response for 'unsure' submissions, re-using session_id.
     $data['postBody'] = 'unsure';
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 0.5);
-    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
+    $this->assertSame('spamResult', $result['spamResult'], 'unsure');
     $this->assertSame('quality', $result['quality'], 0.5);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Additionally enable profanity checking.
     $data['postBody'] = 'spam profanity';
@@ -1002,10 +1002,10 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 1.0);
-    $this->assertSame('spamResult', $result['spamResult'], 'SPAM');
+    $this->assertSame('spamResult', $result['spamResult'], 'spam');
     $this->assertSame('quality', $result['quality'], 0.0);
     $this->assertSame('profanity', $result['profanity'], 1.0);
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Change the string to contain profanity only.
     $data['postBody'] = 'profanity';
@@ -1013,10 +1013,10 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 0.5);
-    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
+    $this->assertSame('spamResult', $result['spamResult'], 'unsure');
     $this->assertSame('quality', $result['quality'], 0.0);
     $this->assertSame('profanity', $result['profanity'], 1.0);
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Disable spam checking, only do profanity checking.
     $data['postBody'] = 'spam profanity';
@@ -1024,18 +1024,20 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(!isset($result['spam']), 'spam not returned.');
+    $this->assertTrue(!isset($result['spamResult']), 'spamResult not returned.');
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
     $this->assertSame('profanity', $result['profanity'], 1.0);
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
     // Pass arbitrary string to profanity checking.
     $data['postBody'] = $this->randomString(12);
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(!isset($result['spam']), 'spam not returned.');
+    $this->assertTrue(!isset($result['spamResult']), 'spamResult not returned.');
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
     $this->assertSame('profanity', $result['profanity'], 0.0);
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $data['id'] = $this->assertResponseID('contentId', $result['id']);
   }
 
   /**
@@ -1056,21 +1058,21 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 0.5);
-    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $this->assertSame('spamResult', $result['spamResult'], 'unsure');
+    $data['id'] = $contentId = $this->assertResponseID('contentId', $result['id']);
 
     $captcha_data = array(
       'type' => 'image',
-      'contentId' => $data['contentId'],
+      'contentId' => $contentId,
       'authorIp' => $data['authorIp'],
     );
     $result = $mollom->getCaptcha($captcha_data);
     $this->assertMollomWatchdogMessages();
-    $data['captchaId'] = $this->assertResponseID('captchaId', $result['captchaId']);
+    $data['captchaId'] = $captchaId = $this->assertResponseID('captchaId', $result['id']);
 
     $captcha_data = array(
-      'captchaId' => $data['captchaId'],
-      'contentId' => $data['contentId'],
+      'id' => $captchaId,
+      'contentId' => $contentId,
       'authorIp' => $data['authorIp'],
       'authorId' => $data['authorId'],
       'solution' => 'correct',
@@ -1083,8 +1085,8 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spam', $result['spam'], 0.0);
-    $this->assertSame('spamResult', $result['spamResult'], 'HAM');
-    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
+    $this->assertSame('spamResult', $result['spamResult'], 'ham');
+    $data['contentId'] = $this->assertResponseID('contentId', $result['id']);
   }
 
   /**
@@ -1124,7 +1126,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     );
     $result = $mollom->getCaptcha($data);
     $this->assertMollomWatchdogMessages();
-    $data['captchaId'] = $this->assertResponseID('captchaId', $result['captchaId']);
+    $data['id'] = $this->assertResponseID('captchaId', $result['id']);
 
     $data += array(
       'solution' => 'correct',
@@ -1348,7 +1350,7 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     variable_set('mollom_servers', array(
       'http://fake-host-1',
       'http://fake-host-2',
-      $GLOBALS['base_url'] . '/mollom-test/rest', // A real server.
+      $GLOBALS['base_url'] . '/mollom-test/rest/' . Mollom::API_VERSION, // A real server.
       'http://fake-host-3',
     ));
 
@@ -1504,22 +1506,22 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $result = mollom()->checkContent(array(
       'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact URL match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Exact URL match was blocked.'));
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Partial URL match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Partial URL match was blocked.'));
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
-    $this->assertEqual($result['spamResult'], 'SPAM', t('URL with www-prefix was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('URL with www-prefix was blocked.'));
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
-    $this->assertEqual($result['spamResult'], 'SPAM', t('URL with different schema was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('URL with different schema was blocked.'));
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
     $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
@@ -1540,19 +1542,19 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'postBody' => $term,
     );
     $result = mollom()->checkContent($data);
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Identical match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Identical match was blocked.'));
 
     $data = array(
       'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = mollom()->checkContent($data);
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = mollom()->checkContent($data);
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Partial match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
     $entry = $mollom->updateBlacklistEntry(array(
@@ -1568,13 +1570,13 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'postBody' => "When match is 'exact', it has to be exact: " . $term,
     );
     $result = mollom()->checkContent($data);
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
+    $this->assertEqual($result['spamResult'], 'spam', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = mollom()->checkContent($data);
-    $this->assertNotEqual($result['spamResult'], 'SPAM', t('Partial match was not blocked.'));
+    $this->assertNotEqual($result['spamResult'], 'spam', t('Partial match was not blocked.'));
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
     $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
