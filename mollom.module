@@ -551,7 +551,7 @@ function mollom_data_delete_form_alter(&$form, &$form_state) {
 function mollom_data_delete_form_submit($form, &$form_state) {
   $forms = mollom_form_cache();
   $mollom_form = mollom_form_load($forms['delete'][$form_state['values']['form_id']]);
-  $data = mollom_form_get_values($form_state['values'], $mollom_form['enabled_fields'], $mollom_form['mapping']);
+  $data = mollom_form_get_values($form_state, $mollom_form['enabled_fields'], $mollom_form['mapping']);
 
   $entity = $mollom_form['entity'];
   $id = $data['post_id'];
@@ -961,8 +961,11 @@ function mollom_form_delete($form_id) {
  *   specified data property. This is usually the case for form elements that
  *   hold system user information.
  *
- * @param $values
- *   An array containing submitted form values, usually $form_state['values'].
+ * @param $form_state
+ *   An associative array containing
+ *   - values: The submitted form values.
+ *   - buttons: A list of button form elements. See form_state_values_clean().
+ *   Not passed by reference.
  * @param $fields
  *   A list of strings representing form elements to extract. Nested fields are
  *   in the form of 'parent][child'.
@@ -972,8 +975,12 @@ function mollom_form_delete($form_id) {
  *
  * @see hook_mollom_form_info()
  */
-function mollom_form_get_values($form_values, $fields, $mapping) {
+function mollom_form_get_values($form_state, $fields, $mapping) {
   global $user;
+
+  // Remove all button values from $form_state['values'].
+  form_state_values_clean($form_state);
+  $form_values = $form_state['values'];
 
   // All elements specified in $mapping must be excluded from $fields, as they
   // are used for dedicated $data properties instead. To reduce the parsing code
@@ -1446,7 +1453,7 @@ function mollom_validate_analysis(&$form, &$form_state) {
   }
 
   // Perform textual analysis.
-  $all_data = mollom_form_get_values($form_state['values'], $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
+  $all_data = mollom_form_get_values($form_state, $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
   // Cancel processing upon invalid UTF-8 data.
   if ($all_data === FALSE) {
     return;
@@ -1474,7 +1481,13 @@ function mollom_validate_analysis(&$form, &$form_state) {
   $form['mollom']['session_id']['#value'] = $result['session_id'];
 
   // Prepare watchdog message teaser text.
-  $teaser = truncate_utf8(strip_tags(isset($data['post_title']) ? $data['post_title'] : isset($data['post_body']) ? $data['post_body'] : '--'), 40);
+  $teaser = '--';
+  if (isset($data['post_title'])) {
+    $teaser = truncate_utf8(strip_tags($data['post_title']), 40);
+  }
+  elseif (isset($data['post_body'])) {
+    $teaser = truncate_utf8(strip_tags($data['post_body']), 40);
+  }
 
   // Handle the profanity check result.
   if (isset($result['profanity']) && $result['profanity'] >= 0.5) {
@@ -1597,7 +1610,7 @@ function mollom_validate_captcha(&$form, &$form_state) {
   // Next to the Mollom session id and captcha result, the Mollom back-end also
   // takes into account the author's IP and local user id (if registered). Any
   // other values are ignored.
-  $all_data = mollom_form_get_values($form_state['values'], $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
+  $all_data = mollom_form_get_values($form_state, $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
   // Cancel processing upon invalid UTF-8 data.
   if ($all_data === FALSE) {
     return;
@@ -1709,7 +1722,7 @@ function mollom_form_submit($form, &$form_state) {
     // new entity id value into $form_state['values'], so we need to rebuild the
     // data mapping. We do not care for the actual fields, only for the value of
     // the mapped post_id.
-    $values = mollom_form_get_values($form_state['values'], array(), $form_state['mollom']['mapping']);
+    $values = mollom_form_get_values($form_state, array(), $form_state['mollom']['mapping']);
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($values['post_id'])) {
       // Save the Mollom session data.
