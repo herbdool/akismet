@@ -198,7 +198,7 @@ function mollom_schema() {
         'type' => 'varchar',
         'length' => 8,
         'not null' => TRUE,
-        'default' => 'medium',
+        'default' => 'normal',
       ),
       'module' => array(
         'description' => 'Module name owning the form.',
@@ -816,4 +816,21 @@ function mollom_update_7010() {
       'default' => 'normal',
     ));
   }
+}
+
+/**
+ * Fix default value of {mollom_form}.strictness.
+ */
+function mollom_update_7011() {
+  db_change_field('mollom_form', 'strictness', 'strictness', array(
+    'description' => 'Strictness of text analysis checks.',
+    'type' => 'varchar',
+    'length' => 8,
+    'not null' => TRUE,
+    'default' => 'normal',
+  ));
+  db_update('mollom_form')
+    ->condition('strictness', 'medium')
+    ->fields(array('strictness' => 'normal'))
+    ->execute();
 }
