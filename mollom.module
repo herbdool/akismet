@@ -1394,6 +1394,11 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     '#default_value' => '',
     '#description' => t("Type the characters you see in the picture above; if you can't read them, submit the form and a new image will be generated. Not case sensitive."),
   );
+  // Disable browser autocompletion, unless testing mode is enabled, in which
+  // case autocompletion for 'correct' and 'incorrect' is handy.
+  if (!variable_get('mollom_testing_mode', 0)) {
+    $element['captcha']['#attributes']['autocomplete'] = 'off';
+  }
 
   // Request and inject a CAPTCHA when required; but also in case validation
   // through textual analysis failed.
