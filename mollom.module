@@ -84,6 +84,28 @@ define('MOLLOM_REFRESH', 1100);
 define('MOLLOM_REDIRECT', 1200);
 
 /**
+ * Implements hook_hook_info().
+ */
+function mollom_hook_info() {
+  $hooks = array(
+    'mollom_form_list',
+    'mollom_form_list_alter',
+    'mollom_form_info',
+    'mollom_form_info_alter',
+    'mollom_form_insert',
+    'mollom_form_update',
+    'mollom_form_delete',
+    'mollom_data_insert',
+    'mollom_data_update',
+    'mollom_data_delete',
+  );
+  $hooks = array_fill_keys($hooks, array(
+    'group' => 'mollom',
+  ));
+  return $hooks;
+}
+
+/**
  * Implements hook_help().
  */
 function mollom_help($path, $arg) {
@@ -804,6 +826,10 @@ function mollom_form_list() {
       );
     }
   }
+
+  // Allow modules to alter the form list.
+  drupal_alter('mollom_form_list', $form_list);
+
   return $form_list;
 }
 
