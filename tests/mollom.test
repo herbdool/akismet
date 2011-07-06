@@ -2646,6 +2646,8 @@ class MollomDataTestCase extends MollomWebTestCase {
    * Test mollom_form_get_values().
    */
   function testFormGetValues() {
+    global $user;
+
     // Form registry information.
     $form_info = array(
       'elements' => array(
@@ -2670,6 +2672,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
 
     // Verify submitted form values for an anonymous/arbitrary user.
+    $user = drupal_anonymous_user();
     $values = array(
       'subject' => 'Foo',
       'message' => 'Bar',
@@ -2706,7 +2709,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('author_ip', $data['author_ip'], ip_address());
 
     // Verify submitted form values for an registered user.
-    $this->drupalLogin($this->admin_user);
+    $user = $this->admin_user;
     $values = array(
       'subject' => 'Foo',
       'message' => 'Bar',
