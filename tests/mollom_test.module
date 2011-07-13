@@ -258,9 +258,38 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
   $bin = 'mollom_test_site';
   $sites = variable_get($bin, array());
 
+  // Check whether publicKey exists.
+  if (isset($publicKey)) {
+    if (!isset($sites[$publicKey])) {
+      return MENU_NOT_FOUND;
+    }
+    // Validate authentication.
+    $time = $data['time'];
+    $nonce = $data['nonce'];
+    $request_data = $time . ':' . $nonce . ':' . $sites[$publicKey]['privateKey'];
+    $hash = base64_encode(hash_hmac('sha1', $request_data, $sites[$publicKey]['privateKey'], TRUE));
+    if ($hash !== $data['hash']) {
+      return Mollom::AUTH_ERROR;
+    }
+  }
+
   // Authentication is ignored for POST requests.
   if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    if (!$delete) {
+    // Update site.
+    if (isset($publicKey)) {
+      // Remove authentication parameters.
+      unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
+
+      $storage = variable_get('mollom_test_verify_key', array());
+      $storage[] = $data;
+      variable_set('mollom_test_verify_key', $storage);
+
+      $sites[$publicKey] = $data + $sites[$publicKey];
+      variable_set($bin, $sites);
+      $response = $sites[$publicKey];
+    }
+    // Create new site.
+    elseif (!$delete) {
       // Remove authentication parameters.
       unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
 
@@ -282,46 +311,16 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
       variable_set($bin, $sites);
       $response = $data;
     }
+    // Delete site.
     else {
-      // Check whether publicKey exists.
-      if (!isset($sites[$publicKey])) {
-        return MENU_NOT_FOUND;
-      }
       unset($sites[$publicKey]);
       variable_set($bin, $sites);
       return TRUE;
     }
   }
   else {
-    // Check whether publicKey exists.
-    if (!isset($publicKey) || !isset($sites[$publicKey])) {
-      return MENU_NOT_FOUND;
-    }
-    // Validate authentication.
-    $time = $data['time'];
-    $nonce = $data['nonce'];
-    $request_data = $time . ':' . $nonce . ':' . $sites[$publicKey]['privateKey'];
-    $hash = base64_encode(hash_hmac('sha1', $request_data, $sites[$publicKey]['privateKey'], TRUE));
-    if ($hash !== $data['hash']) {
-      return Mollom::AUTH_ERROR;
-    }
-    // Remove authentication parameters.
-    unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
-
-    // Update site.
-    if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-      $storage = variable_get('mollom_test_verify_key', array());
-      $storage[] = $data;
-      variable_set('mollom_test_verify_key', $storage);
-
-      $sites[$publicKey] = $data + $sites[$publicKey];
-      variable_set($bin, $sites);
-      $response = $sites[$publicKey];
-    }
     // Return existing site.
-    else {
-      $response = $sites[$publicKey];
-    }
+    $response = $sites[$publicKey];
   }
   return array('site' => $response);
 }
@@ -338,7 +337,7 @@ function mollom_test_rest_content($contentId = NULL) {
     }
     return FALSE;
   }
-  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+  else {
     // Update existing content (includes sending feedback).
     // In case the 'moderated' parameter was passed, the call equals the old
     // mollom.sendFeedback and we only check whether the parameter value is
@@ -348,17 +347,13 @@ function mollom_test_rest_content($contentId = NULL) {
       $valid = $valid && in_array($data['moderated'], array('spam', 'profanity', 'low-quality', 'unwanted', 'approve', 'escalate', 'delete', 'ignore'));
       return $valid;
     }
-    // Content ID in path must be greater than zero.
-    if (empty($contentId)) {
-      return FALSE;
-    }
     // Content ID in request parameters must match the one in path.
     if (isset($data['id']) && $data['id'] != $contentId) {
       return FALSE;
     }
   }
 
-  // Default: Create (POST) or update (PUT) content and check it.
+  // Default POST: Create or update content and check it.
   return array('content' => mollom_test_check_content($data));
 }
 
@@ -374,16 +369,15 @@ function mollom_test_rest_captcha($captchaId = NULL) {
     }
     return FALSE;
   }
-  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-    // CAPTCHA ID in path must be greater than zero.
-    if (empty($captchaId)) {
-      return FALSE;
-    }
+  else {
     // CAPTCHA ID in request parameters must match the one in path.
     if (isset($data['id']) && $data['id'] != $captchaId) {
       return FALSE;
     }
-    return array('captcha' => mollom_test_check_captcha($data));
+    // Verify CAPTCHA.
+    if (isset($data['id'])) {
+      return array('captcha' => mollom_test_check_captcha($data));
+    }
   }
 
   // POST.
@@ -438,9 +432,27 @@ function mollom_test_rest_blacklist($public_key, $entryId = NULL, $delete = FALS
       }
     }
   }
-  elseif ($_SERVER['REQUEST_METHOD'] == 'POST') {
+  else {
+    // Update an existing entry.
+    if (isset($entryId)) {
+      // Entry ID must match.
+      if (isset($data['id']) && $data['id'] != $entryId) {
+        return FALSE;
+      }
+      // Check that the entry was not deleted.
+      if (empty($entries[$entryId])) {
+        return MENU_NOT_FOUND;
+      }
+      // Entry ID cannot be updated.
+      unset($data['id']);
+      $entries[$entryId] = $data;
+      variable_set($bin, $entries);
+      $response = $data;
+      $response['id'] = $entryId;
+      return array('entry' => $response);
+    }
     // Create a new entry.
-    if (!$delete) {
+    elseif (!$delete) {
       $entryId = max(array_keys($entries)) + 1;
       $data['id'] = $entryId;
       $entries[$entryId] = $data;
@@ -461,26 +473,6 @@ function mollom_test_rest_blacklist($public_key, $entryId = NULL, $delete = FALS
         return MENU_NOT_FOUND;
       }
     }
-  }
-  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-    // Update an existing entry.
-    if (empty($entryId)) {
-      return FALSE;
-    }
-    if (isset($data['id']) && $data['id'] != $entryId) {
-      return FALSE;
-    }
-    // Check that the entry was not deleted.
-    if (empty($entries[$entryId])) {
-      return MENU_NOT_FOUND;
-    }
-    // Entry ID cannot be updated.
-    unset($data['id']);
-    $entries[$entryId] = $data;
-    variable_set($bin, $entries);
-    $response = $data;
-    $response['id'] = $entryId;
-    return array('entry' => $response);
   }
 }
 
@@ -573,58 +565,58 @@ function mollom_test_check_content($data) {
     }
 
     if ($spam && $ham) {
-      $response['spam'] = 0.5;
-      $response['spamResult'] = 'unsure';
-      $quality = 0.5;
+      $response['spamScore'] = 0.5;
+      $response['spamClassification'] = 'unsure';
+      $qualityScore = 0.5;
     }
     elseif ($spam) {
-      $response['spam'] = 1.0;
-      $response['spamResult'] = 'spam';
-      $quality = 0.0;
+      $response['spamScore'] = 1.0;
+      $response['spamClassification'] = 'spam';
+      $qualityScore = 0.0;
     }
     elseif ($ham) {
-      $response['spam'] = 0.0;
-      $response['spamResult'] = 'ham';
-      $quality = 1.0;
+      $response['spamScore'] = 0.0;
+      $response['spamClassification'] = 'ham';
+      $qualityScore = 1.0;
     }
     else {
-      $response['spam'] = 0.5;
-      $response['spamResult'] = 'unsure';
-      $quality = NULL;
+      $response['spamScore'] = 0.5;
+      $response['spamClassification'] = 'unsure';
+      $qualityScore = NULL;
     }
     // In case a previous spam check was unsure and a CAPTCHA was solved, the
     // result is supposed to be ham.
     $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());
     if (!empty($data['captchaId']) && !empty($captcha_sessions[$data['captchaId']])) {
-      $response['spam'] = 0.0;
-      $response['spamResult'] = 'ham';
+      $response['spamScore'] = 0.0;
+      $response['spamClassification'] = 'ham';
     }
   }
 
   // Quality filter.
   if (!isset($data['checks']) || in_array('quality', $data['checks'])) {
-    if (isset($quality)) {
-      $response['quality'] = $quality;
+    if (isset($qualityScore)) {
+      $response['qualityScore'] = $qualityScore;
     }
     // @todo No idea how quality is calculated during testing without spam
     //   results above.
     else {
-      $response['quality'] = 0;
+      $response['qualityScore'] = 0;
     }
   }
 
   // Profanity filter.
   if (isset($data['checks']) && in_array('profanity', $data['checks'])) {
-    $profanity = 0.0;
+    $profanityScore = 0.0;
     if (strpos($post, 'profanity') !== FALSE) {
-      $profanity = 1.0;
+      $profanityScore = 1.0;
     }
     // Check blacklist.
     if ($matches = mollom_test_check_content_blacklist($post, $blacklist, 'profanity')) {
-      $profanity = 1.0;
+      $profanityScore = 1.0;
       $response['blacklistProfanity'] = $matches;
     }
-    $response['profanity'] = $profanity;
+    $response['profanityScore'] = $profanityScore;
   }
 
   // Language detection.

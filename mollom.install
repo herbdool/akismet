@@ -126,13 +126,13 @@ function mollom_schema() {
       // would have an unintended meaning. Also, values are stored in individual
       // columns, so as to be able to join and filter/sort on these values for
       // improved content moderation.
-      'spam' => array(
+      'spamScore' => array(
         'description' => 'Text analysis spam check result.',
         'type' => 'float',
         'size' => 'tiny',
         'not null' => FALSE,
       ),
-      'spamResult' => array(
+      'spamClassification' => array(
         'description' => 'Text analysis final spam classification result.',
         'type' => 'varchar',
         'length' => 16,
@@ -140,13 +140,13 @@ function mollom_schema() {
       ),
       // @todo Add Content API result 'reason'.
       // @todo Add CAPTCHA API results 'solved', 'reason'.
-      'quality' => array(
+      'qualityScore' => array(
         'description' => 'Text analysis quality check result.',
         'type' => 'float',
         'size' => 'tiny',
         'not null' => FALSE,
       ),
-      'profanity' => array(
+      'profanityScore' => array(
         'description' => 'Text analysis profanity check result.',
         'type' => 'float',
         'size' => 'tiny',
@@ -882,17 +882,31 @@ function mollom_update_7012() {
     db_add_index('mollom', 'contentId', array('contentId'));
     db_add_index('mollom', 'captchaId', array('captchaId'));
   }
-  if (!db_field_exists('mollom', 'spamResult')) {
-    // Add 'spamResult'.
-    db_add_field('mollom', 'spamResult', array(
+  if (!db_field_exists('mollom', 'spamClassification')) {
+    // Add 'spamClassification'.
+    db_add_field('mollom', 'spamClassification', array(
       'description' => 'Text analysis final spam classification result.',
       'type' => 'varchar',
       'length' => 16,
       'not null' => FALSE,
     ));
-    // Change 'spam' into double.
-    db_change_field('mollom', 'spam', 'spam', array(
+    // Change 'spam' into 'spamScore' double.
+    db_change_field('mollom', 'spam', 'spamScore', array(
       'description' => 'Text analysis spam check result.',
+      'type' => 'float',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+    // Change 'profanity' into 'profanityScore' double.
+    db_change_field('mollom', 'profanity', 'profanityScore', array(
+      'description' => 'Text analysis profanity check result.',
+      'type' => 'float',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+    // Change 'quality' into 'qualityScore' double.
+    db_change_field('mollom', 'quality', 'qualityScore', array(
+      'description' => 'Text analysis quality check result.',
       'type' => 'float',
       'size' => 'tiny',
       'not null' => FALSE,
