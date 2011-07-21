@@ -27,6 +27,21 @@ function mollom_test_xmlrpc() {
 }
 
 /**
+ * Converts camelCase request/response parameters to lowercase with underscores.
+ *
+ * @todo Recurse into multi-dimensional arrays.
+ */
+function mollom_test_xmlrpc_convert_params(array $data = array()) {
+  foreach ($data as $key => $value) {
+    // Convert CamelCase to lowercase with underscores.
+    $new_key = strtolower(preg_replace('@(?<=[a-z])([A-Z])@', '_$1', $key));
+    $data[$new_key] = $value;
+    unset($data[$key]);
+  }
+  return $data;
+}
+
+/**
  * XML-RPC callback for mollom.getServerList to retrieve new server list.
  */
 function mollom_test_xmlrpc_get_server_list($data) {
@@ -115,16 +130,21 @@ function mollom_test_rest() {
   );
 
   $items[$path . '/content'] = $base + array(
-    'page callback' => 'mollom_test_rest_check_content',
+    'page callback' => 'mollom_test_rest_content',
+  );
+  $items[$path . '/content/%'] = $base + array(
+    'page callback' => 'mollom_test_rest_content',
+    'page arguments' => array($base_args + 2),
+  );
+
+  $items[$path . '/captcha'] = $base + array(
+    'page callback' => 'mollom_test_rest_captcha',
   );
   $items[$path . '/captcha/%'] = $base + array(
-    'page callback' => 'mollom_test_rest_get_captcha',
+    'page callback' => 'mollom_test_rest_captcha',
     'page arguments' => array($base_args + 2),
   );
-  $items[$path . '/captcha/%/verify'] = $base + array(
-    'page callback' => 'mollom_test_rest_check_captcha',
-    'page arguments' => array($base_args + 2),
-  );
+
   $items[$path . '/content/%/feedback'] = $base + array(
     'page callback' => 'mollom_test_rest_send_feedback',
     'page arguments' => array($base_args + 2),
@@ -132,6 +152,22 @@ function mollom_test_rest() {
   // @todo Blacklist endpoints.
 
   return $items;
+}
+
+/**
+ * Returns HTTP request query parameters for the current request.
+ *
+ * @see Mollom::httpBuildQuery()
+ * @see http://php.net/manual/en/wrappers.php.php
+ */
+function mollom_test_rest_get_parameters() {
+  if ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD') {
+    $data = Mollom::httpParseQuery($_SERVER['QUERY_STRING']);
+  }
+  elseif ($_SERVER['REQUEST_METHOD'] == 'POST' || $_SERVER['REQUEST_METHOD'] == 'PUT') {
+    $data = Mollom::httpParseQuery(file_get_contents('php://input'));
+  }
+  return $data;
 }
 
 /**
@@ -146,6 +182,10 @@ function mollom_test_rest_deliver($page_callback_result) {
 
   // Append status response parameters.
   // @todo Add support for custom codes (redirect/refresh) + error messages.
+  // @todo Add support for HTTP/resource errors; e.g., 404, 403, etc.
+  if (!isset($page_callback_result)) {
+    $page_callback_result = FALSE;
+  }
   $status = array(
     'code' => $page_callback_result === FALSE ? 1 : 0,
     'message' => '',
@@ -231,31 +271,51 @@ function mollom_test_rest_site($id) {
 /**
  * REST callback for mollom.checkContent to perform textual analysis.
  */
-function mollom_test_rest_check_content() {
-  $data = $_POST;
+function mollom_test_rest_content($contentId = NULL) {
+  $data = mollom_test_rest_get_parameters();
+  if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+    // @todo List/read content.
+    if (empty($contentId)) {
+      return FALSE;
+    }
+    return FALSE;
+  }
+  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    if (empty($contentId)) {
+      return FALSE;
+    }
+    if (isset($data['contentId']) && $data['contentId'] != $contentId) {
+      return FALSE;
+    }
+  }
 
-  return mollom_test_check_content($data);
+  return array('content' => mollom_test_check_content($data));
 }
 
 /**
- * REST callback for mollom.getImageCaptcha to fetch a CATPCHA image.
+ * REST callback for mollom.getImageCaptcha to fetch a CAPTCHA image.
  */
-function mollom_test_rest_get_captcha($type) {
-  $data = $_POST;
-  $data['type'] = $type;
+function mollom_test_rest_captcha($captchaId = NULL) {
+  $data = mollom_test_rest_get_parameters();
+  if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+    // @todo List/read content.
+    if (empty($captchaId)) {
+      return FALSE;
+    }
+    return FALSE;
+  }
+  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    if (empty($captchaId)) {
+      return FALSE;
+    }
+    if (isset($data['captchaId']) && $data['captchaId'] != $captchaId) {
+      return FALSE;
+    }
+    return array('captcha' => mollom_test_check_captcha($data));
+  }
 
-  return mollom_test_get_captcha($data);
-}
-
-/**
- * REST callback for mollom.checkCaptcha to validate a CAPTCHA response.
- */
-function mollom_test_rest_check_captcha($session_id) {
-  $data = $_POST;
-  $data['session_id'] = $session_id;
-
-  $result = mollom_test_check_captcha($data);
-  return array('result' => $result);
+  // POST.
+  return array('captcha' => mollom_test_get_captcha($data));
 }
 
 /**
@@ -308,17 +368,18 @@ function mollom_test_verify_key($data) {
  * @todo Add support for 'redirect' and 'refresh' values.
  */
 function mollom_test_check_content($data) {
-  $storage = variable_get(__FUNCTION__, array());
-  $storage[] = $data;
-  variable_set(__FUNCTION__, $storage);
-
   $response = array();
 
+  // If only a single value for checks is passed, it is a string.
+  if (isset($data['checks']) && is_string($data['checks'])) {
+    $data['checks'] = array($data['checks']);
+  }
+
   // Spam filter: Check post_title and post_body for ham, spam, or unsure.
-  if (!isset($data['checks']) || strpos($data['checks'], 'spam') !== FALSE) {
+  if (!isset($data['checks']) || in_array('spam', $data['checks'])) {
     $spam = FALSE;
     $ham = FALSE;
-    foreach (array('post_title', 'post_body') as $key) {
+    foreach (array('postTitle', 'postBody') as $key) {
       if (!isset($data[$key])) {
         continue;
       }
@@ -337,31 +398,36 @@ function mollom_test_check_content($data) {
       }
     }
     if ($spam && $ham) {
-      $response['spam'] = MOLLOM_ANALYSIS_UNSURE;
+      $response['spam'] = 0.5;
+      $response['spamResult'] = 'UNSURE';
       $quality = 0.5;
     }
     elseif ($spam) {
-      $response['spam'] = MOLLOM_ANALYSIS_SPAM;
-      $quality = 0;
+      $response['spam'] = 1.0;
+      $response['spamResult'] = 'SPAM';
+      $quality = 0.0;
     }
     elseif ($ham) {
-      $response['spam'] = MOLLOM_ANALYSIS_HAM;
-      $quality = 1;
+      $response['spam'] = 0.0;
+      $response['spamResult'] = 'HAM';
+      $quality = 1.0;
     }
     else {
-      $response['spam'] = MOLLOM_ANALYSIS_UNSURE;
+      $response['spam'] = 0.5;
+      $response['spamResult'] = 'UNSURE';
       $quality = NULL;
     }
     // In case a previous spam check was unsure and a CAPTCHA was solved, the
     // result is supposed to be ham.
     $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());
-    if (!empty($data['session_id']) && !empty($captcha_sessions[$data['session_id']])) {
-      $response['spam'] = MOLLOM_ANALYSIS_HAM;
+    if (!empty($data['captchaId']) && !empty($captcha_sessions[$data['captchaId']])) {
+      $response['spam'] = 0.0;
+      $response['spamResult'] = 'HAM';
     }
   }
 
   // Quality filter.
-  if (!isset($data['checks']) || strpos($data['checks'], 'quality') !== FALSE) {
+  if (!isset($data['checks']) || in_array('quality', $data['checks'])) {
     if (isset($quality)) {
       $response['quality'] = $quality;
     }
@@ -373,9 +439,9 @@ function mollom_test_check_content($data) {
   }
 
   // Profanity filter.
-  if (isset($data['checks']) && strpos($data['checks'], 'profanity') !== FALSE) {
+  if (isset($data['checks']) && in_array('profanity', $data['checks'])) {
     $profanity = 0.0;
-    foreach (array('post_title', 'post_body') as $key) {
+    foreach (array('postTitle', 'postBody') as $key) {
       if (isset($data[$key]) && strpos($data[$key], 'profanity') !== FALSE) {
         $profanity = 1.0;
       }
@@ -383,13 +449,11 @@ function mollom_test_check_content($data) {
     $response['profanity'] = $profanity;
   }
 
-  if (!empty($data['session_id'])) {
-    $response['session_id'] = $data['session_id'];
-  }
-  else {
-    drupal_session_start();
-    $response['session_id'] = session_id();
-  }
+  $storage = variable_get(__FUNCTION__, array());
+  $contentId = (!empty($data['contentId']) ? (int) $data['contentId'] : max(array_keys($storage)) + 1);
+  $storage[$contentId] = $data;
+  $response['contentId'] = $contentId;
+  variable_set(__FUNCTION__, $storage);
 
   return $response;
 }
@@ -398,22 +462,22 @@ function mollom_test_check_content($data) {
  * API callback for mollom.getImageCaptcha to fetch a CATPCHA image.
  */
 function mollom_test_get_captcha($data) {
-  $storage = variable_get(__FUNCTION__, array());
-  $storage[] = $data;
-  variable_set(__FUNCTION__, $storage);
-
-  drupal_session_start();
+  $response = array();
 
   // Return a HTTPS URL if 'ssl' parameter was passed.
   $base_url = $GLOBALS['base_url'];
   if (!empty($data['ssl'])) {
     $base_url = str_replace('http', 'https', $base_url);
   }
+  $response['url'] = $base_url . '/' . drupal_get_path('module', 'mollom') . '/images/powered-by-mollom-2.gif';
 
-  return array(
-    'session_id' => !empty($data['session_id']) ? $data['session_id'] : session_id(),
-    'url' => $base_url . '/' . drupal_get_path('module', 'mollom') . '/images/powered-by-mollom-2.gif',
-  );
+  $storage = variable_get(__FUNCTION__, array());
+  $captchaId = (!empty($data['captchaId']) ? (int) $data['captchaId'] : max(array_keys($storage)) + 1);
+  $storage[$captchaId] = $data;
+  $response['captchaId'] = $captchaId;
+  variable_set(__FUNCTION__, $storage);
+
+  return $response;
 }
 
 /**
@@ -422,21 +486,27 @@ function mollom_test_get_captcha($data) {
  * @todo Add support for 'redirect' and 'refresh' values.
  */
 function mollom_test_check_captcha($data) {
+  $response = array();
+
+  if (isset($data['solution']) && $data['solution'] == 'correct') {
+    $response['solved'] = TRUE;
+  }
+  else {
+    $response['solved'] = FALSE;
+    $response['reason'] = '';
+  }
+
   $storage = variable_get(__FUNCTION__, array());
-  $storage[] = $data;
+  $captchaId = (!empty($data['captchaId']) ? (int) $data['captchaId'] : max(array_keys($storage)) + 1);
+  $storage[$captchaId] = $data;
+  $response['captchaId'] = $captchaId;
   variable_set(__FUNCTION__, $storage);
 
-  if ($data['solution'] == 'correct') {
-    $result = TRUE;
-  }
-  if ($data['solution'] == 'incorrect') {
-    $result = FALSE;
-  }
   $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());
-  $captcha_sessions[$data['session_id']] = $result;
+  $captcha_sessions[$captchaId] = $response['solved'];
   variable_set('mollom_test_check_captcha_sessions', $captcha_sessions);
 
-  return $result;
+  return $response;
 }
 
 /**

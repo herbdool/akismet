@@ -1260,7 +1260,7 @@ function _mollom_status($reset = FALSE) {
 
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
-    $status['keys valid'] = mollom('mollom.verifyKey', _mollom_get_version());
+    $status['keys valid'] = mollom()->verifyKey(_mollom_get_version());
   }
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {
@@ -1805,9 +1805,16 @@ function mollom_form_submit($form, &$form_state) {
  *   error values. We should rewrite the error handling so that calling
  *   functions can properly handle error situations.
  */
-function mollom($method, $data = array()) {
+function mollom($method = NULL, $data = array()) {
+  // @todo This will use the singleton pattern after full module conversion.
+  if (!isset($method)) {
+    $mollom = new MollomDrupalRESTTest();
+    return $mollom;
+  }
+
   // @todo Fix method names.
   $method = strtr($method, array('mollom.' => ''));
+//  debug($method);
 
   $mollom = new MollomDrupalRESTTest();
   #$mollom = new MollomDrupalXMLRPC();
@@ -1818,28 +1825,11 @@ function mollom($method, $data = array()) {
     $result = $mollom->query1($method, $data);
   }
 //  debug($result);
-//  dpm($mollom);
+//  debug($mollom->lastResponseCode);
+//  debug($mollom);
 
-  if ($mollom->lastResponseCode === TRUE) {
-    return $result;
-  }
-
-  $messages = array();
-  foreach ($mollom->log as $entry) {
-    $entry += array('arguments' => array());
-    $message = array(
-      $entry['message'] => $entry['arguments'],
-    );
-    if (isset($entry['data'])) {
-      $message['Request:<pre>@request</pre>'] = array('@request' => $entry['data']);
-    }
-    if (isset($entry['response'])) {
-      $message['Response:<pre>@response</pre>'] = array('@response' => $entry['response']);
-    }
-    $messages[] = $message;
-  }
-  _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
-
+  // Unless we have a NETWORK_ERROR (indicating that no servers worked), return
+  // the result.
   if ($result !== NETWORK_ERROR) {
     return $result;
   }
@@ -1853,11 +1843,10 @@ function mollom($method, $data = array()) {
   //   likely want to either embed the fallback handling into form processing,
   //   or introduce a new helper function that is invoked instead of mollom()
   //   during form processing.
-  if ($method != 'mollom.verifyKey') {
+  if ($method != 'verifyKey') {
     _mollom_fallback();
   }
-
-  return NETWORK_ERROR;
+  return $result;
 }
 
 /**

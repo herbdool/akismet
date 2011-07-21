@@ -6,3 +6,4 @@ scripts[] = mollom.js
 stylesheets[all][] = mollom.css
 files[] = mollom.inc
 files[] = tests/mollom.test
+files[] = tests/mollom.class.test

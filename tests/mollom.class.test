@@ -1,0 +1,153 @@
+<?php
+
+/**
+ * @file
+ * Unit tests for Mollom class.
+ *
+ * @todo After final Mollom class commit, move all low-level tests from
+ *   mollom.test into this file.
+ */
+
+/**
+ * Tests Mollom class functionality.
+ */
+class MollomClassUnitTestCase extends DrupalUnitTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Mollom class',
+      'description' => 'Tests Mollom class functionality.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    parent::setUp();
+    // DrupalUnitTestCase does not autoload classes for whatever reason.
+    module_load_include('inc', 'mollom');
+  }
+
+  /**
+   * Asserts that two values belonging to the same variable are equal.
+   *
+   * Checks to see whether two values, which belong to the same variable name or
+   * identifier, are equal and logs a readable assertion message.
+   *
+   * @param $name
+   *   A name or identifier to use in the assertion message.
+   * @param $first
+   *   The first value to check.
+   * @param $second
+   *   The second value to check.
+   *
+   * @return
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   *
+   * @see MollomWebTestCase::assertNotSame()
+   *
+   * @todo D8: Move into core. This improved assertEqual() did not get into D7,
+   *   since the function signature differs and it's plenty of work to manually
+   *   update all assertEqual() invocations throughout all tests.
+   */
+  protected function assertSame($name, $first, $second) {
+    $message = t("@name: @first is equal to @second.", array(
+      '@name' => $name,
+      '@first' => var_export($first, TRUE),
+      '@second' => var_export($second, TRUE),
+    ));
+    $this->assertEqual($first, $second, $message);
+  }
+
+  /**
+   * Asserts that two values belonging to the same variable are not equal.
+   *
+   * Checks to see whether two values, which belong to the same variable name or
+   * identifier, are not equal and logs a readable assertion message.
+   *
+   * @param $name
+   *   A name or identifier to use in the assertion message.
+   * @param $first
+   *   The first value to check.
+   * @param $second
+   *   The second value to check.
+   *
+   * @return
+   *   TRUE if the assertion succeeded, FALSE otherwise.
+   *
+   * @see MollomWebTestCase::assertSame()
+   */
+  protected function assertNotSame($name, $first, $second) {
+    $message = t("@name: @first is not equal to @second.", array(
+      '@name' => $name,
+      '@first' => var_export($first, TRUE),
+      '@second' => var_export($second, TRUE),
+    ));
+    $this->assertNotEqual($first, $second, $message);
+  }
+
+  /**
+   * Tests Mollom::httpBuildQuery().
+   */
+  function testHttpBuildQuery() {
+    $input = array('foo' => 1, 'bar' => 2);
+    $expected = 'foo=1&bar=2';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+
+    $input = array('checks' => array('foo' => 'spam', 'bar' => 'profanity'));
+    $expected = 'checks[foo]=spam&checks[bar]=profanity';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+
+    $input = array('checks' => array('spam', 'profanity'));
+    $expected = 'checks=spam&checks=profanity';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+
+    $input = array('checks' => array(array('spam'), array('profanity')));
+    $expected = 'checks=spam&checks=profanity';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+
+    $input = array('checks' => array('spam', ''));
+    $expected = 'checks=spam&checks=';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+
+    $input = array('checks' => 'spam');
+    $expected = 'checks=spam';
+    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+  }
+
+  /**
+   * Tests Mollom::httpParseQuery().
+   */
+  function testHttpParseQuery() {
+    $input = 'foo=1&bar=2';
+    $expected = array('foo' => 1, 'bar' => 2);
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    $input = 'checks=spam&checks=profanity';
+    $expected = array('checks' => array('spam', 'profanity'));
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    // Mollom::httpParseQuery() does not attempt to work transparently. Thus,
+    // multiple parameter names containing brackets itself (regular PHP syntax)
+    // will lead to an "unexpected" result. Although it wouldn't be hard to add
+    // support for this, there's currently no need for it.
+    $input = 'checks[]=spam&checks[]=profanity';
+    $expected = array('checks' => array(array('spam'), array('profanity')));
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    $input = 'checks=spam&checks=';
+    $expected = array('checks' => array('spam', ''));
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    $input = 'checks=spam&checks';
+    $expected = array('checks' => array('spam', ''));
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    $input = 'checks=spam&';
+    $expected = array('checks' => 'spam');
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+
+    $input = 'checks=spam';
+    $expected = array('checks' => 'spam');
+    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+  }
+}
+

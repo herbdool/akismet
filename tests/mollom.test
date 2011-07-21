@@ -85,11 +85,14 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   function setUp() {
     // Re-initialize stored session_id and watchdog messages.
-    $this->resetSessionID();
+    $this->resetResponseID();
     $this->messages = array();
 
     $modules = func_get_args();
     $modules = (isset($modules[0]) ? $modules[0] : array());
+
+    // @todo Temporary until official backend is ready for testing.
+    $modules[] = 'mollom_test';
 
     // If not explicitly disabled by a test, setup with Mollom and default admin
     // user.
@@ -184,7 +187,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     }
     // Assert that there was a severe message, in case we expected one.
     if ($fail_expected && !$had_severe_message) {
-      $this->fail(t('Severe log message not found.'), t('Watchdog'));
+      $this->fail(t('Severe log message was found.'), t('Watchdog'));
     }
     // Delete processed watchdog messages.
     if (!empty($this->messages)) {
@@ -200,55 +203,72 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * with a different Mollom server (due to a refreshed server list or being
    * redirected), then we will get a new session_id.
    *
+   * @param $type
+   *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
    * @param $session_id
    *   A Mollom session_id of the last request, as contained in the XML-RPC
    *   response.
    */
-  protected function assertSessionID($session_id) {
+  protected function assertResponseID($type, $id) {
     // Check whether watchdog messages indicate a refresh or redirect.
+    // @todo According to latest internal discussions, session/content/captcha
+    //   IDs are no longer reset and transparently known to all servers. Thus,
+    //   this can be removed?
     foreach ($this->messages as $message) {
       if ($message->message == 'Refreshed servers: %servers' || $message->message == 'Server %server redirected to: %next.') {
-        $this->resetSessionID();
+        // Reset all IDs.
+        $this->resetResponseID();
       }
     }
 
-    if (!isset($this->session_id)) {
+    if (!isset($this->responseIds[$type])) {
       // Use assertTrue() instead of pass(), to test !empty().
-      $this->assertTrue($session_id, t('New session_id: %session_id', array('%session_id' => $session_id)));
-      $this->session_id = $session_id;
+      $this->assertTrue($id, t('New %type: %id', array(
+        '%type' => $type,
+        '%id' => $id,
+      )));
+      $this->responseIds[$type] = $id;
     }
     else {
-      $this->assertSame('session_id', $session_id, $this->session_id);
+      $this->assertSame($type, $id, $this->responseIds[$type]);
     }
-    return $this->session_id;
+    return $this->responseIds[$type];
   }
 
   /**
    * Reset the statically cached Mollom session id.
+   *
+   * @param $type
+   *   The type of ID to reset; e.g., 'contentId', 'captchaId'.
    */
-  protected function resetSessionID() {
-    $this->session_id = NULL;
+  protected function resetResponseID($type = NULL) {
+    if (isset($type)) {
+      unset($this->responseIds[$type]);
+    }
+    else {
+      unset($this->responseIds);
+    }
   }
 
   /**
    * Assert a Mollom session id in a form.
    *
-   * This is a wrapper around assertSessionID() allows to assert that a proper
+   * This is a wrapper around assertResponseID() allows to assert that a proper
    * Mollom session id is found in the form contained in the internal browser
    * output. The usual flow is:
    * - drupalGet() or drupalPost() requests or submits a form.
    * - drupalGet() and drupalPost() invoke assertMollomWatchdogMessages()
    *   internally, which records all new watchdog messages.
-   * - This function, assertSessionIDInForm(), is invoked to assert that there
+   * - This function, assertResponseIDInForm(), is invoked to assert that there
    *   is a Mollom session id and, depending on the recorded watchdog messages,
    *   that it either equals the last known session id or the new session id is
    *   used for future comparisons in case of a server redirect.
    * - The return value of this function is used to invoke assertMollomData(),
    *   to verify that the proper session id was stored in the database.
    */
-  protected function assertSessionIDInForm() {
+  protected function assertResponseIDInForm() {
     $session_id = $this->getFieldValueByName('mollom[session_id]');
-    return $this->assertSessionID($session_id);
+    return $this->assertResponseID('sessionId', $session_id);
   }
 
   /**
@@ -579,7 +599,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * Stores the local site as Mollom server to re-route all communication to this site.
    */
   protected function setTestingServer() {
-    if (variable_get('mollom_protocol', 'xmlrpc') == 'xmlrpc') {
+    if (variable_get('mollom_protocol', 'xmlrpc') == 'rest') {
       variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
     }
     else {
@@ -644,7 +664,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *
    * @see DrupalWebTestCase->drupalGet()
    * @see MollomWebTestCase->assertMollomWatchdogMessages()
-   * @see MollomWebTestCase->assertSessionID()
+   * @see MollomWebTestCase->assertResponseID()
    */
   protected function drupalGet($path, array $options = array(), array $headers = array()) {
     $output = parent::drupalGet($path, $options, $headers);
@@ -663,7 +683,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *     negate the watchdog message severity assertion.
    *
    * @see MollomWebTestCase->assertMollomWatchdogMessages()
-   * @see MollomWebTestCase->assertSessionID()
+   * @see MollomWebTestCase->assertResponseID()
    * @see DrupalWebTestCase->drupalPost()
    */
   protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL, $extra_post = NULL) {
@@ -745,10 +765,6 @@ class MollomInstallationTestCase extends MollomWebTestCase {
   }
 
   function setUp() {
-    // Re-initialize stored session_id and watchdog messages.
-    $this->resetSessionID();
-    $this->messages = array();
-
     $this->disableDefaultSetup = TRUE;
     parent::setUp(array('comment'));
 
@@ -898,153 +914,154 @@ class MollomResponseTestCase extends MollomWebTestCase {
    * Tests mollom.checkContent().
    */
   function testCheckContent() {
+    $mollom = mollom();
     $data = array(
-      'author_name' => $this->admin_user->name,
-      'author_mail' => $this->admin_user->mail,
-      'author_id' => $this->admin_user->uid,
-      'author_ip' => ip_address(),
+      'authorName' => $this->admin_user->name,
+      'authorMail' => $this->admin_user->mail,
+      'authorId' => $this->admin_user->uid,
+      'authorIp' => ip_address(),
     );
 
     // Ensure proper response for 'ham' submissions.
     // By default (i.e., omitting 'checks') we expect spam and quality checking
     // only.
-    $data['post_body'] = 'ham';
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'ham';
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_HAM);
-    $this->assertSame('quality', $result['quality'], 1);
+    $this->assertSame('spam', $result['spam'], 0.0);
+    $this->assertSame('spamResult', $result['spamResult'], 'HAM');
+    $this->assertSame('quality', $result['quality'], 1.0);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $session_id = $this->assertSessionID($result['session_id']);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
-    $data['post_body'] = 'spam';
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'spam';
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_SPAM);
-    $this->assertSame('quality', $result['quality'], 0);
+    $this->assertSame('spam', $result['spam'], 1.0);
+    $this->assertSame('spamResult', $result['spamResult'], 'SPAM');
+    $this->assertSame('quality', $result['quality'], 0.0);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $session_id = $this->assertSessionID($result['session_id']);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Ensure proper response for 'unsure' submissions, re-using session_id.
-    $data['post_body'] = 'unsure';
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'unsure';
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
+    $this->assertSame('spam', $result['spam'], 0.5);
+    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
     $this->assertSame('quality', $result['quality'], 0.5);
     $this->assertTrue(!isset($result['profanity']), 'profanity not returned.');
-    $session_id = $this->assertSessionID($result['session_id']);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Additionally enable profanity checking.
-    $data['post_body'] = 'spam profanity';
-    $data['checks'] = 'spam,quality,profanity';
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'spam profanity';
+    $data['checks'] = array('spam', 'quality', 'profanity');
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_SPAM);
-    $this->assertSame('quality', $result['quality'], 0);
-    $this->assertSame('profanity', $result['profanity'], 1);
-    $session_id = $this->assertSessionID($result['session_id']);
+    $this->assertSame('spam', $result['spam'], 1.0);
+    $this->assertSame('spamResult', $result['spamResult'], 'SPAM');
+    $this->assertSame('quality', $result['quality'], 0.0);
+    $this->assertSame('profanity', $result['profanity'], 1.0);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Change the string to contain profanity only.
-    $data['post_body'] = 'profanity';
-    $data['checks'] = 'spam,quality,profanity';
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'profanity';
+    $data['checks'] = array('spam', 'quality', 'profanity');
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
-    $this->assertSame('quality', $result['quality'], 0);
-    $this->assertSame('profanity', $result['profanity'], 1);
-    $session_id = $this->assertSessionID($result['session_id']);
+    $this->assertSame('spam', $result['spam'], 0.5);
+    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
+    $this->assertSame('quality', $result['quality'], 0.0);
+    $this->assertSame('profanity', $result['profanity'], 1.0);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Disable spam checking, only do profanity checking.
-    $data['post_body'] = 'spam profanity';
-    $data['checks'] = 'profanity';
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'spam profanity';
+    $data['checks'] = array('profanity');
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(!isset($result['spam']), 'spam not returned.');
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
-    $this->assertSame('profanity', $result['profanity'], 1);
-    $session_id = $this->assertSessionID($result['session_id']);
+    $this->assertSame('profanity', $result['profanity'], 1.0);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     // Pass arbitrary string to profanity checking.
-    $data['post_body'] = $this->randomString(12);
-    $data['session_id'] = $session_id;
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = $this->randomString(12);
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(!isset($result['spam']), 'spam not returned.');
     $this->assertTrue(!isset($result['quality']), 'quality not returned.');
-    $this->assertSame('profanity', $result['profanity'], 0);
-    $session_id = $this->assertSessionID($result['session_id']);
+    $this->assertSame('profanity', $result['profanity'], 0.0);
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
   }
 
   /**
    * Tests results of mollom.checkContent() across requests for a single session.
    */
   function testCheckContentSession() {
+    $mollom = mollom();
     $data = array(
-      'author_name' => $this->admin_user->name,
-      'author_mail' => $this->admin_user->mail,
-      'author_id' => $this->admin_user->uid,
-      'author_ip' => ip_address(),
+      'authorName' => $this->admin_user->name,
+      'authorMail' => $this->admin_user->mail,
+      'authorId' => $this->admin_user->uid,
+      'authorIp' => ip_address(),
     );
 
     // Sequence: Post unsure spam, correct CAPTCHA, change post into spam,
     // expect it to be ham (due to correct CAPTCHA).
-    $data['post_body'] = 'unsure';
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'unsure';
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_UNSURE);
-    $data['session_id'] = $this->assertSessionID($result['session_id']);
+    $this->assertSame('spam', $result['spam'], 0.5);
+    $this->assertSame('spamResult', $result['spamResult'], 'UNSURE');
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
 
     $captcha_data = array(
       'type' => 'image',
-      'session_id' => $data['session_id'],
-      'author_ip' => $data['author_ip'],
+      'contentId' => $data['contentId'],
+      'authorIp' => $data['authorIp'],
     );
-    $result = mollom('mollom.getImageCaptcha', $captcha_data);
+    $result = $mollom->getCaptcha($captcha_data);
     $this->assertMollomWatchdogMessages();
-    $data['session_id'] = $this->assertSessionID($result['session_id']);
+    $data['captchaId'] = $this->assertResponseID('captchaId', $result['captchaId']);
 
     $captcha_data = array(
-      'session_id' => $data['session_id'],
-      'author_ip' => $data['author_ip'],
-      'author_id' => $data['author_id'],
-      'captcha_result' => 'correct',
+      'captchaId' => $data['captchaId'],
+      'contentId' => $data['contentId'],
+      'authorIp' => $data['authorIp'],
+      'authorId' => $data['authorId'],
+      'solution' => 'correct',
     );
-    $result = mollom('mollom.checkCaptcha', $captcha_data);
+    $result = $mollom->checkCaptcha($captcha_data);
     $this->assertMollomWatchdogMessages();
-    $this->assertIdentical($result, TRUE, t('CAPTCHA response was correct.'));
+    $this->assertSame('solved', $result['solved'], 1);
 
-    $data['post_body'] = 'spam';
-    $result = mollom('mollom.checkContent', $data);
+    $data['postBody'] = 'spam';
+    $result = $mollom->checkContent($data);
     $this->assertMollomWatchdogMessages();
-    $this->assertSame('spam', $result['spam'], MOLLOM_ANALYSIS_HAM);
-    $data['session_id'] = $this->assertSessionID($result['session_id']);
+    $this->assertSame('spam', $result['spam'], 0.0);
+    $this->assertSame('spamResult', $result['spamResult'], 'HAM');
+    $data['contentId'] = $this->assertResponseID('contentId', $result['contentId']);
   }
 
   /**
    * Tests mollom.getImageCaptcha().
    */
   function testGetImageCaptcha() {
+    $mollom = mollom();
     // Ensure we get no SSL URL by default.
     $data = array(
       'type' => 'image',
-      'author_ip' => ip_address(),
+      'authorIp' => ip_address(),
     );
-    $result = mollom('mollom.getImageCaptcha', $data);
+    $result = $mollom->getCaptcha($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(strpos($result['url'], 'http://') === 0, t('CAPTCHA URL uses HTTP protocol.'));
 
     // Ensure we get a SSL URL when passing the 'ssl' parameter.
-    $data = array(
-      'type' => 'image',
-      'author_ip' => ip_address(),
-      'ssl' => TRUE,
-    );
-    $result = mollom('mollom.getImageCaptcha', $data);
+    $data['ssl'] = TRUE;
+    $result = $mollom->getCaptcha($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(strpos($result['url'], 'https://') === 0, t('CAPTCHA URL uses HTTPS protocol.'));
   }
@@ -1053,23 +1070,24 @@ class MollomResponseTestCase extends MollomWebTestCase {
    * Tests mollom.checkCaptcha().
    */
   function testCheckCaptcha() {
+    $mollom = mollom();
     // Ensure we can send an 'author_id'.
     // Verifying no severe watchdog messages is sufficient, as unsupported
     // parameters would trigger a XML-RPC error.
     $uid = rand();
     $data = array(
       'type' => 'image',
-      'author_ip' => ip_address(),
-      'author_id' => $uid,
+      'authorIp' => ip_address(),
+      'authorId' => $uid,
     );
-    $result = mollom('mollom.getImageCaptcha', $data);
+    $result = $mollom->getCaptcha($data);
     $this->assertMollomWatchdogMessages();
+    $data['captchaId'] = $this->assertResponseID('captchaId', $result['captchaId']);
 
     $data += array(
-      'session_id' => $result['session_id'],
-      'captcha_result' => 'correct',
+      'solution' => 'correct',
     );
-    $result = mollom('mollom.checkCaptcha', $data);
+    $result = $mollom->checkCaptcha($data);
     $this->assertMollomWatchdogMessages();
   }
 }
@@ -1090,7 +1108,7 @@ class MollomResponseLocalTestCase extends MollomResponseTestCase {
     // Enable testing server implementation.
     parent::setUp(array('mollom_test'));
     // Re-route Mollom communication to this testing site.
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    $this->setTestingServer();
   }
 }
 
@@ -1292,7 +1310,6 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     variable_set('mollom_servers', array(
       'http://fake-host-1',
       'http://fake-host-2',
-      #$GLOBALS['base_url'] . '/xmlrpc.php?version=',
       $GLOBALS['base_url'] . '/mollom-test/rest',
       'http://xmlrpc1.mollom.com', // The real server.
       'http://fake-host-3',
@@ -1310,6 +1327,8 @@ class MollomFallbackTestCase extends MollomWebTestCase {
 }
 
 class MollomServerListRecoveryTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
   public static function getInfo() {
     return array(
       'name' => 'Server list recovery',
@@ -1335,16 +1354,18 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
     );
 
     foreach ($list as $servers) {
-      // Call mollom.verifyKey with an invalid server list.  The expected behavior
-      // is that the first call fails, but that the second call succeeds because
-      // the server list is automatically reset or recovered by the Mollom module.
       variable_set('mollom_servers', $servers);
 
-      $key_is_valid = mollom('mollom.verifyKey');
+      // Verify that Mollom::query() fails with an invalid server list and
+      // appropriate messages are logged.
+      $mollom = mollom();
+      $key_is_valid = $mollom->verifyKey();
       $this->assertIdentical($key_is_valid, NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
       $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
 
-      $key_is_valid = mollom('mollom.verifyKey');
+      // Verify that Mollom::query() automatically empties the server list and
+      // a directly following, subsequent request attempt succeeds.
+      $key_is_valid = $mollom->verifyKey();
       $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
       $this->assertMollomWatchdogMessages();
     }
@@ -1720,7 +1741,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText($this->profanity_message);
     $this->assertNoText(t('Your comment has been posted.'));
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
 
     $edit["comment_body[$langcode][0][value]"] = 'not profane ham';
     $this->drupalPost(NULL, $edit, t('Save'));
@@ -1746,7 +1767,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
     $this->assertCaptchaField();
     $this->assertNoText($this->profanity_message);
     $this->assertNoText(t('Your comment has been posted.'));
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
 
     $edit["comment_body[$langcode][0][value]"] = 'unsure profanity';
     $this->postCorrectCaptcha(NULL, $edit, t('Save'));
@@ -2226,7 +2247,7 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
     // Login and submit a node.
     $this->drupalLogin($this->web_user);
     $this->drupalGet('node/add/article');
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $edit = array(
       'title' => 'spam',
       'mollom[captcha]' => 'correct',
@@ -2315,21 +2336,21 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $this->drupalLogin($this->web_user);
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $this->assertSessionIDInForm();
+    $this->assertResponseIDInForm();
     $this->assertNoPrivacyLink();
 
     // Try to submit an incorrect answer for the CAPTCHA, without value for
     // required field.
     $this->postIncorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $this->assertSessionIDInForm();
+    $this->assertResponseIDInForm();
     $this->assertNoPrivacyLink();
 
     // Try to submit a correct answer for the CAPTCHA, still without required
     // field value.
     $this->postCorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $this->assertNoPrivacyLink();
 
     // Finally, we should be able to submit a comment.
@@ -2343,7 +2364,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     $value = 'some more spam';
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $edit = array(
       'comment_body[und][0][value]' => $value,
       'mollom[captcha]' => 'correct',
@@ -2375,7 +2396,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertCaptchaField();
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $this->assertPrivacyLink();
 
     // Try to submit the form by solving the CAPTCHA incorrectly. At this point,
@@ -2383,7 +2404,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // the comment is still neither ham or spam.
     $this->postIncorrectCaptcha(NULL, array(), t('Save'));
     $this->assertCaptchaField();
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $this->assertPrivacyLink();
 
     // Correctly solving the CAPTCHA should accept the form submission.
@@ -2394,23 +2415,23 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 
     // Try to save a new 'spam' comment; it should be discarded, with no CAPTCHA
     // appearing on the page.
-    $this->resetSessionID();
+    $this->resetResponseID();
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
     // Try to save again; it should be discarded, with no CAPTCHA.
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $session_id = $this->assertSessionIDInForm();
+    $session_id = $this->assertResponseIDInForm();
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
     // Save a new 'ham' comment.
-    $this->resetSessionID();
+    $this->resetResponseID();
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
