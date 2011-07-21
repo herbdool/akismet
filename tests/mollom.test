@@ -68,12 +68,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
   /**
    * The public key used during testing.
    */
-  protected $public_key = '';
+  protected $public_key;
 
   /**
    * The private key used during testing.
    */
-  protected $private_key = '';
+  protected $private_key;
 
   /**
    * A boolean that is TRUE if the above keys are for a reseller account.
@@ -143,6 +143,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   function tearDown() {
+    // Delete the testing site.
+    $this->deleteKeys();
     // Capture any (remaining) watchdog messages.
     $this->assertMollomWatchdogMessages();
     parent::tearDown();
@@ -304,29 +306,23 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   otherwise.
    */
   protected function setKeys($public = MOLLOM_TEST_PUBLIC_KEY, $private = MOLLOM_TEST_PRIVATE_KEY, $reseller = MOLLOM_TEST_RESELLER_KEY) {
-    // @todo Backend: Current Site API does not know of our testing keys, and
-    //   the default "dummy site" response does not contain a server list. We
-    //   therefore have to create a new site and retrieve it right afterwards,
-    //   in order to get a API key pair that the backend knows of and for
-    //   which it returns a server list...
-    if (strpos($this->mollomClass, 'Local') === FALSE) {
-      // Create a testing site and use its keys.
-      $mollom = mollom();
-      // Hardcoded servers required, or any request will fail, since dummy site
-      // on backend does not return a server list.
-      $mollom->servers = $mollom->serversInit;
-      // Dummy API keys required, or Mollom client class (rightfully) bails out.
-      $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
-      $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
-
-      $result = $mollom->createSite(array(
-        'url' => $GLOBALS['base_url'],
-      ));
-      $result = $mollom->getSite($result['id']);
-
-      $public = $mollom->keyPublic = $result['publicKey'];
-      $private = $mollom->keyPrivate = $result['privateKey'];
+    // Create a testing site and use its keys.
+    $mollom = mollom();
+    // Hardcoded servers required, or any request will fail, since dummy site
+    // on backend does not return a server list.
+    foreach ($mollom->serversInit as $server) {
+      $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
     }
+    // Dummy API keys required, or Mollom client class (rightfully) bails out.
+    $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
+    $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
+
+    $result = $mollom->createSite(array(
+      'url' => $GLOBALS['base_url'],
+    ));
+
+    $public = $mollom->keyPublic = $result['publicKey'];
+    $private = $mollom->keyPrivate = $result['privateKey'];
 
     // Save internal properties.
     $this->public_key = $public;
@@ -338,6 +334,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     variable_set('mollom_private_key', $private);
 
     // Enable testing mode.
+    // @todo Obsolete?
     variable_set('mollom_testing_mode', 1);
 
     // Delete any previously set Mollom servers to make sure we are using
@@ -353,6 +350,15 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $status = _mollom_status(TRUE);
     $this->assertMollomWatchdogMessages();
     $this->assertIdentical($status, TRUE, t('Mollom servers can be contacted and testing API keys are valid.'));
+  }
+
+  /**
+   * Deletes the current testing site.
+   */
+  protected function deleteKeys() {
+    mollom()->deleteSite($this->public_key);
+    unset($this->public_key);
+    unset($this->private_key);
   }
 
   /**
@@ -1090,6 +1096,42 @@ class MollomResponseTestCase extends MollomWebTestCase {
   }
 
   /**
+   * Tests the language detection functionality at the API level.
+   */
+  function testCheckContentLanguage() {
+    // Note that Mollom supports more languages than those tested.
+    $tests = array(
+      'Some text in lang-en.' => array(
+        'en' => 1.0,
+      ),
+      'Etwas lang-de and some lang-en, too.' => array(
+        'en' => 0.5,
+        'de' => 0.5,
+      ),
+      'Unknown language' => array(
+        'zxx' => 1.0,
+      ),
+      'lang-en lang-de lang-es lang-ru lang-it' => array(
+        LANGUAGE_NONE => 1.0,
+      ),
+    );
+
+    $mollom = mollom();
+    foreach ($tests as $string => $expected) {
+      $result = $mollom->checkContent(array(
+        'checks' => 'language',
+        'postBody' => $string,
+      ));
+      // Parse result values.
+      $actual = array();
+      foreach ($result['languages'] as $language) {
+        $actual[$language['languageCode']] = $language['confidence'];
+      }
+      $this->assertSame($string, $actual, $expected);
+    }
+  }
+
+  /**
    * Tests mollom.getImageCaptcha().
    */
   function testGetImageCaptcha() {
@@ -1413,48 +1455,6 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
   }
 }
 
-class MollomLanguageDetectionTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Language detection',
-      'description' => 'Tests language detection functionality.',
-      'group' => 'Mollom',
-    );
-  }
-
-  /**
-   * Test the language detection functionality at the API level without using a web interface.
-   */
-  function testLanguageDetectionAPI() {
-    // Note that Mollom supports more languages than those tested.
-    $strings = array(
-      'en' => "Hi, this is a test of the language detection code to see if it works well.",
-      'nl' => "Hallo, dit is een test van de taaldetectiecode om te controleren of het werkt.",
-      'fr' => "Bonjour, ceci est un test du detecteur langue automatique pour voir ci ça marche bien.",
-      'de' => "Bedecke deinen Himmel, Zeus, Mit Wolkendunst Und übe, dem Knaben gleich, der Disteln köpft, An Eichen dich und Bergeshöhn.",
-      'ko' => "'엄마야 누나야 강변살자. 뜰에는 반짝이는 금모래 빛. 뒷문 밖에는 갈잎의 노래",
-      'ru' => "Холуй трясется. Раб хохочет. Палач свою секиру точит. Тиран кромсает каплуна. Сверкает зимняя луна.",
-      'hu' => "Földszintiek mászófámról pillantva fejjel lefelé ti lógtok bele nézőim az űrbe ki tudja így kölcsönös kíváncsiak a helyes felelet kié",
-      'el' => "Σαν να 'χουνε την όψη της αιώνες οργωμένη. Κάτι άναρχο κι ατέλειωτο στο πρόσωπό της μένει.",
-      'ja' => "吹くからに秋の草木のしをるれば",
-      'th' => "ทั่วประเทศ ประมาณ ๔๐,๐๐๐ แห่ง ชาวไทยนับตั้งแต่ครั้งอดีตมีวิถี ชีวิตผูกพันกับพุทธศาสนาอย่างใกล้ชิด แสดงออกมาเป็น ขนบธรรมเนียมประเพณี",
-      'zh' => "螽斯羽，诜诜兮。宜尔子孙，振振兮",
-    );
-
-    $mollom = mollom();
-    foreach ($strings as $language => $text) {
-      $result = $mollom->checkContent(array(
-        'checks' => 'language',
-        'postBody' => $text,
-      ));
-      $this->assertEqual($result['language'][0]['language'], $language, t('A language code was specified and they match.'));
-      $this->assertTrue($result['language'][0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));
-    }
-  }
-}
-
 /**
  * Tests blacklist functionality.
  *
@@ -1491,51 +1491,59 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
         $mollom->deleteBlacklistEntry($entry['id']);
       }
     }
+    $this->assertMollomWatchdogMessages();
 
     // Blacklist a URL.
-    $domain = $this->randomName() . '.com';
+    $domain = drupal_strtolower($this->randomName()) . '.com';
     $entry = $mollom->createBlacklistEntry(array(
-      'text' => $domain,
+      'value' => $domain,
       'context' => 'allFields',
       'reason' => 'spam',
       'match' => 'contains',
     ));
     $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
+    $this->assertMollomWatchdogMessages();
 
     // Check whether posts containing the blacklisted URL are properly blocked.
     $result = mollom()->checkContent(array(
       'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'spam', t('Exact URL match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
     $this->assertEqual($result['spamResult'], 'spam', t('Partial URL match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'spam', t('URL with www-prefix was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'spam', t('URL with different schema was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
     $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
+    $this->assertMollomWatchdogMessages();
 
     // Blacklist a word.
     // @todo As of now, only non-numeric, lower-case text seems to be supported.
     $term = drupal_strtolower(preg_replace('/[^a-zA-Z]/', '', $this->randomName()));
     $entry = $mollom->createBlacklistEntry(array(
-      'text' => $term,
+      'value' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'contains',
     ));
     $this->assertTrue($entry['id'], t('The text was blacklisted.'));
+    $this->assertMollomWatchdogMessages();
 
     // Check whether posts containing the blacklisted word are properly blocked.
     $data = array(
@@ -1543,43 +1551,50 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     );
     $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'spam', t('Identical match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'spam', t('Exact match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'spam', t('Partial match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     // Update the blacklist entry to match the term only exactly.
     $entry = $mollom->updateBlacklistEntry(array(
       'id' => $entry['id'],
-      'text' => $term,
+      'value' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'exact',
     ));
     $this->assertTrue($entry['id'], t('The blacklist entry was updated.'));
+    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: " . $term,
     );
     $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'spam', t('Exact match was blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = mollom()->checkContent($data);
     $this->assertNotEqual($result['spamResult'], 'spam', t('Partial match was not blocked.'));
+    $this->assertMollomWatchdogMessages();
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
     $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
+    $this->assertMollomWatchdogMessages();
 
     // Try to remove a non-existing entry.
     // @todo Ensure that the ID does not exist.
@@ -1608,7 +1623,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/config/content/mollom/blacklist');
     $text = $this->randomName();
     $edit = array(
-      'entry[text]' => $text,
+      'entry[value]' => $text,
       'entry[context]' => 'everything',
       'entry[match]' => 'contains',
     );
@@ -1631,7 +1646,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/config/content/mollom/blacklist/profanity');
     $text = $this->randomName();
     $edit = array(
-      'entry[text]' => $text,
+      'entry[value]' => $text,
       'entry[context]' => 'everything',
       'entry[match]' => 'contains',
     );
@@ -3245,6 +3260,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
     $this->assertSame('spam', $data->spam, 1.0);
+    $this->assertSame('spamResult', $data->spamResult, 'spam');
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -3260,6 +3276,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
     $this->assertSame('spam', $data->spam, 1.0);
+    $this->assertSame('spamResult', $data->spamResult, 'spam');
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -3274,6 +3291,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 1, t('Published test post found.'));
     $this->assertSame('spam', $data->spam, 1.0);
+    $this->assertSame('spamResult', $data->spamResult, 'spam');
     $this->assertSame('profanity', $data->profanity, 1);
     $this->assertSame('moderate', $data->moderate, 0);
 
@@ -3281,9 +3299,9 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     // marked for moderation.
     $this->drupalLogout();
     $expectations = array(
-      'ham' => array('spam' => 0.0, 'spamResult' => 'HAM', 'profanity' => 0),
-      'unsure' => array('spam' => 0.5, 'spamResult' => 'UNSURE', 'profanity' => 0),
-      $this->randomString() => array('spam' => 0.5, 'spamResult' => 'UNSURE', 'profanity' => 0),
+      'ham' => array('spam' => 0.0, 'spamResult' => 'ham', 'profanity' => 0),
+      'unsure' => array('spam' => 0.5, 'spamResult' => 'unsure', 'profanity' => 0),
+      $this->randomString() => array('spam' => 0.5, 'spamResult' => 'unsure', 'profanity' => 0),
     );
     foreach ($expectations as $body => $expected) {
       $edit = array(
@@ -3291,7 +3309,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
         'body' => $body,
       );
       $this->drupalPost('mollom-test/form', $edit, 'Submit');
-      if ($expected['spamResult'] == 'UNSURE') {
+      if ($expected['spamResult'] == 'unsure') {
         $this->postCorrectCaptcha(NULL, array(), 'Submit');
       }
       $mid = $this->assertTestSubmitData();
@@ -3299,6 +3317,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
       $record = mollom_test_load($mid);
       $this->assertEqual($record['status'], 1, t('Published test post %body found.', array('%body' => $body)));
       $this->assertSame('spam', $data->spam, $expected['spam']);
+      $this->assertSame('spamResult', $data->spamResult, $expected['spamResult']);
       $this->assertSame('profanity', $data->profanity, $expected['profanity']);
       $this->assertSame('moderate', $data->moderate, 0);
     }

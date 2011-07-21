@@ -462,9 +462,9 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
           '#markup' => check_plain($matches[$entry['match']]),
           '#class' => 'mollom-blacklist-match value-' . check_plain($entry['match']),
         ),
-        'text' => array(
-          '#markup' => check_plain($entry['text']),
-          '#class' => 'mollom-blacklist-text',
+        'value' => array(
+          '#markup' => check_plain($entry['value']),
+          '#class' => 'mollom-blacklist-value',
         ),
       );
       $row['actions']['delete'] = array(
@@ -498,14 +498,14 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
     '#required' => TRUE,
     '#id' => 'mollom-blacklist-filter-match',
   );
-  $form['entry']['text'] = array(
+  $form['entry']['value'] = array(
     '#type' => 'textfield',
-    '#title' => t('Text'),
+    '#title' => t('Value'),
     '#title_display' => 'invisible',
     '#size' => 40,
     '#required' => TRUE,
     '#maxlength' => 64,
-    '#id' => 'mollom-blacklist-filter-text',
+    '#id' => 'mollom-blacklist-filter-value',
     '#attributes' => array(
       'autocomplete' => 'off',
     ),
@@ -531,7 +531,7 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
  */
 function mollom_admin_blacklist_form_submit($form, &$form_state) {
   $data = array(
-    'text' => $form_state['values']['entry']['text'],
+    'value' => $form_state['values']['entry']['value'],
     'context' => $form_state['values']['entry']['context'],
     'match' => $form_state['values']['entry']['match'],
     'reason' => $form_state['values']['entry']['reason'],
@@ -539,7 +539,7 @@ function mollom_admin_blacklist_form_submit($form, &$form_state) {
   $result = mollom()->createBlacklistEntry($data);
 
   $args = array(
-    '@text' => $data['text'],
+    '@value' => $data['value'],
     '@context' => $data['context'],
     '@match' => $data['match'],
     '@reason' => $data['reason'],
@@ -547,15 +547,15 @@ function mollom_admin_blacklist_form_submit($form, &$form_state) {
   if (!empty($result['id'])) {
     drupal_set_message(t('The entry was added to the blacklist.'));
     _mollom_watchdog(array(
-      'Added @text (@context, @match) to @reason blacklist.' => $args,
+      'Added @value (@context, @match) to @reason blacklist.' => $args,
       'Data:<pre>@data</pre>' => array('@data' => $data),
       'Result:<pre>@result</pre>' => array('@result' => $result),
     ));
   }
   else {
-    drupal_set_message(t('An error occurred upon trying to add the text to the blacklist.'), 'error');
+    drupal_set_message(t('An error occurred upon trying to add the value to the blacklist.'), 'error');
     _mollom_watchdog(array(
-      'Failed to add @text (@context, @match) to @reason blacklist.' => $args,
+      'Failed to add @value (@context, @match) to @reason blacklist.' => $args,
       'Data:<pre>@data</pre>' => array('@data' => $data),
       'Result:<pre>@result</pre>' => array('@result' => $result),
     ), WATCHDOG_ERROR);
@@ -570,7 +570,7 @@ function theme_mollom_admin_blacklist_form($variables) {
   $header = array(
     t('Context'),
     t('Matches'),
-    t('Text'),
+    t('Value'),
     '',
   );
   $rows = array();
@@ -578,7 +578,7 @@ function theme_mollom_admin_blacklist_form($variables) {
   $rows[] = array(
     drupal_render($form['entry']['context']),
     drupal_render($form['entry']['match']),
-    drupal_render($form['entry']['text']),
+    drupal_render($form['entry']['value']),
     drupal_render($form['entry']['actions']),
   );
 
@@ -593,8 +593,8 @@ function theme_mollom_admin_blacklist_form($variables) {
         'class' => $form['blacklist'][$id]['match']['#class'],
       ),
       array(
-        'data' => drupal_render($form['blacklist'][$id]['text']),
-        'class' => $form['blacklist'][$id]['text']['#class'],
+        'data' => drupal_render($form['blacklist'][$id]['value']),
+        'class' => $form['blacklist'][$id]['value']['#class'],
       ),
       drupal_render($form['blacklist'][$id]['actions']),
     );
@@ -631,7 +631,7 @@ function mollom_admin_blacklist_delete($form, &$form_state, $entryId) {
 
   return confirm_form(
     $form,
-    t('Are you sure you want to delete %text from the blacklist?', array('%text' => $entry['text'])),
+    t('Are you sure you want to delete %value from the blacklist?', array('%value' => $entry['value'])),
     'admin/config/content/mollom/blacklist',
     t('This action cannot be undone.'),
     t('Delete'), t('Cancel')
@@ -645,14 +645,14 @@ function mollom_admin_blacklist_delete_submit($form, &$form_state) {
   $result = mollom()->deleteBlacklistEntry($form_state['values']['entry']['id']);
 
   $args = array(
-    '@text' => $form_state['values']['entry']['text'],
+    '@value' => $form_state['values']['entry']['value'],
     '@context' => $form_state['values']['entry']['context'],
     '@reason' => $form_state['values']['entry']['reason'],
   );
   if ($result === TRUE) {
     drupal_set_message(t('The entry was removed from the blacklist.'));
     _mollom_watchdog(array(
-      'Removed @text (@context) from @reason blacklist.' => $args,
+      'Removed @value (@context) from @reason blacklist.' => $args,
       'Data:<pre>@data</pre>' => array('@data' => $form_state['values']['entry']),
       'Result:<pre>@result</pre>' => array('@result' => $result),
     ));
@@ -660,7 +660,7 @@ function mollom_admin_blacklist_delete_submit($form, &$form_state) {
   else {
     drupal_set_message(t('An error occurred upon trying to remove the item from the blacklist.'), 'error');
     _mollom_watchdog(array(
-      'Failed to removed @text (%context) from @reason blacklist.' => $args,
+      'Failed to removed @value (%context) from @reason blacklist.' => $args,
       'Data:<pre>@data</pre>' => array('@data' => $form_state['values']['entry']),
       'Result:<pre>@result</pre>' => array('@result' => $result),
     ), WATCHDOG_ERROR);

@@ -4,10 +4,13 @@
  * @file
  * Mollom client class.
  *
- * @todo
- * - Doing a "verifyKey" with an empty server list leads to two/duplicate and
- *   unnecessary GET site/$id requests, one for the server list, subsequent ones
- *   for whatever/verifyKey. Some resources can be cached.
+ * @todo Refine exceptions by necessity of having to react differently.
+ *   - All 5xx HTTP codes, MollomRedirectException, and MollomResponseException
+ *     should make the client try the next server.
+ *   - Only AUTH_ERROR and 404 are not recoverable.
+ * @todo Doing a "verifyKey" with an empty server list leads to two/duplicate
+ *   and unnecessary GET site/$id requests, one for the server list, subsequent
+ *   ones for whatever/verifyKey. Some resources can be cached?
  */
 
 /**
@@ -44,10 +47,6 @@
  *     query parameters that were sent to the server.
  *   - response: (mixed) The server response, either as string, or the already
  *     parsed response; i.e., an array.
- *
- * @todo Refine exceptions by necessity of having to react differently. All 5xx
- *   HTTP codes, MollomRedirectException, and MollomResponseException should
- *   make the client try the next server.
  */
 class MollomException extends Exception {
   /**
@@ -470,7 +469,7 @@ abstract class Mollom {
    *   value of array('site', 'servers') expects $response['site']['servers'] to
    *   exist in the response.
    */
-  public function query($method, $path, array $data = array(), array $expected = array()) {
+  protected function query($method, $path, array $data = array(), array $expected = array()) {
     // Retrieve server list.
     // If we get no list, we will have no servers to iterate over and only the
     // error logic remains.
@@ -548,6 +547,12 @@ abstract class Mollom {
         break;
       }
       catch (MollomException $e) {
+        // If the resource does not exist, there is no point in trying another
+        // server.
+        // @todo Error handling?
+        if ($e->getCode() == 404) {
+          break;
+        }
         // On any other known error, try the next server.
         next($this->servers);
         continue;
@@ -594,6 +599,11 @@ abstract class Mollom {
     // Return an authentication error, which may require special client-side
     // processing.
     if ($this->lastResponseCode == self::AUTH_ERROR) {
+      return $this->lastResponseCode;
+    }
+    // Return a not found error, which always needs to be handled by the calling
+    // code.
+    if ($this->lastResponseCode == 404) {
       return $this->lastResponseCode;
     }
 
@@ -837,8 +847,18 @@ abstract class Mollom {
   public function verifyKey() {
     $data = $this->getClientInformation();
     $result = $this->query('PUT', 'site/' . $this->keyPublic, $data, array('site'));
+    // If the public key could not be found, make sure to return an
+    // authentication error.
+    if ($this->lastResponseCode === 404) {
+      return self::AUTH_ERROR;
+    }
     // lastResponseCode will either be TRUE, AUTH_ERROR, or NETWORK_ERROR.
     return $this->lastResponseCode === TRUE ? TRUE : $this->lastResponseCode;
+  }
+
+  public function deleteSite($siteId) {
+    $result = $this->query('POST', 'site/' . $siteId . '/delete');
+    return $this->lastResponseCode === TRUE;
   }
 
   public function checkContent($data = array()) {
@@ -847,6 +867,10 @@ abstract class Mollom {
     }
     else {
       $result = $this->query('POST', 'content', $data, array('content', 'id'));
+    }
+    // parseXML() can only convert multiple sub-elements into an indexed array.
+    if (isset($result['content']['languages']) && is_array($result['content']['languages'])) {
+      $result['content']['languages'] = array_values($result['content']['languages']);
     }
     return isset($result['content']) ? $result['content'] : $result;
   }
@@ -878,15 +902,15 @@ abstract class Mollom {
    * @todo This part of the REST API needs work. No way to report CAPTCHA sessions.
    */
   public function sendFeedback($data = array()) {
-    if (empty($data['contentId'])) {
+    if (empty($data['contentId']) && empty($data['captchaId'])) {
       // @todo Error handling?
-      throw new MollomException('Missing content ID.', 0, NULL, $this);
+      throw new MollomException('Missing resource ID.', 0, NULL, $this);
     }
-    if (empty($data['moderated'])) {
+    if (empty($data['reason'])) {
       // @todo Error handling?
-      throw new MollomException('Missing feedback value.', 0, NULL, $this);
+      throw new MollomException('Missing feedback reason.', 0, NULL, $this);
     }
-    $result = $this->query('PUT', 'content/' . $data['contentId'], $data);
+    $this->query('POST', 'feedback', $data);
     return $this->lastResponseCode === TRUE ? TRUE : FALSE;
   }
 
@@ -898,10 +922,14 @@ abstract class Mollom {
       $siteId = $this->keyPublic;
     }
     $result = $this->query('GET', 'blacklist/' . $siteId, array(), array('list'));
-    // @todo 'list' is a string when empty. Consider to move list response meta
-    //   elements into the 'list' element, so it's never empty.
+    // In XML, 'list' is a string when blacklist is empty.
     if (isset($result['list'])) {
-      return is_array($result['list']) ? $result['list'] : array();
+      // parseXML() can only convert multiple sub-elements into an indexed array.
+      if (is_array($result['list'])) {
+        $result['list'] = array_values($result['list']);
+        return $result['list'];
+      }
+      return array();
     }
     return $result;
   }

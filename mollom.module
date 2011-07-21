@@ -427,8 +427,8 @@ function mollom_db_query_range($query, $from, $count, array $args = array(), arr
  *   - session_id: The session ID returned by Mollom.
  *   And optionally:
  *   - spam: A spam check result double returned by Mollom.
- *   - spamResult: A final spam classification result string; 'HAM', 'SPAM', or
- *     'UNSURE'.
+ *   - spamResult: A final spam classification result string; 'ham', 'spam', or
+ *     'unsure'.
  *   - quality: A rating of the content's quality, in the range of 0 and 1.0.
  *   - profanity: A profanity check rating returned by Mollom, in the range of
  *     0 and 1.0.
@@ -437,10 +437,14 @@ function mollom_db_query_range($query, $from, $count, array $args = array(), arr
  */
 function mollom_data_save($data) {
   $data->changed = REQUEST_TIME;
+
   // Convert languages array into a string.
-  // @todo This conversion and data handling is not correct; needs work.
   if (isset($data->languages) && is_array($data->languages)) {
-    $data->languages = implode(' ', $data->languages);
+    $languages = array();
+    foreach ($data->languages as $language) {
+      $languages[] = $language['languageCode'];
+    }
+    $data->languages = implode(',', $languages);
   }
 
   $update = db_query_range("SELECT 'id' FROM {mollom} WHERE entity = :entity AND id = :id", 0, 1, array(
@@ -475,7 +479,7 @@ function mollom_data_moderate($entity, $id) {
   }
 
   // Report the session to Mollom.
-  _mollom_send_feedback($data->contentId, 'approve');
+  _mollom_send_feedback($data, 'approve');
 
   // Mark the session data as moderated.
   $data->moderate = 0;
@@ -585,8 +589,8 @@ function mollom_data_report_multiple($entity, array $ids, $feedback) {
     // Load the Mollom session data.
     $data = mollom_data_load($entity, $id);
     // Send feedback, if we have session data.
-    if (!empty($data->contentId)) {
-      $result = _mollom_send_feedback($data->contentId, $feedback);
+    if (!empty($data->contentId) || !empty($data->captchaId)) {
+      $result = _mollom_send_feedback($data, $feedback);
       $return = $return && $result;
     }
   }
@@ -1530,8 +1534,8 @@ function mollom_validate_analysis(&$form, &$form_state) {
   // invocations for a single user/post session. When content is re-checked
   // during form validation, the result may change according to the values that
   // have been submitted (which e.g. can change during previews). Only in case
-  // the spam check led to a 'UNSURE' result, and the user solved the CAPTCHA
-  // correctly, subsequent spam check results will likely be 'HAM' (though not
+  // the spam check led to a 'unsure' result, and the user solved the CAPTCHA
+  // correctly, subsequent spam check results will likely be 'ham' (though not
   // guaranteed).
   if (isset($result['spamResult'])) {
     switch ($result['spamResult']) {
@@ -1878,14 +1882,38 @@ function _mollom_watchdog_multiple($messages, $severity) {
 
 /**
  * Send feedback to Mollom.
+ *
+ * @param $data
+ *   A Mollom data record containing one or both of:
+ *   - contentId: The content ID to send feedback for.
+ *   - captchaId: The CAPTCHA ID to send feedback for.
+ * @param $reason
+ *   The feedback to send, one of 'spam', 'profanity', 'quality', 'unwanted',
+ *   'approve', 'delete'.
  */
-function _mollom_send_feedback($contentId, $feedback = 'spam') {
-  $result = mollom()->sendFeedback(array(
-    'contentId' => $contentId,
-    'moderated' => $feedback,
+function _mollom_send_feedback($data, $reason = 'spam') {
+  if (!empty($data->captchaId)) {
+    $params['captchaId'] = $data->captchaId;
+    $resource = 'CAPTCHA';
+    $id = $data->captchaId;
+  }
+  if (!empty($data->contentId)) {
+    $params['contentId'] = $data->contentId;
+    $resource = 'content';
+    $id = $data->contentId;
+  }
+  if (!isset($id)) {
+    return FALSE;
+  }
+  $result = mollom()->sendFeedback($params + array(
+    'reason' => $reason,
   ));
   _mollom_watchdog(array(
-    'Reported %feedback for content ID %contentId.' => array('%contentId' => $contentId, '%feedback' => $feedback),
+    'Reported %feedback for @resource %id.' => array(
+      '%feedback' => $reason,
+      '@resource' => $resource,
+      '%id' => $id,
+    ),
   ));
   return $result;
 }

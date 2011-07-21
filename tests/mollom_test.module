@@ -129,39 +129,21 @@ function mollom_test_rest() {
     'delivery callback' => 'mollom_test_rest_deliver',
   );
 
-  $items[$path . '/site/%'] = $base + array(
+  $items[$path . '/site'] = $base + array(
     'page callback' => 'mollom_test_rest_site',
-    'page arguments' => array($base_args + 2),
   );
-
   $items[$path . '/content'] = $base + array(
     'page callback' => 'mollom_test_rest_content',
   );
-  $items[$path . '/content/%'] = $base + array(
-    'page callback' => 'mollom_test_rest_content',
-    'page arguments' => array($base_args + 2),
-  );
-
   $items[$path . '/captcha'] = $base + array(
     'page callback' => 'mollom_test_rest_captcha',
   );
-  $items[$path . '/captcha/%'] = $base + array(
-    'page callback' => 'mollom_test_rest_captcha',
-    'page arguments' => array($base_args + 2),
-  );
-
-  $items[$path . '/content/%/feedback'] = $base + array(
+  $items[$path . '/feedback'] = $base + array(
     'page callback' => 'mollom_test_rest_send_feedback',
-    'page arguments' => array($base_args + 2),
   );
-
   $items[$path . '/blacklist/%'] = $base + array(
     'page callback' => 'mollom_test_rest_blacklist',
     'page arguments' => array($base_args + 2),
-  );
-  $items[$path . '/blacklist/%/%'] = $base + array(
-    'page callback' => 'mollom_test_rest_blacklist',
-    'page arguments' => array($base_args + 2, $base_args + 3),
   );
   // @todo Whitelist endpoints.
 
@@ -259,44 +241,88 @@ function mollom_test_rest_add_xml(DOMDocument $doc, DOMNode $parent, $data, $key
 /**
  * REST callback for CRUD site operations.
  *
- * @param $public_key
- *   The public key of a site. Has to be MOLLOM_TEST_PUBLIC_KEY.
+ * @param $publicKey
+ *   (optional) The public key of a site.
+ * @param $delete
+ *   (optional) Whether to delete the site with $publicKey.
  */
-function mollom_test_rest_site($public_key) {
+function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
   $data = mollom_test_rest_get_parameters();
-  if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
-    mollom_test_verify_key($data);
-  }
-  else {
-    module_load_include('php', 'simpletest', 'drupal_web_test_case');
-    module_load_include('test', 'mollom', 'tests/mollom');
-  }
-  // Verify keys (in case of PUT, again).
-  if ($data['publicKey'] !== MOLLOM_TEST_PUBLIC_KEY) {
-    return Mollom::AUTH_ERROR;
-  }
 
-  $mollom = mollom();
-  $version = $mollom->getClientInformation();
+  // Prepare server list.
   $servers = mollom_test_get_server_list($data);
   foreach ($servers as $key => &$url) {
-    $url .= '/mollom-test/rest/' . $mollom::API_VERSION;
+    $url .= '/mollom-test/rest/' . Mollom::API_VERSION;
   }
 
-  $response = array(
-    'publicKey' => MOLLOM_TEST_PUBLIC_KEY,
-    'privateKey' => MOLLOM_TEST_PRIVATE_KEY,
-    'url' => $GLOBALS['base_url'],
-    'email' => variable_get('site_mail', ''),
-    'languages' => array(),
-    'subscriptionType' => 'free',
-    'platformName' => $version['platformName'],
-    'platformVersion' => $version['platformVersion'],
-    'clientName' => $version['clientName'],
-    'clientVersion' => $version['clientVersion'],
-    'servers' => $servers,
-    // @todo Statistics.
-  );
+  $bin = 'mollom_test_site';
+  $sites = variable_get($bin, array());
+
+  // Authentication is ignored for POST requests.
+  if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (!$delete) {
+      // Remove authentication parameters.
+      unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
+
+      $data['publicKey'] = $publicKey = md5(rand() . REQUEST_TIME);
+      $data['privateKey'] = $privateKey = md5(rand() . REQUEST_TIME);
+      // Apply default values.
+      $data += array(
+        'url' => '',
+        'email' => '',
+        'languages' => array(),
+        'subscriptionType' => 0, // Mollom Free.
+        'platformName' => '',
+        'platformVersion' => '',
+        'clientName' => '',
+        'clientVersion' => '',
+        'servers' => $servers,
+      );
+      $sites[$publicKey] = $data;
+      variable_set($bin, $sites);
+      $response = $data;
+    }
+    else {
+      // Check whether publicKey exists.
+      if (!isset($sites[$publicKey])) {
+        return MENU_NOT_FOUND;
+      }
+      unset($sites[$publicKey]);
+      variable_set($bin, $sites);
+      return TRUE;
+    }
+  }
+  else {
+    // Check whether publicKey exists.
+    if (!isset($publicKey) || !isset($sites[$publicKey])) {
+      return MENU_NOT_FOUND;
+    }
+    // Validate authentication.
+    $time = $data['time'];
+    $nonce = $data['nonce'];
+    $request_data = $time . ':' . $nonce . ':' . $sites[$publicKey]['privateKey'];
+    $hash = base64_encode(hash_hmac('sha1', $request_data, $sites[$publicKey]['privateKey'], TRUE));
+    if ($hash !== $data['hash']) {
+      return Mollom::AUTH_ERROR;
+    }
+    // Remove authentication parameters.
+    unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
+
+    // Update site.
+    if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+      $storage = variable_get('mollom_test_verify_key', array());
+      $storage[] = $data;
+      variable_set('mollom_test_verify_key', $storage);
+
+      $sites[$publicKey] = $data + $sites[$publicKey];
+      variable_set($bin, $sites);
+      $response = $sites[$publicKey];
+    }
+    // Return existing site.
+    else {
+      $response = $sites[$publicKey];
+    }
+  }
   return array('site' => $response);
 }
 
@@ -381,10 +407,6 @@ function mollom_test_rest_blacklist($public_key, $entryId = NULL, $delete = FALS
   unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
 
   // Prepare text value.
-  if (isset($data['text'])) {
-    $data['text'] = drupal_strtolower(trim($data['text']));
-  }
-  // @todo API specification/implementation mismatch.
   if (isset($data['value'])) {
     $data['value'] = drupal_strtolower(trim($data['value']));
   }
@@ -465,15 +487,17 @@ function mollom_test_rest_blacklist($public_key, $entryId = NULL, $delete = FALS
 /**
  * REST callback for mollom.sendFeedback to send feedback for a moderated post.
  */
-function mollom_test_rest_send_feedback($session_id) {
-  $data = $_POST;
-  $data['session_id'] = $session_id;
-
-  $result = mollom_test_send_feedback($data);
-  if ($result) {
-    return TRUE;
+function mollom_test_rest_send_feedback() {
+  $data = mollom_test_rest_get_parameters();
+  // A resource ID is required.
+  if (empty($data['contentId']) && empty($data['captchaId'])) {
+    return 400;
   }
-  return FALSE;
+
+  // The feedback is valid if the supplied reason is one of the supported
+  // strings. Otherwise, it's a bad request.
+  $result = mollom_test_send_feedback($data);
+  return $result ? TRUE : 400;
 }
 
 /**
@@ -603,6 +627,35 @@ function mollom_test_check_content($data) {
     $response['profanity'] = $profanity;
   }
 
+  // Language detection.
+  if (isset($data['checks']) && in_array('language', $data['checks'])) {
+    $languages = array();
+    preg_match_all('@\blang-(..)\b@', $post, $matches);
+    if (empty($matches[1])) {
+      $languages[] = array(
+        'languageCode' => 'zxx',
+        'confidence' => 1.0,
+      );
+    }
+    elseif (count($matches[1]) > 3) {
+      $languages[] = array(
+        'languageCode' => LANGUAGE_NONE,
+        'confidence' => 1.0,
+      );
+    }
+    else {
+      $confidence = 1 / count($matches[1]);
+      foreach ($matches[1] as $language) {
+        $languages[] = array(
+          'languageCode' => $language,
+          'confidence' => $confidence,
+        );
+      }
+    }
+    $response['languages'] = $languages;
+    $response['langDebug'] = $matches;
+  }
+
   $storage = variable_get(__FUNCTION__, array());
   $contentId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
   $storage[$contentId] = $data;
@@ -619,8 +672,7 @@ function mollom_test_check_content_blacklist($string, $blacklist, $reason) {
   $terms = array();
   foreach ($blacklist as $entry) {
     if ($entry['reason'] == $reason) {
-      // @todo API/implementation mismatch.
-      $term = preg_quote(isset($entry['text']) ? $entry['text'] : $entry['value']);
+      $term = preg_quote($entry['value']);
       if ($entry['match'] == 'exact') {
         $term = '\b' . $term . '\b';
       }
@@ -694,7 +746,7 @@ function mollom_test_send_feedback($data) {
   $storage[] = $data;
   variable_set(__FUNCTION__, $storage);
 
-  return in_array($data['feedback'], array('spam', 'profanity', 'low-quality', 'unwanted', 'ham'));
+  return in_array($data['reason'], array('spam', 'profanity', 'quality', 'unwanted', 'approve', 'delete'));
 }
 
 /**
