@@ -389,6 +389,8 @@ abstract class Mollom {
 
   /**
    * Fetches Mollom servers from local configuration or retrieves a new list.
+   *
+   * @see Mollom::refreshServers()
    */
   public function getServers() {
     // If there is no server list yet, consult the local configuration.
@@ -416,12 +418,25 @@ abstract class Mollom {
     return $this->servers;
   }
 
+  /**
+   * Returns a new server list retrieved from Mollom.
+   *
+   * The server list returned from Mollom should be stored as configuration
+   * value on the client-side. This method should only be called when the
+   * configuration value is not yet or no longer available, or when a Mollom
+   * server specifically asks the client to refresh its server list.
+   *
+   * @see Mollom::getServers()
+   * @see Mollom::query()
+   * @see MollomRefreshException
+   * @see Mollom::REFRESH_ERROR
+   */
   protected function refreshServers() {
     // refreshServers() cannot use query() as we need to prevent infinite
     // recursion. In addition, we handle returned error codes differently here,
     // since REDIRECT_ERROR, REFRESH_ERROR, and any other communication error
     // requires us to skip to the next server in order to retrieve a new server
-    // list. We only ever abort, if we get a AUTH_ERROR, in which case there
+    // list. We only ever abort, if we get an AUTH_ERROR, in which case there
     // is a configuration error (i.e., invalid API keys).
     $servers = array();
     try {
@@ -442,7 +457,7 @@ abstract class Mollom {
         break;
       }
       catch (MollomException $e) {
-        // On any other error and skip to the next server.
+        // On any other error, skip to the next server.
         continue;
       }
 
@@ -468,6 +483,8 @@ abstract class Mollom {
    *   of parent element keys to the element and the element key itself; e.g., a
    *   value of array('site', 'servers') expects $response['site']['servers'] to
    *   exist in the response.
+   *
+   * @see Mollom::request()
    */
   protected function query($method, $path, array $data = array(), array $expected = array()) {
     // Retrieve server list.
@@ -636,6 +653,7 @@ abstract class Mollom {
    * @throws MollomRefreshException
    * @throws MollomException
    *
+   * @see Mollom::query()
    * @see Mollom::httpBuildQuery()
    * @see Mollom::httpParseQuery()
    * @see Mollom::parseXML()
@@ -831,6 +849,21 @@ abstract class Mollom {
     return $result;
   }
 
+  public function getSites() {
+    $result = $this->query('GET', 'site', array(), array('list'));
+    // In XML, 'list' is a string when blacklist is empty.
+    // @todo Move into query().
+    if (isset($result['list'])) {
+      // parseXML() can only convert multiple sub-elements into an indexed array.
+      if (is_array($result['list'])) {
+        $result['list'] = array_values($result['list']);
+        return $result['list'];
+      }
+      return array();
+    }
+    return $result;
+  }
+
   public function getSite($siteId = NULL) {
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
@@ -846,8 +879,7 @@ abstract class Mollom {
 
   public function verifyKey() {
     $data = $this->getClientInformation();
-    // FIXME: PUT/POST: Temporary hack to make tests pass.
-    $result = $this->query('PUT', 'site/' . $this->keyPublic, $data, array('site'));
+    $result = $this->query('POST', 'site/' . $this->keyPublic, $data, array('site'));
     // If the public key could not be found, make sure to return an
     // authentication error.
     if ($this->lastResponseCode === 404) {
@@ -867,18 +899,11 @@ abstract class Mollom {
     if (!empty($data['id'])) {
       $path .= '/' . $data['id'];
     }
-    // FIXME: PUT/POST: Temporary hack to make tests pass.
-    $method = (isset($data['id']) ? 'PUT' : 'POST');
-    $result = $this->query($method, $path, $data, array('content', 'id'));
+    $result = $this->query('POST', $path, $data, array('content', 'id'));
 
     // parseXML() can only convert multiple sub-elements into an indexed array.
     if (isset($result['content']['languages']) && is_array($result['content']['languages'])) {
       $result['content']['languages'] = array_values($result['content']['languages']);
-    }
-
-    // FIXME: spamResult/spamClassification: Temporary hack to make tests pass.
-    if (isset($result['content']['spamResult'])) {
-      $result['content']['spamClassification'] = $result['content']['spamResult'];
     }
 
     return isset($result['content']) ? $result['content'] : $result;
@@ -933,6 +958,7 @@ abstract class Mollom {
     }
     $result = $this->query('GET', 'blacklist/' . $siteId, array(), array('list'));
     // In XML, 'list' is a string when blacklist is empty.
+    // @todo Move into query().
     if (isset($result['list'])) {
       // parseXML() can only convert multiple sub-elements into an indexed array.
       if (is_array($result['list'])) {
@@ -968,9 +994,7 @@ abstract class Mollom {
     if (!isset($siteId)) {
       $siteId = $this->keyPublic;
     }
-    // FIXME: PUT/POST: Temporary hack to make tests pass.
-    $method = (isset($data['id']) ? 'PUT' : 'POST');
-    $result = $this->query($method, 'blacklist/' . $siteId . '/' . $data['id'], $data, array('entry', 'id'));
+    $result = $this->query('POST', 'blacklist/' . $siteId . '/' . $data['id'], $data, array('entry', 'id'));
 
     return isset($result['entry']) ? $result['entry'] : $result;
   }

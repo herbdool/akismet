@@ -66,10 +66,9 @@ function mollom_captcha_js($type, $form_build_id, $captchaId) {
  * @param $entity
  *   The entity type of the data to report, e.g. 'node' or 'comment'.
  * @param $id
- *   The entity id the data belongs to. If 'session' is passed as $entity, then
- *   $id is assumed to be a Mollom session_id, as returned by Mollom servers,
- *   which should only be used to report session data that was not stored for an
- *   entity in the database (such as contact form submissions).
+ *   The entity id the data belongs to.
+ *
+ * @see mollom_report_access()
  */
 function mollom_report_form($form, &$form_state, $entity, $id) {
   $form['entity'] = array(
@@ -104,13 +103,7 @@ function mollom_report_form_submit($form, &$form_state) {
     $id = $form_state['values']['id'];
 
     // Load the Mollom session data.
-    if ($entity == 'session') {
-      $data = new stdClass;
-      $data->contentId = $id;
-    }
-    else {
-      $data = mollom_data_load($entity, $id);
-    }
+    $data = mollom_data_load($entity, $id);
 
     // Send feedback to Mollom, if we have session data.
     if ((!empty($data->contentId) || !empty($data->captchaId)) && !empty($form_state['values']['mollom']['feedback'])) {

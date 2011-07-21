@@ -273,10 +273,25 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
     }
   }
 
-  // Authentication is ignored for POST requests.
-  if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    // Update site.
+  if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+    // Return existing site.
     if (isset($publicKey)) {
+      $response = $sites[$publicKey];
+    }
+    // Return list of existing sites.
+    else {
+      $response = array(
+        'list' => array_values($sites),
+        'listCount' => count($sites),
+        'listOffset' => 0,
+        'listTotal' => count($sites),
+      );
+      return $response;
+    }
+  }
+  else {
+    // Update site.
+    if (isset($publicKey) && !$delete) {
       // Remove authentication parameters.
       unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
 
@@ -289,6 +304,7 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
       $response = $sites[$publicKey];
     }
     // Create new site.
+    // Authentication is ignored in this case.
     elseif (!$delete) {
       // Remove authentication parameters.
       unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
@@ -301,10 +317,13 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
         'email' => '',
         'languages' => array(),
         'subscriptionType' => 0, // Mollom Free.
+        // Client version info is not defined by default.
+        /*
         'platformName' => '',
         'platformVersion' => '',
         'clientName' => '',
         'clientVersion' => '',
+        */
         'servers' => $servers,
       );
       $sites[$publicKey] = $data;
@@ -317,10 +336,6 @@ function mollom_test_rest_site($publicKey = NULL, $delete = FALSE) {
       variable_set($bin, $sites);
       return TRUE;
     }
-  }
-  else {
-    // Return existing site.
-    $response = $sites[$publicKey];
   }
   return array('site' => $response);
 }

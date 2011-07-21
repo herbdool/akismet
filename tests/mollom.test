@@ -295,6 +295,36 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
+   * Creates a testing site and sets keys to class properties.
+   *
+   * @param $public
+   *   (optional) A public Mollom API key to use to create the site.
+   * @param $private
+   *   (optional) A private Mollom API key to use to create the site.
+   */
+  protected function createKeys($public = MOLLOM_TEST_PUBLIC_KEY, $private = MOLLOM_TEST_PRIVATE_KEY) {
+    $mollom = mollom();
+    // Hardcoded servers required, or any request will fail.
+    foreach ($mollom->serversInit as $server) {
+      $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
+    }
+    // Dummy API keys required, or Mollom client class (rightfully) bails out.
+    $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
+    $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
+
+    $result = $mollom->createSite(array(
+      'url' => $GLOBALS['base_url'],
+    ));
+
+    // Set testing class properties.
+    $this->public_key = $result['publicKey'];
+    $this->private_key = $result['privateKey'];
+    // Set Mollom class properties; the instance may be re-used within the test.
+    $mollom->keyPublic = $this->public_key;
+    $mollom->keyPrivate = $this->private_key;
+  }
+
+  /**
    * Assign the Mollom API keys to internal variables and reset the server list.
    *
    * @param $public
@@ -307,31 +337,14 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   protected function setKeys($public = MOLLOM_TEST_PUBLIC_KEY, $private = MOLLOM_TEST_PRIVATE_KEY, $reseller = MOLLOM_TEST_RESELLER_KEY) {
     // Create a testing site and use its keys.
-    $mollom = mollom();
-    // Hardcoded servers required, or any request will fail, since dummy site
-    // on backend does not return a server list.
-    foreach ($mollom->serversInit as $server) {
-      $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
-    }
-    // Dummy API keys required, or Mollom client class (rightfully) bails out.
-    $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
-    $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
+    $this->createKeys($public, $private);
 
-    $result = $mollom->createSite(array(
-      'url' => $GLOBALS['base_url'],
-    ));
-
-    $public = $mollom->keyPublic = $result['publicKey'];
-    $private = $mollom->keyPrivate = $result['privateKey'];
-
-    // Save internal properties.
-    $this->public_key = $public;
-    $this->private_key = $private;
+    // Set reseller property.
     $this->is_reseller = $reseller;
 
     // Set the module key settings.
-    variable_set('mollom_public_key', $public);
-    variable_set('mollom_private_key', $private);
+    variable_set('mollom_public_key', $this->public_key);
+    variable_set('mollom_private_key', $this->private_key);
 
     // Enable testing mode.
     // @todo Obsolete?
@@ -912,11 +925,14 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertText(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'));
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
+    // Create a testing site on backend to have some API keys.
+    $this->createKeys();
+
     // Verify that valid keys work.
     $this->drupalGet('admin/config/content/mollom/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $edit = array(
-      'mollom_public_key' => MOLLOM_TEST_PUBLIC_KEY,
-      'mollom_private_key' => MOLLOM_TEST_PRIVATE_KEY,
+      'mollom_public_key' => $this->public_key,
+      'mollom_private_key' => $this->private_key,
       'mollom_testing_mode' => 1,
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'));
@@ -956,6 +972,116 @@ class MollomResponseTestCase extends MollomWebTestCase {
       'description' => 'Tests that Mollom server responses match expectations.',
       'group' => 'Mollom',
     );
+  }
+
+  /**
+   * Tests Site API.
+   */
+  function testSiteAPI() {
+    $mollom = mollom();
+    $info = $mollom->getClientInformation();
+
+    // Create a new site.
+    $site = array(
+      'url' => 'example.com',
+      'email' => 'mollom@example.com',
+    );
+    $result = $mollom->createSite($site);
+    $this->assertMollomWatchdogMessages();
+    $this->assertTrue(!empty($result['publicKey']), 'publicKey found.');
+    $this->assertTrue(!empty($result['privateKey']), 'privateKey found.');
+    $this->assertSame('url', $result['url'], $site['url']);
+    $this->assertSame('email', $result['email'], $site['email']);
+    $this->assertTrue(!isset($result['platformName']), 'platformName not found.');
+    $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
+    $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
+    $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
+    $this->assertTrue(!empty($result['servers']) && is_array($result['servers']), 'Server list found.');
+
+    $site = $result;
+    $mollom->keyPublic = $site['publicKey'];
+    $mollom->keyPrivate = $site['privateKey'];
+
+    // Verify that getSite() response equals the createSite() response.
+    $result = $mollom->getSite();
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('publicKey', $result['publicKey'], $site['publicKey']);
+    $this->assertSame('privateKey', $result['privateKey'], $site['privateKey']);
+    $this->assertSame('url', $result['url'], $site['url']);
+    $this->assertSame('email', $result['email'], $site['email']);
+    $this->assertTrue(!isset($result['platformName']), 'platformName not found.');
+    $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
+    $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
+    $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
+    $this->assertSame('servers', $result['servers'], $site['servers']);
+
+    // Test that verifying keys updates client information.
+    $result = $mollom->verifyKey();
+    $this->assertMollomWatchdogMessages();
+    $this->assertIdentical($result, TRUE, 'Site was updated.');
+
+    $result = $mollom->getSite();
+    $this->assertMollomWatchdogMessages();
+    $this->assertSame('publicKey', $result['publicKey'], $site['publicKey']);
+    $this->assertSame('privateKey', $result['privateKey'], $site['privateKey']);
+    $this->assertSame('url', $result['url'], $site['url']);
+    $this->assertSame('email', $result['email'], $site['email']);
+    $this->assertSame('platformName', $result['platformName'], $info['platformName']);
+    $this->assertSame('platformVersion', $result['platformVersion'], $info['platformVersion']);
+    $this->assertSame('clientName', $result['clientName'], $info['clientName']);
+    $this->assertSame('clientVersion', $result['clientVersion'], $info['clientVersion']);
+    $this->assertSame('servers', $result['servers'], $site['servers']);
+
+    // Verify that the site is listed.
+    // FIXME: Site listing not supported by backend yet.
+    /*
+    $result = $mollom->getSites();
+    $this->assertMollomWatchdogMessages();
+    $found = FALSE;
+    foreach ($result as $record) {
+      if ($record['publicKey'] == $site['publicKey']) {
+        $found = TRUE;
+      }
+    }
+    $this->assertTrue($found, 'Site record was found in site list.');
+    */
+
+    // Verify that the site can be deleted.
+    $result = $mollom->deleteSite($site['publicKey']);
+    $this->assertMollomWatchdogMessages();
+    $this->assertIdentical($result, TRUE, 'Site was deleted.');
+
+    // Verify that the site no longer appears in site list.
+    $mollom->keyPublic = $this->public_key;
+    $mollom->keyPrivate = $this->private_key;
+    // FIXME: Site listing not supported by backend yet.
+    /*
+    $result = $mollom->getSites();
+    $this->assertMollomWatchdogMessages();
+    $found = FALSE;
+    foreach ($result as $record) {
+      if ($record['publicKey'] == $site['publicKey']) {
+        $found = TRUE;
+      }
+    }
+    $this->assertFalse($found, 'Deleted site no longer exists.');
+    */
+
+    // Verify that retrieving the deleted site yields a 404.
+    $result = $mollom->getSite($site['publicKey']);
+    $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
+    $this->assertEqual($result, 404, 'Attempt to get deleted site throws 404.');
+
+    // Verify that authentication fails.
+    $mollom->keyPublic = $site['publicKey'];
+    $mollom->keyPrivate = $site['privateKey'];
+    $result = $mollom->getSite();
+    $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
+    $this->assertEqual($mollom->lastResponseCode, 404, 'Attempt to authenticate with deleted site keys returns 404.');
+
+    // Restore keys for tearDown().
+    $mollom->keyPublic = $this->public_key;
+    $mollom->keyPrivate = $this->private_key;
   }
 
   /**
@@ -1444,14 +1570,14 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
       // appropriate messages are logged.
       $mollom = mollom();
       $key_is_valid = $mollom->verifyKey();
-      $this->assertIdentical($key_is_valid, Mollom::NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
       $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
+      $this->assertIdentical($key_is_valid, Mollom::NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
 
       // Verify that Mollom::query() automatically empties the server list and
       // a directly following, subsequent request attempt succeeds.
       $key_is_valid = $mollom->verifyKey();
-      $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
       $this->assertMollomWatchdogMessages();
+      $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
     }
   }
 }
@@ -1502,41 +1628,41 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'reason' => 'spam',
       'match' => 'contains',
     ));
-    $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
 
     // Check whether posts containing the blacklisted URL are properly blocked.
     $result = mollom()->checkContent(array(
       'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Exact URL match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Partial URL match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('URL with www-prefix was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $result = mollom()->checkContent(array(
       'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('URL with different schema was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
-    $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
 
     // Blacklist a word.
     // @todo As of now, only non-numeric, lower-case text seems to be supported.
@@ -1547,33 +1673,33 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'reason' => 'spam',
       'match' => 'contains',
     ));
-    $this->assertTrue($entry['id'], t('The text was blacklisted.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertTrue($entry['id'], t('The text was blacklisted.'));
 
     // Check whether posts containing the blacklisted word are properly blocked.
     $data = array(
       'postBody' => $term,
     );
     $result = mollom()->checkContent($data);
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Identical match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = mollom()->checkContent($data);
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Exact match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = mollom()->checkContent($data);
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Partial match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     // Update the blacklist entry to match the term only exactly.
     $entry = $mollom->updateBlacklistEntry(array(
@@ -1583,28 +1709,28 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
       'reason' => 'spam',
       'match' => 'exact',
     ));
-    $this->assertTrue($entry['id'], t('The blacklist entry was updated.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertTrue($entry['id'], t('The blacklist entry was updated.'));
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: " . $term,
     );
     $result = mollom()->checkContent($data);
+    $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertEqual($result['spamClassification'], 'spam', t('Exact match was blocked.'));
-    $this->assertMollomWatchdogMessages();
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = mollom()->checkContent($data);
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertNotEqual($result['spamClassification'], 'spam', t('Partial match was not blocked.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertSame('spamScore', $result['spamScore'], 0.5);
+    $this->assertEqual($result['spamClassification'], 'unsure', t('Partial match was not blocked.'));
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
-    $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
     $this->assertMollomWatchdogMessages();
+    $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
 
     // Try to remove a non-existing entry.
     // @todo Ensure that the ID does not exist.
@@ -2622,16 +2748,16 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     $this->assertText($success);
     $report_link = $this->parseMollomMailReportLink();
     $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
-    $this->assertEqual($report_link['entity'], 'session', t('Report link in e-mail uses entity type "session".'));
-    $this->assertMollomData($report_link['entity'], $report_link['session_id']);
+    $this->assertEqual($report_link['entity'], 'mollom_content', t('Report link in e-mail uses entity type "session".'));
+    $this->assertMollomData($report_link['entity'], $report_link['id']);
 
     // Submit an 'unsure' message.  This should be accepted only after the
     // CAPTCHA has been solved.
     $this->assertUnsureSubmit($url, array('subject', 'message'), array(), $button, $success);
     $report_link = $this->parseMollomMailReportLink();
     $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
-    $this->assertEqual($report_link['entity'], 'session', t('Report link in e-mail uses entity type "session".'));
-    $this->assertMollomData($report_link['entity'], $report_link['session_id']);
+    $this->assertEqual($report_link['entity'], 'mollom_content', t('Report link in e-mail uses entity type "session".'));
+    $this->assertMollomData($report_link['entity'], $report_link['id']);
 
     // Report the mail to Mollom.
     $this->drupalGet($report_link['url']);
@@ -2660,7 +2786,7 @@ class MollomContactFormTestCase extends MollomWebTestCase {
       $found = array(
         'url' => $matches[0],
         'entity' => $matches[1],
-        'session_id' => $matches[2],
+        'id' => $matches[2],
         'mail' => $email,
       );
     }
@@ -2861,7 +2987,7 @@ class MollomDataTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Test that form button values are not contained in post_body sent to Mollom.
+   * Test that form button values are not contained in postBody sent to Mollom.
    */
   function testFormButtonValues() {
     $this->drupalLogin($this->admin_user);
@@ -2876,7 +3002,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
     $this->drupalPost('mollom-test/form', $edit, 'Submit');
     $data = $this->getServerRecord();
-    $this->assertFalse(preg_match('@Submit|Add@', $data['post_body']), 'Button values not found in post body.');
+    $this->assertFalse(preg_match('@Submit|Add@', $data['postBody']), 'Button values not found in post body.');
   }
 
   /**
@@ -3269,7 +3395,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spam, 1.0);
+    $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 1);
@@ -3285,7 +3411,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spam, 1.0);
+    $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 1);
@@ -3300,7 +3426,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
     $this->assertEqual($record['status'], 1, t('Published test post found.'));
-    $this->assertSame('spamScore', $data->spam, 1.0);
+    $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 0);
@@ -3326,7 +3452,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
       $data = $this->assertMollomData('mollom_test', $mid);
       $record = mollom_test_load($mid);
       $this->assertEqual($record['status'], 1, t('Published test post %body found.', array('%body' => $body)));
-      $this->assertSame('spamScore', $data->spam, $expected['spamScore']);
+      $this->assertSame('spamScore', $data->spamScore, $expected['spamScore']);
       $this->assertSame('spamClassification', $data->spamClassification, $expected['spamClassification']);
       $this->assertSame('profanityScore', $data->profanityScore, $expected['profanityScore']);
       $this->assertSame('moderate', $data->moderate, 0);

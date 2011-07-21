@@ -158,8 +158,10 @@ class MollomDrupal extends Mollom {
     }
 
     $dhr = drupal_http_request($server . '/' . $rest_path, $request_data);
+    // @todo Core: Ensure that $dhr->code is an integer.
+    $dhr->code = (int) $dhr->code;
     // @todo Core: Any other code than 200 as interpreted as error.
-    $error = (isset($dhr->error) && $dhr->code[0] != 2);
+    $error = (isset($dhr->error) && ($dhr->code < 200 || $dhr->code >= 300));
     // @todo Core: data property is not assigned if there is no response body.
     if (!isset($dhr->data)) {
       $dhr->data = NULL;
@@ -187,10 +189,10 @@ class MollomDrupal extends Mollom {
 
     // If a 'code' exists in the response, it has precedence, regardless of a
     // possible HTTP error code.
-    if (isset($dhr->data) && is_array($dhr->data) && isset($dhr->data['code']) && $dhr->data['code'] != 200) {
+    if (isset($dhr->data['code']) && is_array($dhr->data) && $dhr->data['code'] != 200) {
       $error = TRUE;
       // Replace HTTP status code with 'code' from response.
-      $dhr->code = $dhr->data['code'];
+      $dhr->code = (int) $dhr->data['code'];
       // If there is no HTTP status message, take over 'message' from response.
       // @todo Remove this condition when Mollom sends proper error messages.
       if (!isset($dhr->error) && isset($dhr->data['message'])) {
@@ -217,9 +219,6 @@ class MollomDrupal extends Mollom {
         $dhr->error = 'Unexpected server response.';
       }
     }
-
-    // Ensure that $dhr->code is an integer.
-    $dhr->code = (int) $dhr->code;
 
     if ($error) {
       $arguments = array(
@@ -272,6 +271,42 @@ class MollomDrupalTest extends MollomDrupal {
    * Overrides Mollom::$serversInit.
    */
   public $serversInit = array('http://megatron.mollom.com');
+
+  /**
+   * Overrides Mollom::refreshServers().
+   *
+   * @todo FIXME: Site data is not consistent across servers. Testing site
+   *   record is initially created on first hard-coded server.
+   *   MollomServerListRecoveryTestCase replaces server list with invalid URLs
+   *   to verify proper recovery. Since there is no server list,
+   *   refreshServers() is invoked, which calls GET /site/$publicKey, which
+   *   contains a new server list. The first server in that list is used for
+   *   subsequent/following requests. But the first server in the returned list
+   *   can be different to the first server in our hard-coded list
+   *   (Mollom::serversInit), and in that case, authentication fails, and in
+   *   turn, all tests fail.
+   */
+  protected function refreshServers() {
+    // Retrieve new server list.
+    $servers = parent::refreshServers();
+    // Nothing to do on empty list.
+    if (empty($servers)) {
+      return $servers;
+    }
+
+    // Append API version to serversInit.
+    $known = array();
+    foreach ($this->serversInit as $server) {
+      $known[] = $server . '/' . self::API_VERSION;
+    }
+    // Check whether any of the hard-coded servers is contained, and if so, sort
+    // them first (and in their hard-coded order).
+    $new = array_intersect($known, $servers);
+    // Append the remaining.
+    $new = array_merge($new, array_diff($servers, $new));
+
+    return $new;
+  }
 }
 
 /**
