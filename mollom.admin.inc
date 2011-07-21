@@ -677,6 +677,9 @@ function mollom_admin_blacklist_delete_submit($form, &$form_state) {
  * mollom.verifyKey would invalidate the keys and throw an error; hence,
  * _mollom_fallback() would invoke form_set_error(), effectively preventing this
  * form from submitting.
+ *
+ * @todo Implement proper form validation now that mollom() no longer triggers
+ *   the fallback mode.
  */
 function mollom_admin_settings($form, &$form_state) {
   // Output a positive status message, since users keep on asking whether

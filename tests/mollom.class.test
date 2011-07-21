@@ -154,6 +154,65 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
    * Tests Mollom::parseXML().
    */
   function testParseXML() {
+    $header = '<?xml version="1.0"?>';
+
+    $input = $header . <<<EOF
+<response>
+  <code>0</code>
+  <message>Foo.</message>
+  <content>
+    <contentId>321</contentId>
+    <languages>
+      <language>
+        <code>en</code>
+        <confidence>1.0</confidence>
+      </language>
+      <language>
+        <code>de</code>
+        <confidence>0.5</confidence>
+      </language>
+    </languages>
+  </content>
+</response>
+EOF;
+    $expected = array(
+      'code' => 0,
+      'message' => 'Foo.',
+      'content' => array(
+        'contentId' => 321,
+        'languages' => array(
+          array('code' => 'en', 'confidence' => 1.0),
+          array('code' => 'de', 'confidence' => 0.5),
+        ),
+      ),
+    );
+    $this->assertSame($input, Mollom::parseXML(new SimpleXmlIterator($input)), $expected);
+
+    $input = $header . <<<EOF
+<response>
+  <code>0</code>
+  <message></message>
+  <site>
+    <siteId>321</siteId>
+    <servers>
+      <server>http://foo</server>
+      <server>http://bar</server>
+    </servers>
+  </site>
+</response>
+EOF;
+    $expected = array(
+      'code' => 0,
+      'message' => '',
+      'site' => array(
+        'siteId' => 321,
+        'servers' => array(
+          'http://foo',
+          'http://bar',
+        ),
+      ),
+    );
+    $this->assertSame($input, Mollom::parseXML(new SimpleXmlIterator($input)), $expected);
   }
 }
 

@@ -81,6 +81,19 @@ class MollomWebTestCase extends DrupalWebTestCase {
   protected $is_reseller = FALSE;
 
   /**
+   * The Mollom client class implementation to use.
+   *
+   * By default, we use MollomDrupalTest and test against production Mollom
+   * testing servers.
+   * Assign MollomDrupalTestLocal to test against local dummy/fake REST server.
+   *
+   * @see mollom.drupal.inc
+   *
+   * @var string
+   */
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
+  /**
    * Set up an administrative user account and testing keys.
    */
   function setUp() {
@@ -91,8 +104,10 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $modules = func_get_args();
     $modules = (isset($modules[0]) ? $modules[0] : array());
 
-    // @todo Temporary until official backend is ready for testing.
-    $modules[] = 'mollom_test';
+    // Automatically enable local testing server implementation.
+    if (strstr($this->mollomClass, 'Local') && !in_array('mollom_test', $modules)) {
+      $modules[] = 'mollom_test';
+    }
 
     // If not explicitly disabled by a test, setup with Mollom and default admin
     // user.
@@ -100,6 +115,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $modules[] = 'mollom';
       $modules[] = 'dblog';
       parent::setUp($modules);
+      variable_set('mollom_class', $this->mollomClass);
 
       $permissions = array(
         'access administration pages',
@@ -116,6 +132,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     else {
       $modules[] = 'dblog';
       parent::setUp($modules);
+      variable_set('mollom_class', $this->mollomClass);
     }
 
     // D7's new default theme Bartik is bogus in various locations, which leads
@@ -604,18 +621,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Stores the local site as Mollom server to re-route all communication to this site.
-   */
-  protected function setTestingServer() {
-    if (variable_get('mollom_protocol', 'xmlrpc') == 'rest') {
-      variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
-    }
-    else {
-      variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
-    }
-  }
-
-  /**
    * Retrieve submitted XML-RPC values from testing server implementation.
    *
    * @param $method
@@ -624,6 +629,9 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *
    * @see MollomWebTestCase::resetServerRecords()
    * @see mollom_test_xmlrpc()
+   *
+   * @todo Needs update. May directly use the short name suffixes of testing
+   *   server API functions; i.e., 'content', 'captcha', 'blacklist', etc.
    */
   protected function getServerRecord($method = 'mollom.checkContent') {
     // Map the XML-RPC method name to the corresponding function callback name.
@@ -1104,19 +1112,15 @@ class MollomResponseTestCase extends MollomWebTestCase {
  * Tests low-level communication with local fake Mollom server.
  */
 class MollomResponseLocalTestCase extends MollomResponseTestCase {
+  // Re-route Mollom communication to this testing site.
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
   public static function getInfo() {
     return array(
       'name' => 'Server responses (local)',
       'description' => 'Tests that local fake Mollom server responses match expectations.',
       'group' => 'Mollom',
     );
-  }
-
-  function setUp() {
-    // Enable testing server implementation.
-    parent::setUp(array('mollom_test'));
-    // Re-route Mollom communication to this testing site.
-    $this->setTestingServer();
   }
 }
 
@@ -1240,17 +1244,15 @@ class MollomAccessTestCase extends MollomWebTestCase {
 }
 
 class MollomFallbackTestCase extends MollomWebTestCase {
+  // Re-route Mollom communication to this testing site.
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
   public static function getInfo() {
     return array(
       'name' => 'Fallback behavior',
       'description' => 'Check that the module uses the correct fallback mechanism when one or more of the specified Mollom servers are not available.',
       'group' => 'Mollom',
     );
-  }
-
-  function setUp() {
-    // Enable testing server implementation.
-    parent::setUp(array('mollom_test'));
   }
 
   /**
@@ -1320,8 +1322,7 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     variable_set('mollom_servers', array(
       'http://fake-host-1',
       'http://fake-host-2',
-      $GLOBALS['base_url'] . '/mollom-test/rest',
-      'http://xmlrpc1.mollom.com', // The real server.
+      $GLOBALS['base_url'] . '/mollom-test/rest', // A real server.
       'http://fake-host-3',
     ));
 
@@ -1365,6 +1366,8 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
 
     foreach ($list as $servers) {
       variable_set('mollom_servers', $servers);
+      // Reset static, since the Mollom instance is statically cached.
+      drupal_static_reset('mollom');
 
       // Verify that Mollom::query() fails with an invalid server list and
       // appropriate messages are logged.
@@ -1472,22 +1475,22 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
 
     // Check whether posts containing the blacklisted URL are properly blocked.
-    $result = mollom('mollom.checkContent', array(
+    $result = mollom()->checkContent(array(
       'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact URL match was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('Partial URL match was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $result = mollom()->checkContent(array(
       'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('URL with www-prefix was blocked.'));
 
-    $result = mollom('mollom.checkContent', array(
+    $result = mollom()->checkContent(array(
       'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('URL with different schema was blocked.'));
@@ -1510,19 +1513,19 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $data = array(
       'postBody' => $term,
     );
-    $result = mollom('mollom.checkContent', $data);
+    $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Identical match was blocked.'));
 
     $data = array(
       'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
-    $result = mollom('mollom.checkContent', $data);
+    $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
-    $result = mollom('mollom.checkContent', $data);
+    $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
@@ -1538,13 +1541,13 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: " . $term,
     );
-    $result = mollom('mollom.checkContent', $data);
+    $result = mollom()->checkContent($data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
-    $result = mollom('mollom.checkContent', $data);
+    $result = mollom()->checkContent($data);
     $this->assertNotEqual($result['spamResult'], 'SPAM', t('Partial match was not blocked.'));
 
     $result = $mollom->deleteBlacklistEntry($entry['id']);
@@ -1754,6 +1757,9 @@ class MollomProfanityTestCase extends MollomWebTestCase {
  * Tests Mollom form configuration functionality.
  */
 class MollomFormConfigurationTestCase extends MollomWebTestCase {
+  // Re-route Mollom communication to this testing site.
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
   public static function getInfo() {
     return array(
       'name' => 'Form administration',
@@ -1763,9 +1769,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   }
 
   function setUp() {
-    parent::setUp(array('mollom_test'));
-    // Re-route Mollom communication to this testing site.
-    $this->setTestingServer();
+    parent::setUp();
 
     $this->drupalLogin($this->admin_user);
   }
@@ -2630,7 +2634,7 @@ class MollomResellerTestCase extends MollomWebTestCase {
 
     // Create 3 test sites:
     for ($i = 1; $i <= 3; $i++) {
-      $keys[] = mollom('mollom.createSite', array(
+      $keys[] = mollom()->createSite(array(
         'url' => 'http://example.com/site-'. $i,
         'mail' => 'mail@example.com',
         'status' => 0,
@@ -2644,7 +2648,7 @@ class MollomResellerTestCase extends MollomWebTestCase {
     $sites = mollom('mollom.listSites');
     foreach ($sites as $site) {
       // Retrieve the site information:
-      $details = mollom('mollom.getSite', array('client_key' => $site));
+      $details = mollom()->getSite(array('client_key' => $site));
 
       $this->assertEqual($details['mail'], 'mail@example.com', t('The original information is correctly retrieved from Mollom.'));
       $this->assertEqual($details['status'], 0, t('The original information is correctly retrieved from Mollom.'));
@@ -2654,8 +2658,8 @@ class MollomResellerTestCase extends MollomWebTestCase {
       // valid sites in case someone messed up their Mollom settings!
       if ($details['mail'] == 'mail@example.com' || $details['mail'] == 'root@example.com') {
         // Update the information on the site and verify that it was updated.
-        mollom('mollom.updateSite', array('client_key' => $site, 'mail' => 'root@example.com'));
-        $details = mollom('mollom.getSite', array('client_key' => $site));
+        mollom()->updateSite(array('client_key' => $site, 'mail' => 'root@example.com'));
+        $details = mollom()->getSite(array('client_key' => $site));
         $this->assertEqual($details['mail'], 'root@example.com', t('The updated information is correctly retrieved from Mollom.'));
 
         // Verify that the existing information did not change (partial updates).
@@ -2663,7 +2667,7 @@ class MollomResellerTestCase extends MollomWebTestCase {
         $this->assertEqual($details['testing'], 1, t('The original information is correctly retrieved from Mollom.'));
 
         // Delete the test site:
-        mollom('mollom.deleteSite', array('client_key' => $site));
+        mollom()->deleteSite(array('client_key' => $site));
       }
       else {
         $this->fail(t('We tried to delete a non-test site.'));
@@ -2674,7 +2678,7 @@ class MollomResellerTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
 
     // Retrieve information about a non-existing site:
-    $details = mollom('mollom.getSite', array('client_key' => 'bogus'));
+    $details = mollom()->getSite(array('client_key' => 'bogus'));
     $this->assertEqual(xmlrpc_errno(), TRUE, t('Retrieving information from a non-existing site returned an XML-RPC error.'));
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
 
@@ -2688,19 +2692,15 @@ class MollomResellerTestCase extends MollomWebTestCase {
  * Tests form value processing.
  */
 class MollomDataTestCase extends MollomWebTestCase {
+  // Re-route Mollom communication to this testing site.
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
   public static function getInfo() {
     return array(
       'name' => 'Data processing',
       'description' => 'Verify that form registry information is properly transformed into data that is sent to Mollom servers.',
       'group' => 'Mollom',
     );
-  }
-
-  function setUp() {
-    // Enable testing server implementation.
-    parent::setUp(array('mollom_test'));
-    // Re-route Mollom communication to this testing site.
-    $this->setTestingServer();
   }
 
   /**
@@ -3036,13 +3036,16 @@ class MollomDataTestCase extends MollomWebTestCase {
     $edit['title'] = 'unsure';
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertCaptchaField();
+    $contentId = $this->assertResponseIDInForm('contentId');
+    $captchaId = $this->assertResponseIDInForm('captchaId');
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
     $new_data = $this->assertMollomData('mollom_test', $mid);
 
     // Verify that only session data was updated.
     $this->assertSame('entity', $data->entity, $new_data->entity);
     $this->assertSame('id', $data->id, $new_data->id);
-    $this->assertNotSame('session_id', $data->session_id, $new_data->session_id);
+    $this->assertNotSame('contentId', $data->contentId, $new_data->contentId);
+    $this->assertNotSame('captchaId', $data->captchaId, $new_data->captchaId);
     $this->assertSame('form_id', $data->form_id, $new_data->form_id);
     $this->assertSame('quality', $data->quality, $new_data->quality);
     $count = db_query("SELECT COUNT(1) FROM {mollom}")->fetchField();
@@ -3058,12 +3061,12 @@ class MollomDataTestCase extends MollomWebTestCase {
 
     // Verify that we additionally sent version data.
     $data = $this->getServerRecord('mollom.verifyKey');
-    $info = _mollom_get_version();
-    $this->assertTrue(!empty($info['platform_name']), t('Version information found.'));
-    $this->assertSame('platform_name', $data['platform_name'], $info['platform_name']);
-    $this->assertSame('platform_version', $data['platform_version'], $info['platform_version']);
-    $this->assertSame('client_name', $data['client_name'], $info['client_name']);
-    $this->assertSame('client_version', $data['client_version'], $info['client_version']);
+    $info = mollom()->getClientInformation();
+    $this->assertTrue(!empty($info['platformName']), t('Version information found.'));
+    $this->assertSame('platformName', $data['platformName'], $info['platformName']);
+    $this->assertSame('platformVersion', $data['platformVersion'], $info['platformVersion']);
+    $this->assertSame('clientName', $data['clientName'], $info['clientName']);
+    $this->assertSame('clientVersion', $data['clientVersion'], $info['clientVersion']);
   }
 }
 

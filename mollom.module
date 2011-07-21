@@ -1231,7 +1231,7 @@ function _mollom_status($reset = FALSE) {
 
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
-    $status['keys valid'] = mollom()->verifyKey(_mollom_get_version());
+    $status['keys valid'] = mollom()->verifyKey();
   }
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {
@@ -1288,13 +1288,6 @@ function _mollom_fallback() {
   if ($fallback == MOLLOM_FALLBACK_BLOCK) {
     form_set_error('mollom', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
   }
-
-  $servers = variable_get('mollom_servers', array());
-  _mollom_watchdog(array(
-    'All servers unavailable: %servers' => array('%servers' => $servers ? implode(', ', $servers) : '--'),
-    // @todo No global error handler with REST.
-    //'Last error: @code %message' => array('@code' => xmlrpc_errno(), '%message' => xmlrpc_error_msg()),
-  ), WATCHDOG_ERROR);
 }
 
 /**
@@ -1352,9 +1345,6 @@ function mollom_theme() {
  * The 'mollom' form element is stateful. The Mollom session ID that is exchanged
  * between Drupal, the Mollom back-end, and the user allows us to keep track of
  * the form validation state.
- *
- * The session ID is valid for a given $form_id only. We expire it as soon as
- * the form is submitted, to avoid it being replayed.
  */
 function mollom_process_mollom($element, &$form_state, $complete_form) {
   // Setup initial Mollom session and form information.
@@ -1368,6 +1358,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
       'response' => array(
       ),
     );
+    // @todo Put the Mollom instance into $form_state.
   }
   $form_state['mollom'] += $element['#mollom_form'];
 
@@ -1425,6 +1416,8 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     else {
       $form_state['mollom']['require_analysis'] = FALSE;
       $form_state['mollom']['require_captcha'] = FALSE;
+      // Trigger fallback mode.
+      _mollom_fallback();
       return array();
     }
   }
@@ -1494,7 +1487,7 @@ function mollom_validate_analysis(&$form, &$form_state) {
   }
   $data['checks'] = $form_state['mollom']['checks'];
   $data['strictness'] = $form_state['mollom']['strictness'];
-  $result = mollom('mollom.checkContent', $data);
+  $result = mollom()->checkContent($data);
 
   // Use all available data properties for log messages below.
   $data += $all_data;
@@ -1656,7 +1649,7 @@ function mollom_validate_captcha(&$form, &$form_state) {
   if (isset($all_data['honeypot'])) {
     $data['honeypot'] = $all_data['honeypot'];
   }
-  $result = mollom('mollom.checkCaptcha', $data);
+  $result = mollom()->checkCaptcha($data);
   // Use all available data properties for log messages below.
   $data += $all_data;
 
@@ -1779,51 +1772,23 @@ function mollom_form_submit($form, &$form_state) {
  */
 
 /**
- * Call a remote procedure at the Mollom server.
+ * Instantiates a new Mollom client.
  *
- * This function automatically adds the information required to authenticate
- * against Mollom.
- *
- * @todo Currently, this function's return value mixes actual values and
- *   error values. We should rewrite the error handling so that calling
- *   functions can properly handle error situations.
+ * @param $class
+ *   (optional) The name of a Mollom client implementation class to instantiate.
+ *   Overrides the 'mollom_class' configuration variable. Debug use only.
  */
-function mollom($method = NULL, $data = array()) {
-  // @todo This will use the singleton pattern after full module conversion.
-  if (!isset($method)) {
-    $mollom = new MollomDrupalTestLocal();
-    return $mollom;
+function mollom($class = NULL) {
+  $instance = &drupal_static(__FUNCTION__);
+  if (!isset($class)) {
+    $class = variable_get('mollom_class', 'MollomDrupal');
   }
-
-  // @todo Fix method names.
-  $method = strtr($method, array('mollom.' => ''));
-
-  $mollom = new MollomDrupalTestLocal();
-  #$mollom = new MollomDrupalXMLRPC();
-  $result = $mollom->$method($data);
-//  debug($result);
-//  debug($mollom->lastResponseCode);
-//  debug($mollom);
-
-  // Unless we have a NETWORK_ERROR (indicating that no servers worked), return
-  // the result.
-  if ($result !== Mollom::NETWORK_ERROR) {
-    return $result;
+  // If there is no instance yet or if it is not from the configured class,
+  // create a new one.
+  if (!isset($instance) || !($instance instanceof $class)) {
+    $instance = new $class();
   }
-
-  // If none of the servers worked, activate the fallback mechanism.
-  // @todo mollom() can be invoked outside of form processing. _mollom_fallback()
-  //   unconditionally invokes form_set_error(), which always displays the
-  //   fallback error message. Ideally, we would pass a $verbose argument to
-  //   _mollom_fallback(), but for that, we'd have to know here already.
-  //   Consequently, mollom() would need that $verbose argument. In the end, we
-  //   likely want to either embed the fallback handling into form processing,
-  //   or introduce a new helper function that is invoked instead of mollom()
-  //   during form processing.
-  if ($method != 'verifyKey') {
-    _mollom_fallback();
-  }
-  return $result;
+  return $instance;
 }
 
 /**
@@ -1909,57 +1874,10 @@ function _mollom_watchdog_multiple($messages, $severity) {
   }
 }
 
-/**
- * Returns version information to send with mollom.verifyKey.
- *
- * Retrieves platform and module version information for mollom.verifyKey, which
- * is normally invoked on Mollom's administration pages only.
- *
- * This information is solely used to speed up support requests and technical
- * inquiries. The data may also be aggregated to help the Mollom staff to make
- * decisions on new features or the necessity of back-porting improved
- * functionality to older versions.
- *
- * @return
- *   An array containing:
- *   - platform_name: The name of the Drupal distribution; i.e., "Drupal".
- *   - platform_version: The version of Drupal; e.g., "7.0".
- *   - client_name: The module name; i.e., "Mollom".
- *   - client_version: The version of the module; e.g., "7.x-1.0".
- *
- * @see _mollom_status()
- *
- * @todo Should be part of Mollom class.
- */
-function _mollom_get_version() {
-  if ($cache = cache_get('mollom_version')) {
-    return $cache->data;
-  }
-
-  // Retrieve Drupal distribution and installation profile information.
-  $profile = drupal_get_profile();
-  $profile_info = system_get_info('module', $profile) + array(
-    'distribution_name' => 'Drupal',
-    'version' => VERSION,
-  );
-
-  // Retrieve Mollom module information.
-  $mollom_info = system_get_info('module', 'mollom');
-  if (empty($mollom_info['version'])) {
-    // Manually build a module version string for repository checkouts.
-    $mollom_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-1.x-dev';
-  }
-
-  $data = array(
-    'platform_name' => $profile_info['distribution_name'],
-    'platform_version' => $profile_info['version'],
-    'client_name' => $mollom_info['name'],
-    'client_version' => $mollom_info['version'],
-  );
-  cache_set('mollom_version', $data);
-
-  return $data;
-}
+//function mollom_watchdog(array $entry) {
+//  $output = t($entry['message'], $entry['variables']);
+//  echo "<pre>"; var_dump($output); echo "</pre>\n";
+//}
 
 /**
  * Send feedback to Mollom.
@@ -2003,7 +1921,7 @@ function mollom_get_statistics($refresh = FALSE) {
       ));
 
       foreach ($statistics as $statistic) {
-        $result = mollom('mollom.getStatistics', array('type' => $statistic));
+        $result = mollom()->getStatistics(array('type' => $statistic));
         if ($result === Mollom::NETWORK_ERROR || $result === Mollom::AUTH_ERROR) {
           // If there was an error, stop fetching statistics and store FALSE
           // in the cache. This will help prevent from making unnecessary
@@ -2072,13 +1990,13 @@ function mollom_get_captcha(&$form_state) {
   if (empty($form_state['mollom']['response'][$key])) {
     $data = array(
       'type' => $form_state['mollom']['captcha_type'],
-      'author_ip' => ip_address(),
+      'authorIp' => ip_address(),
       'ssl' => (int) (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on'),
     );
     if (!empty($form_state['mollom']['response']['content']['contentId'])) {
       $data['contentId'] = $form_state['mollom']['response']['content']['contentId'];
     }
-    $result = mollom('mollom.getCaptcha', $data);
+    $result = mollom()->getCaptcha($data);
 
     if (isset($result['url'])) {
       $url = $result['url'];

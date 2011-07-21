@@ -3,6 +3,11 @@
 /**
  * @file
  * Testing functionality for Mollom module.
+ *
+ * @todo Extract testing server into a new mollom_test_server.module. The
+ *   mollom_test.module serves as good example for how to implement Mollom
+ *   support in a Drupal module, but 90% of it pertain to the testing server
+ *   now, so it's hard to explain people what they should look at.
  */
 
 /**
@@ -241,40 +246,44 @@ function mollom_test_rest_add_xml(DOMDocument $doc, DOMNode $parent, $data, $key
  *   The public key of a site. Has to be MOLLOM_TEST_PUBLIC_KEY.
  */
 function mollom_test_rest_site($id) {
-  if ($_SERVER['REQUEST_METHOD'] == 'GET') {
-    // Verify keys.
+  $data = mollom_test_rest_get_parameters();
+  if ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    mollom_test_verify_key($data);
+  }
+  else {
     module_load_include('php', 'simpletest', 'drupal_web_test_case');
     module_load_include('test', 'mollom', 'tests/mollom');
-    if ($_GET['publicKey'] !== MOLLOM_TEST_PUBLIC_KEY) {
-      return FALSE;
-    }
-
-    $version = _mollom_get_version();
-    $servers = mollom_test_get_server_list($_GET);
-    foreach ($servers as $key => &$url) {
-      $url .= '/mollom-test/rest';
-    }
-
-    $response = array(
-      'publicKey' => MOLLOM_TEST_PUBLIC_KEY,
-      'privateKey' => MOLLOM_TEST_PRIVATE_KEY,
-      'url' => $GLOBALS['base_url'],
-      'email' => variable_get('site_mail', ''),
-      'languages' => array(),
-      'subscriptionType' => 'free',
-      'platform' => array(
-        'name' => $version['platform_name'],
-        'version' => $version['platform_version'],
-      ),
-      'client' => array(
-        'name' => $version['client_name'],
-        'version' => $version['client_version'],
-      ),
-      'servers' => $servers,
-      // @todo Statistics.
-    );
-    return array('site' => $response);
   }
+  // Verify keys (in case of PUT, again).
+  if ($data['publicKey'] !== MOLLOM_TEST_PUBLIC_KEY) {
+    return FALSE;
+  }
+
+  $version = mollom()->getClientInformation();
+  $servers = mollom_test_get_server_list($data);
+  foreach ($servers as $key => &$url) {
+    $url .= '/mollom-test/rest';
+  }
+
+  $response = array(
+    'publicKey' => MOLLOM_TEST_PUBLIC_KEY,
+    'privateKey' => MOLLOM_TEST_PRIVATE_KEY,
+    'url' => $GLOBALS['base_url'],
+    'email' => variable_get('site_mail', ''),
+    'languages' => array(),
+    'subscriptionType' => 'free',
+    'platform' => array(
+      'name' => $version['platformName'],
+      'version' => $version['platformVersion'],
+    ),
+    'client' => array(
+      'name' => $version['clientName'],
+      'version' => $version['clientVersion'],
+    ),
+    'servers' => $servers,
+    // @todo Statistics.
+  );
+  return array('site' => $response);
 }
 
 /**
