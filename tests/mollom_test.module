@@ -149,7 +149,16 @@ function mollom_test_rest() {
     'page callback' => 'mollom_test_rest_send_feedback',
     'page arguments' => array($base_args + 2),
   );
-  // @todo Blacklist endpoints.
+
+  $items[$path . '/blacklist/%'] = $base + array(
+    'page callback' => 'mollom_test_rest_blacklist',
+    'page arguments' => array($base_args + 2),
+  );
+  $items[$path . '/blacklist/%/%'] = $base + array(
+    'page callback' => 'mollom_test_rest_blacklist',
+    'page arguments' => array($base_args + 2, $base_args + 3),
+  );
+  // @todo Whitelist endpoints.
 
   return $items;
 }
@@ -281,6 +290,15 @@ function mollom_test_rest_content($contentId = NULL) {
     return FALSE;
   }
   elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    // Update existing content (includes sending feedback).
+    // In case the 'moderated' parameter was passed, the call equals the old
+    // mollom.sendFeedback and we only check whether the parameter value is
+    // correct.
+    if (isset($data['moderated'])) {
+      $valid = is_string($data['moderated']);
+      $valid = $valid && in_array($data['moderated'], array('spam', 'profanity', 'low-quality', 'unwanted', 'approve', 'escalate', 'delete', 'ignore'));
+      return $valid;
+    }
     if (empty($contentId)) {
       return FALSE;
     }
@@ -289,11 +307,12 @@ function mollom_test_rest_content($contentId = NULL) {
     }
   }
 
+  // Default: Create (POST) or update (PUT) content and check it.
   return array('content' => mollom_test_check_content($data));
 }
 
 /**
- * REST callback for mollom.getImageCaptcha to fetch a CAPTCHA image.
+ * REST callback for mollom.getCaptcha to fetch a CAPTCHA.
  */
 function mollom_test_rest_captcha($captchaId = NULL) {
   $data = mollom_test_rest_get_parameters();
@@ -316,6 +335,101 @@ function mollom_test_rest_captcha($captchaId = NULL) {
 
   // POST.
   return array('captcha' => mollom_test_get_captcha($data));
+}
+
+/**
+ * REST callback for Blacklist API.
+ *
+ * @todo Abstract actual functionality like other REST handlers.
+ */
+function mollom_test_rest_blacklist($siteId, $entryId = NULL, $delete = FALSE) {
+  if (empty($siteId)) {
+    return FALSE;
+  }
+  $data = mollom_test_rest_get_parameters();
+  // Remove authentication parameters.
+  unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
+
+  // Prepare text value.
+  if (isset($data['text'])) {
+    $data['text'] = drupal_strtolower(trim($data['text']));
+  }
+  // @todo API specification/implementation mismatch.
+  if (isset($data['value'])) {
+    $data['value'] = drupal_strtolower(trim($data['value']));
+  }
+
+  $bin = 'mollom_test_blacklist_' . $siteId;
+  $entries = variable_get($bin, array());
+
+  if ($_SERVER['REQUEST_METHOD'] == 'GET') {
+    // List blacklist entries.
+    if (empty($entryId)) {
+      $response = array();
+      // Remove deleted entries (== FALSE).
+      $entries = array_filter($entries);
+      $response['list'] = $entries;
+      // @todo Not required yet.
+      $response['listCount'] = count($entries);
+      $response['listOffset'] = 0;
+      $response['listTotal'] = count($entries);
+      return $response;
+    }
+    // Read a single entry.
+    else {
+      // Check whether the entry exists and was not deleted.
+      if (!empty($entries[$entryId])) {
+        return array('entry' => $entries[$entryId]);
+      }
+      else {
+        return FALSE;
+      }
+    }
+  }
+  elseif ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Create a new entry.
+    if (!$delete) {
+      $entryId = max(array_keys($entries)) + 1;
+      $data['id'] = $entryId;
+      $entries[$entryId] = $data;
+      variable_set($bin, $entries);
+
+      $response = $data;
+      return array('entry' => $response);
+    }
+    // Delete an existing entry.
+    else {
+      // Check that the entry was not deleted already.
+      if (!empty($entries[$entryId])) {
+        $entries[$entryId] = FALSE;
+        variable_set($bin, $entries);
+        return TRUE;
+      }
+      else {
+        return FALSE;
+      }
+    }
+  }
+  elseif ($_SERVER['REQUEST_METHOD'] == 'PUT') {
+    // Update an existing entry.
+    if (empty($entryId)) {
+      return FALSE;
+    }
+    if (isset($data['id']) && $data['id'] != $entryId) {
+      return FALSE;
+    }
+    // Check that the entry was not deleted.
+    if (empty($entries[$entryId])) {
+      return FALSE;
+    }
+    // Entry ID cannot be updated.
+    unset($data['id']);
+    $entries[$entryId] = $data;
+    variable_set($bin, $entries);
+    $response = $data;
+    $response['id'] = $entryId;
+    return array('entry' => $response);
+  }
 }
 
 /**

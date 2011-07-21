@@ -1383,6 +1383,8 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
 }
 
 class MollomLanguageDetectionTestCase extends MollomWebTestCase {
+  protected $profile = 'testing';
+
   public static function getInfo() {
     return array(
       'name' => 'Language detection',
@@ -1410,10 +1412,11 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
       'zh' => "螽斯羽，诜诜兮。宜尔子孙，振振兮",
     );
 
+    $mollom = mollom();
     foreach ($strings as $language => $text) {
-      $result = mollom('mollom.checkContent', array(
+      $result = $mollom->checkContent(array(
         'checks' => 'language',
-        'post_body' => $text,
+        'postBody' => $text,
       ));
       $this->assertEqual($result['language'][0]['language'], $language, t('A language code was specified and they match.'));
       $this->assertTrue($result['language'][0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));
@@ -1446,152 +1449,110 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Test the URL blacklist functionality at the API level without using a web interface.
+   * Test the blacklist functionality at the API level without using a web interface.
    */
-  function testUrlBlacklistAPI() {
+  function testBlacklistAPI() {
+    $mollom = mollom();
     // Remove any stale blacklist entries from test runs that did not finish.
-    $blacklist = mollom('mollom.listBlacklistURL');
+    $blacklist = $mollom->getBlacklist();
     foreach ($blacklist as $entry) {
       if (REQUEST_TIME - strtotime($entry['created']) > 86400) {
-        mollom('mollom.removeBlacklistURL', array(
-          'text' => $entry['text'],
-          'context' => $entry['context'],
-          'reason' => $entry['reason'],
-        ));
+        $mollom->deleteBlacklistEntry($entry['id']);
       }
     }
 
     // Blacklist a URL.
     $domain = $this->randomName() . '.com';
-    $result = mollom('mollom.addBlacklistURL', array(
-      'text' => $domain,
-      'context' => 'everything',
+    $entry = $mollom->createBlacklistEntry(array(
+      'value' => $domain,
+      'context' => 'allFields',
       'reason' => 'spam',
       'match' => 'contains',
     ));
-    $this->assertTrue($result, t('The URL was blacklisted.'));
+    $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
 
     // Check whether posts containing the blacklisted URL are properly blocked.
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the exact URL is present, the post should get blocked: http://{$domain}",
+      'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact URL match was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
+      'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('Partial URL match was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
+      'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('URL with www-prefix was blocked.'));
 
     $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
+      'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
     $this->assertEqual($result['spamResult'], 'SPAM', t('URL with different schema was blocked.'));
 
-    // @todo Not implemented yet.
-    /*
-    $result = mollom('mollom.checkContent', array(
-      'post_body' => "When the domain appears on its own, the post should get blocked: www.{$domain}",
-    ));
-    $this->assertEqual($result['spamResult'], 'SPAM', t('Plain domain name with www-prefix was blocked.'));
-    */
-
-    $result = mollom('mollom.removeBlacklistURL', array(
-      'text' => $domain,
-      'context' => 'everything',
-      'reason' => 'spam',
-    ));
-    $this->assertTrue($result, t('The blacklisted URL was removed.'));
-  }
-
-  /**
-   * Test the text blacklist functionality at the API level without using a web interface.
-   */
-  function testTextBlacklistAPI() {
-    // Remove any stale blacklist entries from test runs that did not finish.
-    $blacklist = mollom('mollom.listBlacklistText');
-    foreach ($blacklist as $entry) {
-      if (REQUEST_TIME - strtotime($entry['created']) > 86400) {
-        mollom('mollom.removeBlacklistText', array(
-          'text' => $entry['text'],
-          'context' => $entry['context'],
-          'reason' => $entry['reason'],
-        ));
-      }
-    }
+    $result = $mollom->deleteBlacklistEntry($entry['id']);
+    $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
 
     // Blacklist a word.
     // @todo As of now, only non-numeric, lower-case text seems to be supported.
     $term = drupal_strtolower(preg_replace('/[^a-zA-Z]/', '', $this->randomName()));
-    $data = array(
+    $entry = $mollom->createBlacklistEntry(array(
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'contains',
-    );
-    $result = mollom('mollom.addBlacklistText', $data);
-    $this->assertIdentical($result, TRUE, t('The text was blacklisted.'));
+    ));
+    $this->assertTrue($entry['id'], t('The text was blacklisted.'));
 
     // Check whether posts containing the blacklisted word are properly blocked.
     $data = array(
-      'post_body' => $term,
+      'postBody' => $term,
     );
     $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Identical match was blocked.'));
 
     $data = array(
-      'post_body' => "When the term is present, the post should get blocked: " . $term,
+      'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
-      'post_body' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
+      'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
-    $data = array(
+    $entry = $mollom->updateBlacklistEntry(array(
+      'id' => $entry['id'],
       'text' => $term,
       'context' => 'everything',
       'reason' => 'spam',
       'match' => 'exact',
-    );
-    $result = mollom('mollom.addBlacklistText', $data);
-    $this->assertTrue($result, t('The text was blacklisted.'));
+    ));
+    $this->assertTrue($entry['id'], t('The blacklist entry was updated.'));
 
     $data = array(
-      'post_body' => "When match is 'exact', it has to be exact: " . $term,
+      'postBody' => "When match is 'exact', it has to be exact: " . $term,
     );
     $result = mollom('mollom.checkContent', $data);
     $this->assertEqual($result['spamResult'], 'SPAM', t('Exact match was blocked.'));
 
     $data = array(
-      'post_body' => "When match is 'exact', it has to be exact: abc{$term}def",
+      'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = mollom('mollom.checkContent', $data);
     $this->assertNotEqual($result['spamResult'], 'SPAM', t('Partial match was not blocked.'));
 
-    $data = array(
-      'text' => $term,
-      'context' => 'everything',
-      'reason' => 'spam',
-    );
-    $result = mollom('mollom.removeBlacklistText', $data);
-    $this->assertTrue($result, t('The blacklisted text was removed.'));
+    $result = $mollom->deleteBlacklistEntry($entry['id']);
+    $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
 
     // Try to remove a non-existing entry.
-    $data = array(
-      'text' => $term,
-      'context' => 'everything',
-      'reason' => 'spam',
-    );
-    $result = mollom('mollom.removeBlacklistText', $data);
+    // @todo Ensure that the ID does not exist.
+    $result = $mollom->deleteBlacklistEntry(999);
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
     $this->assertNotIdentical($result, TRUE, t('Error response for a non-existing blacklist text found.'));
   }
@@ -1763,6 +1724,7 @@ class MollomProfanityTestCase extends MollomWebTestCase {
 
     // Sequence: Post unsure spam (not profanity), post profanity along with
     // correct CAPTCHA, and expect that to be discarded.
+    $this->resetResponseID();
     $this->web_user = $this->drupalCreateUser();
     $this->drupalLogin($this->web_user);
     $edit = array(

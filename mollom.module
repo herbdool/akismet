@@ -257,10 +257,10 @@ function mollom_menu() {
     'type' => MENU_LOCAL_TASK,
     'file' => 'mollom.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist/delete'] = array(
+  $items['admin/config/content/mollom/blacklist/delete/%'] = array(
     'title' => 'Delete',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_delete'),
+    'page arguments' => array('mollom_admin_blacklist_delete', 6),
     'access arguments' => array('administer mollom'),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',
@@ -507,7 +507,7 @@ function mollom_data_moderate($entity, $id) {
   }
 
   // Report the session to Mollom.
-  _mollom_send_feedback($data->session_id, 'ham');
+  _mollom_send_feedback($data->contentId, 'approve');
 
   // Mark the session data as moderated.
   $data->moderate = 0;
@@ -617,8 +617,8 @@ function mollom_data_report_multiple($entity, array $ids, $feedback) {
     // Load the Mollom session data.
     $data = mollom_data_load($entity, $id);
     // Send feedback, if we have session data.
-    if (!empty($data->session_id)) {
-      $result = _mollom_send_feedback($data->session_id, $feedback);
+    if (!empty($data->contentId)) {
+      $result = _mollom_send_feedback($data->contentId, $feedback);
       $return = $return && $result;
     }
   }
@@ -1829,16 +1829,10 @@ function mollom($method = NULL, $data = array()) {
 
   // @todo Fix method names.
   $method = strtr($method, array('mollom.' => ''));
-//  debug($method);
 
   $mollom = new MollomDrupalRESTTest();
   #$mollom = new MollomDrupalXMLRPC();
-  if (method_exists($mollom, $method)) {
-    $result = $mollom->$method($data);
-  }
-  else {
-    $result = $mollom->query1($method, $data);
-  }
+  $result = $mollom->$method($data);
 //  debug($result);
 //  debug($mollom->lastResponseCode);
 //  debug($mollom);
@@ -2002,13 +1996,13 @@ function _mollom_get_version() {
 /**
  * Send feedback to Mollom.
  */
-function _mollom_send_feedback($session_id, $feedback = 'spam') {
-  $result = mollom('mollom.sendFeedback', array(
-    'session_id' => $session_id,
-    'feedback' => $feedback,
+function _mollom_send_feedback($contentId, $feedback = 'spam') {
+  $result = mollom()->sendFeedback(array(
+    'contentId' => $contentId,
+    'moderated' => $feedback,
   ));
   _mollom_watchdog(array(
-    'Reported %feedback for session id %session.' => array('%session' => $session_id, '%feedback' => $feedback),
+    'Reported %feedback for content ID %contentId.' => array('%contentId' => $contentId, '%feedback' => $feedback),
   ));
   return $result;
 }

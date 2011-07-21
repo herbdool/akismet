@@ -106,15 +106,15 @@ function mollom_report_form_submit($form, &$form_state) {
     // Load the Mollom session data.
     if ($entity == 'session') {
       $data = new stdClass;
-      $data->session_id = $id;
+      $data->contentId = $id;
     }
     else {
       $data = mollom_data_load($entity, $id);
     }
 
     // Send feedback to Mollom, if we have session data.
-    if (!empty($data->session_id) && !empty($form_state['values']['mollom']['feedback'])) {
-      if (_mollom_send_feedback($data->session_id, $form_state['values']['mollom']['feedback'])) {
+    if (!empty($data->contentId) && !empty($form_state['values']['mollom']['feedback'])) {
+      if (_mollom_send_feedback($data->contentId, $form_state['values']['mollom']['feedback'])) {
         drupal_set_message(t('The content was successfully reported as inappropriate.'));
       }
     }

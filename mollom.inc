@@ -328,111 +328,6 @@ abstract class Mollom {
     return $servers;
   }
 
-  public function query1($method, array $data = array()) {
-    // Enable testing mode.
-    if (variable_get('mollom_testing_mode', 0)) {
-      $data['testing'] = TRUE;
-    }
-
-    // Retrieve server list.
-    // @todo Use a magic getter for $this->server?
-    $this->getServers();
-    // If we get no list, return the error code.
-    // @todo Better error handling.
-    if (empty($this->servers)) {
-      return $this->lastResponseCode;
-    }
-
-    // Unconditionally add HMAC request authentication parameters.
-    try {
-      $data += $this->getAuthentication();
-    }
-    catch (MollomAuthenticationException $e) {
-      return MOLLOM_ERROR;
-    }
-
-    // Initialize refresh variable.
-    $refresh = FALSE;
-    // Send the request to the first server; if that fails, try the other
-    // servers in the list.
-    reset($this->servers);
-    while ($server = current($this->servers)) {
-      $result = $this->request1($server, $method, $data);
-
-      // Handle non-positive request result.
-      // @todo Make request() throw exceptions instead?
-      if ($this->lastResponseCode !== TRUE) {
-        if ($this->lastResponseCode === MOLLOM_REFRESH) {
-          // Avoid endless loops.
-          if (!$refresh) {
-            $refresh = TRUE;
-
-            // Retrieve a new list of valid Mollom servers.
-            $this->servers = $this->refreshServers();
-            // Update the server list.
-            $this->configServerListSet($this->servers);
-            // If API keys are invalid, the XML-RPC error code is returned.
-            // To reach this, we must have had a server list (and therefore
-            // valid keys) before, so we do not immediately return (like above),
-            // but instead trigger the fallback mode.
-            if (empty($this->servers)) {
-              break;
-            }
-            $this->log[] = array(
-              'type' => 'debug',
-              'message' => 'Refreshed servers: %servers',
-              'arguments' => array(
-                '%servers' => implode(', ', $this->servers),
-              ),
-            );
-            // No reset() required, because:
-            // php -r "$a = array(1, 2, 3); $i = 0; while ($b = current($a)) { var_dump($b); if ($b == 2 && !$i) {$i = 1; $a = array(1, 2, 3); continue; } next($a); }"
-            // => int(1), int(2), int(1), int(2), int(3)
-          }
-        }
-        elseif ($this->lastResponseCode === MOLLOM_REDIRECT) {
-          // Try the next server in the list.
-          $next = next($this->servers);
-
-          $this->log[] = array(
-            'type' => 'debug',
-            'message' => 'Server %server redirected to: %next.',
-            'arguments' => array(
-              '%server' => $server,
-              '%next' => $next,
-            ),
-          );
-        }
-        // Instantly return upon a 'real' error.
-        elseif ($this->lastResponseCode === MOLLOM_ERROR) {
-          return MOLLOM_ERROR;
-        }
-        // On any other error, try the next server.
-        else {
-          next($this->servers);
-        }
-      }
-      // Positive result.
-      else {
-        # _mollom_watchdog_multiple($messages, WATCHDOG_DEBUG);
-        return $result;
-      }
-    }
-
-    // If everything failed, we reset the server list to force Mollom to request
-    // a new list.
-    variable_del('mollom_servers');
-
-    // Report this error.
-    $this->log[] = array(
-      'type' => 'debug',
-      'message' => 'All servers unreachable or returning errors. The server list was emptied.',
-    );
-    # _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
-
-    return NETWORK_ERROR;
-  }
-
   public function query($method, $path, array $data = array()) {
     // Retrieve server list.
     // If we get no list, we will have no servers to iterate over and only the
@@ -738,6 +633,74 @@ abstract class Mollom {
     $result = $this->query('PUT', 'captcha/' . $data['captchaId'], $data);
     return isset($result['captcha']) ? $result['captcha'] : $result;
   }
+
+  /**
+   * @todo This part of the REST API needs work. No way to report CAPTCHA sessions.
+   */
+  public function sendFeedback($data = array()) {
+    if (empty($data['contentId'])) {
+      // @todo Error handling?
+      throw new MollomException('Missing content ID.');
+    }
+    if (empty($data['moderated'])) {
+      // @todo Error handling?
+      throw new MollomException('Missing feedback value.');
+    }
+    $result = $this->query('PUT', 'content/' . $data['contentId'], $data);
+    return $this->lastResponseCode === TRUE ? TRUE : FALSE;
+  }
+
+  /**
+   * @todo List parameters.
+   */
+  public function getBlacklist($siteId = NULL) {
+    if (!isset($siteId)) {
+      $siteId = $this->keyPublic;
+    }
+    $result = $this->query('GET', 'blacklist/' . $siteId);
+    // @todo 'list' is a string when empty. Consider to move list response meta
+    //   elements into the 'list' element, so it's never empty.
+    if (isset($result['list'])) {
+      return is_array($result['list']) ? $result['list'] : array();
+    }
+    return $result;
+  }
+
+  public function getBlacklistEntry($entryId, $siteId = NULL) {
+    if (!isset($siteId)) {
+      $siteId = $this->keyPublic;
+    }
+    $result = $this->query('GET', 'blacklist/' . $siteId . '/' . $entryId);
+    return isset($result['entry']) ? $result['entry'] : $result;
+  }
+
+  public function createBlacklistEntry($data = array(), $siteId = NULL) {
+    if (!isset($siteId)) {
+      $siteId = $this->keyPublic;
+    }
+    $result = $this->query('POST', 'blacklist/' . $siteId, $data);
+    return isset($result['entry']) ? $result['entry'] : $result;
+  }
+
+  public function updateBlacklistEntry($data = array(), $siteId = NULL) {
+    if (empty($data['id'])) {
+      // @todo Error handling?
+      throw new MollomException('Missing blacklist entry ID.');
+    }
+    if (!isset($siteId)) {
+      $siteId = $this->keyPublic;
+    }
+    $result = $this->query('PUT', 'blacklist/' . $siteId . '/' . $data['id'], $data);
+    return isset($result['entry']) ? $result['entry'] : $result;
+  }
+
+  public function deleteBlacklistEntry($entryId, $siteId = NULL) {
+    if (!isset($siteId)) {
+      $siteId = $this->keyPublic;
+    }
+    $result = $this->query('POST', 'blacklist/' . $siteId . '/' . $entryId . '/delete');
+    return $this->lastResponseCode === TRUE;
+  }
 }
 
 /**
@@ -914,80 +877,6 @@ class MollomDrupalREST extends MollomDrupal implements MollomProtocolInterface {
       $messages[] = $message;
     }
     _mollom_watchdog_multiple($messages, $this->lastResponseCode === TRUE ? WATCHDOG_DEBUG : WATCHDOG_ERROR);
-  }
-
-  function query1($method, array $data = array()) {
-    // Map methods to REST paths.
-    $original_method = $method;
-    switch ($method) {
-      case 'checkContent':
-        $method = 'POST';
-        $path = 'content';
-        break;
-
-      case 'getCaptcha':
-      case 'getImageCaptcha':
-      case 'getAudioCaptcha':
-        $method = 'POST';
-        $path = 'captcha/' . $data['type'];
-        break;
-
-      case 'checkCaptcha':
-        $method = 'POST';
-        $path = 'captcha/' . $data['session_id'] . '/verify';
-        break;
-
-      case 'sendFeedback':
-        $method = 'POST';
-        $path = 'content/' . $data['session_id'] . '/feedback';
-        break;
-
-      case 'listBlacklistText':
-      case 'listBlacklistURL':
-        $method = 'GET';
-        $path = 'blacklist/' . $this->keyPublic;
-        break;
-
-      case 'addBlacklistText':
-      case 'addBlacklistURL':
-        $method = 'POST';
-        $path = 'blacklist/' . $this->keyPublic;
-        break;
-
-      case 'removeBlacklistText':
-      case 'removeBlacklistURL':
-        $method = 'POST';
-        $path = 'blacklist/' . $this->keyPublic . '/delete';
-        break;
-
-      default:
-        $path = $method;
-        $method = 'GET';
-        throw new MollomException("Unknown method $method.");
-        break;
-    }
-
-    $result = $this->query($method, $path, $data);
-
-    // Clean-up.
-    if ($this->lastResponseCode === TRUE && isset($result)) {
-      // No XML value data types; /rest/captcha/verify returns a string
-      // instead of a Boolean.
-      if ($original_method == 'checkCaptcha') {
-        $result = (bool) (int) $result['result'];
-      }
-      // New 'code' response key moves certain response values into sub-keys.
-      if ($original_method == 'listBlacklistText' || $original_method == 'listBlacklistURL') {
-        // Response contains empty string if blacklist is empty.
-        $result = (isset($result['entries']) && is_array($result['entries']) ? $result['entries'] : array());
-      }
-      // New 'code' response key...
-      if (in_array($original_method, array('addBlacklistText', 'addBlacklistURL', 'removeBlacklistText', 'removeBlacklistURL'))) {
-        $result = !(bool) $result['code'];
-      }
-    }
-
-    return $result;
   }
 
   /**
