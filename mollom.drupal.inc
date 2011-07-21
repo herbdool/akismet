@@ -92,6 +92,7 @@ class MollomDrupal extends Mollom {
           '@request' => $entry['request'],
           '@parameters' => $entry['data'],
         );
+        unset($entry['request'], $entry['data']);
       }
       if (isset($entry['response'])) {
         $message['Response:<pre>@response</pre>'] = array('@response' => $entry['response']);
@@ -116,13 +117,13 @@ class MollomDrupal extends Mollom {
     _mollom_watchdog_multiple($messages, $this->lastResponseCode === TRUE ? WATCHDOG_DEBUG : WATCHDOG_ERROR);
 
     // After writing log messages, empty the log.
-//    $this->purgeLog();
+    $this->purgeLog();
   }
 
   /**
    * Overrides Mollom::refreshServers().
    */
-  public function refreshServers() {
+  protected function refreshServers() {
     $servers = parent::refreshServers();
 
     // Allow other modules to alter the server list. Internal use only.
@@ -193,7 +194,7 @@ class MollomDrupal extends Mollom {
       $dhr->code = $dhr->data['code'];
       // If there is no HTTP status message, take over 'message' from response.
       // @todo Remove this condition when Mollom sends proper error messages.
-      if (!isset($dhr->error)) {
+      if (!isset($dhr->error) && isset($dhr->data['message'])) {
         $dhr->error = $dhr->data['message'];
       }
     }
@@ -206,7 +207,7 @@ class MollomDrupal extends Mollom {
     // response, the client could also introduce dedicated classes for each
     // resource, but that feels like over-engineering for the average use-case.
     $key_exists = TRUE;
-    if (!empty($expected)) {
+    if (!$error && !empty($expected)) {
       $key_exists = FALSE;
       if (is_array($dhr->data)) {
         $key_exists = $this->arrayKeyExists($dhr->data, $expected);
@@ -272,6 +273,19 @@ class MollomDrupalTest extends MollomDrupal {
    * Overrides Mollom::$serversInit.
    */
   public $serversInit = array('http://megatron.mollom.com');
+
+  /**
+   * @todo Backend: Returned server list contains API version.
+   */
+  protected function refreshServers() {
+    $servers = parent::refreshServers();
+    foreach ($servers as &$server) {
+      if (substr($server, -3) == '/v1') {
+        $server = substr($server, 0, -3);
+      }
+    }
+    return $servers;
+  }
 }
 
 /**
@@ -285,10 +299,6 @@ class MollomDrupalTestLocal extends MollomDrupal {
     parent::__construct();
     // Replace initial server list with local fake server.
     $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
-    // Use testing API keys.
-//    module_load_include('test', 'mollom', 'tests/mollom');
-//    $this->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
-//    $this->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
   }
 }
 

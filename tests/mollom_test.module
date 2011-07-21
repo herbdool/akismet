@@ -498,28 +498,35 @@ function mollom_test_check_content($data) {
     $data['checks'] = array($data['checks']);
   }
 
+  // Fetch blacklist.
+  $blacklist = variable_get('mollom_test_blacklist_' . $data['publicKey'], array());
+
+  $post = implode('\n', array_intersect_key($data, array('postTitle' => 1, 'postBody' => 1)));
+
   // Spam filter: Check post_title and post_body for ham, spam, or unsure.
   if (!isset($data['checks']) || in_array('spam', $data['checks'])) {
     $spam = FALSE;
     $ham = FALSE;
-    foreach (array('postTitle', 'postBody') as $key) {
-      if (!isset($data[$key])) {
-        continue;
-      }
-      // 'spam' always has precedence.
-      if (strpos($data[$key], 'spam') !== FALSE) {
-        $spam = TRUE;
-      }
-      // Otherwise, check for 'ham'.
-      elseif (strpos($data[$key], 'ham') !== FALSE) {
-        $ham = TRUE;
-      }
-      // Lastly, take a forced 'unsure' into account.
-      elseif (strpos($data[$key], 'unsure') !== FALSE) {
-        $spam = TRUE;
-        $ham = TRUE;
-      }
+    // 'spam' always has precedence.
+    if (strpos($post, 'spam') !== FALSE) {
+      $spam = TRUE;
     }
+    // Otherwise, check for 'ham'.
+    elseif (strpos($post, 'ham') !== FALSE) {
+      $ham = TRUE;
+    }
+    // Lastly, take a forced 'unsure' into account.
+    elseif (strpos($post, 'unsure') !== FALSE) {
+      $spam = TRUE;
+      $ham = TRUE;
+    }
+    // Check blacklist.
+    if ($matches = mollom_test_check_content_blacklist($post, $blacklist, 'spam')) {
+      $spam = TRUE;
+      $ham = FALSE;
+      $response['blacklistSpam'] = $matches;
+    }
+
     if ($spam && $ham) {
       $response['spam'] = 0.5;
       $response['spamResult'] = 'UNSURE';
@@ -564,10 +571,13 @@ function mollom_test_check_content($data) {
   // Profanity filter.
   if (isset($data['checks']) && in_array('profanity', $data['checks'])) {
     $profanity = 0.0;
-    foreach (array('postTitle', 'postBody') as $key) {
-      if (isset($data[$key]) && strpos($data[$key], 'profanity') !== FALSE) {
-        $profanity = 1.0;
-      }
+    if (strpos($post, 'profanity') !== FALSE) {
+      $profanity = 1.0;
+    }
+    // Check blacklist.
+    if ($matches = mollom_test_check_content_blacklist($post, $blacklist, 'profanity')) {
+      $profanity = 1.0;
+      $response['blacklistProfanity'] = $matches;
     }
     $response['profanity'] = $profanity;
   }
@@ -579,6 +589,29 @@ function mollom_test_check_content($data) {
   variable_set(__FUNCTION__, $storage);
 
   return $response;
+}
+
+/**
+ * Checks a string against blacklisted terms.
+ */
+function mollom_test_check_content_blacklist($string, $blacklist, $reason) {
+  $terms = array();
+  foreach ($blacklist as $entry) {
+    if ($entry['reason'] == $reason) {
+      // @todo API/implementation mismatch.
+      $term = preg_quote(isset($entry['text']) ? $entry['text'] : $entry['value']);
+      if ($entry['match'] == 'exact') {
+        $term = '\b' . $term . '\b';
+      }
+      $terms[] = $term;
+    }
+  }
+  if (!empty($terms)) {
+    $terms = '/(' . implode('|', $terms) . ')/';
+    preg_match_all($terms, strtolower($string), $matches);
+    return $matches[1];
+  }
+  return array();
 }
 
 /**

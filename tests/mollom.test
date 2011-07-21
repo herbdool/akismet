@@ -91,7 +91,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *
    * @var string
    */
-  protected $mollomClass = 'MollomDrupalTestLocal';
+  protected $mollomClass = 'MollomDrupalTest';
 
   /**
    * Set up an administrative user account and testing keys.
@@ -109,14 +109,22 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $modules[] = 'mollom_test';
     }
 
-    // If not explicitly disabled by a test, setup with Mollom and default admin
-    // user.
+    // If not explicitly disabled by a test, setup with Mollom.
     if (empty($this->disableDefaultSetup)) {
       $modules[] = 'mollom';
-      $modules[] = 'dblog';
-      parent::setUp($modules);
-      variable_set('mollom_class', $this->mollomClass);
+    }
+    $modules[] = 'dblog';
+    parent::setUp($modules);
+    variable_set('mollom_class', $this->mollomClass);
 
+    // D7's new default theme Bartik is bogus in various locations, which leads
+    // to failing tests.
+    // @todo Remove this override.
+    variable_set('theme_default', 'garland');
+
+    // If not explicitly disabled by a test, setup and validate testing keys,
+    // and create a default admin user.
+    if (empty($this->disableDefaultSetup)) {
       $permissions = array(
         'access administration pages',
         'administer mollom',
@@ -128,20 +136,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
         $permissions[] = 'administer comments';
       }
       $this->admin_user = $this->drupalCreateUser($permissions);
-    }
-    else {
-      $modules[] = 'dblog';
-      parent::setUp($modules);
-      variable_set('mollom_class', $this->mollomClass);
-    }
 
-    // D7's new default theme Bartik is bogus in various locations, which leads
-    // to failing tests.
-    // @todo Remove this override.
-    variable_set('theme_default', 'garland');
-
-    // If not explicitly disabled by a test, setup and validate testing keys.
-    if (empty($this->disableDefaultSetup)) {
       $this->setKeys();
       $this->assertValidKeys();
     }
@@ -179,7 +174,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
       ->orderBy('w.timestamp', 'ASC');
 
     // The comparison logic applied in this function is a bit confusing, since
-    // the values of the watchdog severity level constants in Drupal core are
+    // the values of watchdog severity level constants defined by RFC 3164 are
     // negated to their actual "severity level" meaning:
     // WATCHDOG_EMERGENCY is 0, WATCHDOG_NOTICE is 5, WATCHDOG_DEBUG is 7.
 
@@ -190,11 +185,18 @@ class MollomWebTestCase extends DrupalWebTestCase {
       // Only messages with a maximum severity of $max_severity or less severe
       // messages must pass. More severe messages need to fail. See note about
       // severity level constant values above.
+      $output = theme_dblog_message(array('event' => $row, 'link' => FALSE));
       if ($row->severity >= $max_severity) {
-        $this->pass(theme_dblog_message(array('event' => $row, 'link' => FALSE)), t('Watchdog'));
+        // Visually separate debug log messages from other messages.
+        if ($row->severity == WATCHDOG_DEBUG) {
+          $this->error($output, 'User notice');
+        }
+        else {
+          $this->pass($output, t('Watchdog'));
+        }
       }
       else {
-        $this->fail(theme_dblog_message(array('event' => $row, 'link' => FALSE)), t('Watchdog'));
+        $this->fail($output, t('Watchdog'));
       }
       // In case a severe message is expected, non-severe messages always pass,
       // since we would trigger a false positive test failure otherwise.
@@ -302,6 +304,30 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   otherwise.
    */
   protected function setKeys($public = MOLLOM_TEST_PUBLIC_KEY, $private = MOLLOM_TEST_PRIVATE_KEY, $reseller = MOLLOM_TEST_RESELLER_KEY) {
+    // @todo Backend: Current Site API does not know of our testing keys, and
+    //   the default "dummy site" response does not contain a server list. We
+    //   therefore have to create a new site and retrieve it right afterwards,
+    //   in order to get a API key pair that the backend knows of and for
+    //   which it returns a server list...
+    if (strpos($this->mollomClass, 'Local') === FALSE) {
+      // Create a testing site and use its keys.
+      $mollom = mollom();
+      // Hardcoded servers required, or any request will fail, since dummy site
+      // on backend does not return a server list.
+      $mollom->servers = $mollom->serversInit;
+      // Dummy API keys required, or Mollom client class (rightfully) bails out.
+      $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
+      $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
+
+      $result = $mollom->createSite(array(
+        'url' => $GLOBALS['base_url'],
+      ));
+      $result = $mollom->getSite($result['id']);
+
+      $public = $mollom->keyPublic = $result['publicKey'];
+      $private = $mollom->keyPrivate = $result['privateKey'];
+    }
+
     // Save internal properties.
     $this->public_key = $public;
     $this->private_key = $private;
@@ -1467,7 +1493,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     // Blacklist a URL.
     $domain = $this->randomName() . '.com';
     $entry = $mollom->createBlacklistEntry(array(
-      'value' => $domain,
+      'text' => $domain,
       'context' => 'allFields',
       'reason' => 'spam',
       'match' => 'contains',
@@ -1558,6 +1584,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $result = $mollom->deleteBlacklistEntry(999);
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
     $this->assertNotIdentical($result, TRUE, t('Error response for a non-existing blacklist text found.'));
+    $this->assertSame('Response code', $mollom->lastResponseCode, 404);
   }
 
   /**

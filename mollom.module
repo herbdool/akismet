@@ -1874,11 +1874,6 @@ function _mollom_watchdog_multiple($messages, $severity) {
   }
 }
 
-//function mollom_watchdog(array $entry) {
-//  $output = t($entry['message'], $entry['variables']);
-//  echo "<pre>"; var_dump($output); echo "</pre>\n";
-//}
-
 /**
  * Send feedback to Mollom.
  */

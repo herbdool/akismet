@@ -406,10 +406,6 @@ abstract class Mollom {
           $this->saveConfiguration('servers', $this->servers);
           $this->log[] = array(
             'type' => 'debug',
-            'file' => __FILE__,
-            'line' => __LINE__,
-            'class' => __CLASS__,
-            'function' => __FUNCTION__,
             'message' => 'Refreshed servers: %servers',
             'arguments' => array(
               '%servers' => implode(', ', $this->servers),
@@ -487,6 +483,9 @@ abstract class Mollom {
     catch (MollomAuthenticationException $e) {
       // MollomAuthenticationException sets the appropriate error code. Merely
       // catch the exception, move on to error logic below.
+      // Prevent any requests from being performed in case we have servers
+      // loaded from configuration or due to some other edge-case (scripting).
+      $this->servers = array();
     }
 
     // Initialize refresh variable.
@@ -514,8 +513,12 @@ abstract class Mollom {
         if (!$refresh) {
           $refresh = TRUE;
 
-          // Retrieve a new list of valid Mollom servers.
-          $this->servers = $this->refreshServers();
+          // In any case, the current server list is no longer valid.
+          $this->servers = array();
+          $this->deleteConfiguration('servers');
+
+          // Retrieve a fresh list of Mollom servers.
+          $this->servers = $this->getServers();
           // If API keys are invalid, we won't be able to get a new server list.
           // To reach this, we must have had a server list (and therefore
           // valid keys) before, so we do not immediately return, but trigger
@@ -523,15 +526,6 @@ abstract class Mollom {
           if (empty($this->servers)) {
             break;
           }
-          // Update the server list.
-          $this->configServerListSet($this->servers);
-          $this->log[] = array(
-            'type' => 'debug',
-            'message' => 'Refreshed servers: %servers',
-            'arguments' => array(
-              '%servers' => implode(', ', $this->servers),
-            ),
-          );
         }
       }
       catch (MollomRedirectException $e) {
@@ -832,6 +826,11 @@ abstract class Mollom {
       $siteId = $this->keyPublic;
     }
     $result = $this->query('GET', 'site/' . $siteId, array(), array('site'));
+    return isset($result['site']) ? $result['site'] : $result;
+  }
+
+  public function createSite($data = array()) {
+    $result = $this->query('POST', 'site', $data, array('site'));
     return isset($result['site']) ? $result['site'] : $result;
   }
 
