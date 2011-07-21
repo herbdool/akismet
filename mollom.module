@@ -1261,8 +1261,6 @@ function _mollom_status($reset = FALSE) {
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
     $status['keys valid'] = mollom('mollom.verifyKey', _mollom_get_version());
-    // @todo Weird new status code in response...
-    $status['keys valid'] = (isset($status['keys valid']['code']) && $status['keys valid']['code'] == 0);
   }
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {
@@ -1613,8 +1611,8 @@ function mollom_validate_analysis(&$form, &$form_state) {
           $captcha = mollom_get_captcha($form_state);
           // If we get a response, add the image CAPTCHA to the form element.
           if (!empty($captcha)) {
-            $form['mollom']['captcha']['#field_prefix'] = $captcha;
             $form['mollom']['session_id']['#value'] = $form_state['mollom']['response']['session_id'];
+            $form['mollom']['captcha']['#field_prefix'] = $captcha;
           }
         }
         break;
@@ -1808,219 +1806,42 @@ function mollom_form_submit($form, &$form_state) {
  *   functions can properly handle error situations.
  */
 function mollom($method, $data = array()) {
-  module_load_include('inc', 'mollom');
+  // @todo Fix method names.
+  $method = strtr($method, array('mollom.' => ''));
+
+  $mollom = new MollomDrupalRESTTest();
+  #$mollom = new MollomDrupalXMLRPC();
+  if (method_exists($mollom, $method)) {
+    $result = $mollom->$method($data);
+  }
+  else {
+    $result = $mollom->query1($method, $data);
+  }
+//  debug($result);
+//  dpm($mollom);
+
+  if ($mollom->lastResponseCode === TRUE) {
+    return $result;
+  }
+
   $messages = array();
-
-  // Initialize refresh variable.
-  $refresh = FALSE;
-
-  // Enable testing mode.
-  // @todo Testing mode not implemented in REST backend yet.
-  if (variable_get('mollom_testing_mode', 0)) {
-    $data['testing'] = TRUE;
-  }
-
-  // Map XML-RPC methods to REST paths.
-  $original_method = $method;
-  switch ($method) {
-    case 'mollom.verifyKey':
-      $method = 'GET';
-      $path = 'site/' . variable_get('mollom_public_key', '') . '/verify';
-      break;
-
-    case 'mollom.checkContent':
-      $method = 'POST';
-      $path = 'content';
-      break;
-
-    case 'mollom.getCaptcha':
-    case 'mollom.getImageCaptcha':
-    case 'mollom.getAudioCaptcha':
-      $method = 'POST';
-      $path = 'captcha/' . $data['type'];
-      break;
-
-    case 'mollom.checkCaptcha':
-      $method = 'POST';
-      $path = 'captcha/' . $data['session_id'] . '/verify';
-      break;
-
-    case 'mollom.sendFeedback':
-      $method = 'POST';
-      $path = 'content/' . $data['session_id'] . '/feedback';
-      break;
-
-    case 'mollom.listBlacklistText':
-    case 'mollom.listBlacklistURL':
-      $method = 'GET';
-      $path = 'blacklist/' . variable_get('mollom_public_key', '');
-      break;
-
-    case 'mollom.addBlacklistText':
-    case 'mollom.addBlacklistURL':
-      $method = 'POST';
-      $path = 'blacklist/' . variable_get('mollom_public_key', '');
-      break;
-
-    case 'mollom.removeBlacklistText':
-    case 'mollom.removeBlacklistURL':
-      $method = 'POST';
-      $path = 'blacklist/' . variable_get('mollom_public_key', '') . '/delete';
-      break;
-
-    default:
-      $path = $method;
-      $method = 'GET';
-      break;
-  }
-
-  // Retrieve server list.
-  $servers = _mollom_get_servers();
-  // If we get no list, return the error code.
-  if (!is_array($servers)) {
-    return $servers;
-  }
-
-  if (is_array($servers)) {
-    $data += _mollom_authentication();
-
-    // Build the REST request path.
-    $rest_path = $path;
-    $query = NULL;
-    if ($data) {
-      $query = drupal_http_build_query($data);
-      if ($method != 'POST') {
-        $rest_path .= '?' . $query;
-      }
+  foreach ($mollom->log as $entry) {
+    $entry += array('arguments' => array());
+    $message = array(
+      $entry['message'] => $entry['arguments'],
+    );
+    if (isset($entry['data'])) {
+      $message['Request:<pre>@request</pre>'] = array('@request' => $entry['data']);
     }
-
-    // Send the request to the first server; if that fails, try the other
-    // servers in the list.
-    reset($servers);
-    while ($server = current($servers)) {
-      $request_data = array(
-        'method' => $method,
-        'headers' => array(
-          'Accept' => 'application/xml, application/json;q=0.8, */*;q=0.5',
-        ),
-        // Required for POST requests.
-        'data' => $query,
-      );
-      if ($method == 'POST') {
-        $request_data['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
-      }
-      $result = drupal_http_request($server . '/' . $rest_path, $request_data);
-      #debug($result);
-      #debug($result->data);
-//      dpm($result);
-
-      // @todo drupal_http_request() interprets any other code than 200 as error, stupid.
-      if (isset($result->error) && $result->code[0] != 2) {
-        if ($result->code === MOLLOM_REFRESH) {
-          // Avoid endless loops.
-          if (!$refresh) {
-            $refresh = TRUE;
-
-            // Retrieve a new list of valid Mollom servers.
-            $servers = _mollom_retrieve_server_list();
-            // If API keys are invalid, the XML-RPC error code is returned.
-            // To reach this, we must have had a server list (and therefore
-            // valid keys) before, so we do not immediately return (like above),
-            // but instead trigger the fallback mode.
-            if (!is_array($servers)) {
-              break;
-            }
-
-            // Reset the list of servers to restart from the first server.
-            reset($servers);
-
-            // Update the server list.
-            variable_set('mollom_servers', $servers);
-
-            $messages[] = array(
-              'Refreshed servers: %servers' => array('%servers' => implode(', ', $servers)),
-            );
-          }
-        }
-        elseif ($result->code === MOLLOM_REDIRECT) {
-          // Try the next server in the list.
-          $next = next($servers);
-
-          $messages[] = array(
-            'Server %server redirected to: %next.' => array('%server' => $server, '%next' => $next),
-          );
-        }
-        else {
-          $messages[] = array(
-            'Error @errno from %server for %method: %message' => array(
-              '@errno' => $result->code,
-              '%server' => $server,
-              '%method' => "{$method} {$rest_path}",
-              '%message' => $result->error,
-            ),
-            'Data:<pre>@data</pre>' => array('@data' => $data),
-          );
-
-          // Instantly return upon a 'real' error.
-          if ($result->code === MOLLOM_ERROR) {
-            _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
-            return MOLLOM_ERROR;
-          }
-          // Otherwise, try the next server.
-          next($servers);
-        }
-      }
-      // Positive result.
-      else {
-        // Handle response data format.
-        if (isset($result->headers['content-type'])) {
-          if ($result->headers['content-type'] == 'application/json') {
-            $result->data = drupal_json_decode($result->data);
-          }
-          // Before attempting to parse XML, ensure the response actually is XML.
-          elseif ($result->headers['content-type'] == 'application/xml' && is_string($result->data) && isset($result->data[1]) && $result->data[1] === '?') {
-            // Ensure the response is proper XML.
-//            if (is_string($result->data) && (!isset($result->data[1]) || $result->data[1] !== '?')) {
-//              $result->data = '<?xml version="1.0" encoding="utf-8" ?' . ">\n<value>" . $result->data . '</value>';
-//            }
-//            dpm($result);
-
-            $result->elements = new SimpleXmlIterator($result->data);
-            $result->data = _mollom_parse_xml($result->elements);
-          }
-        }
-
-        // @todo FIXME: Backend issues.
-        // No XML value data types; /rest/captcha/verify returns a string
-        // instead of a Boolean.
-        if ($original_method == 'mollom.checkCaptcha') {
-          $result->data = ($result->data['result'] == 'true');
-        }
-        // New 'code' response key moves certain response values into sub-keys.
-        if ($original_method == 'mollom.listBlacklistText' || $original_method == 'mollom.listBlacklistURL') {
-          // Response contains empty string if blacklist is empty.
-          $result->data = (isset($result->data['entries']) && is_array($result->data['entries']) ? $result->data['entries'] : array());
-        }
-        // New 'code' response key...
-        if (in_array($original_method, array('mollom.addBlacklistText', 'mollom.addBlacklistURL', 'mollom.removeBlacklistText', 'mollom.removeBlacklistURL'))) {
-          $result->data = !(bool) $result->data['code'];
-        }
-
-        $messages[] = array(
-          '%method to %server: @code' => array(
-            '@code' => $result->code,
-            '%server' => $server,
-            '%method' => "{$method} {$rest_path}",
-          ),
-          'Data:<pre>@data</pre>' => array('@data' => $data),
-          'Result:<pre>@result</pre>' => array('@result' => $result->data),
-        );
-
-        _mollom_watchdog_multiple($messages, WATCHDOG_DEBUG);
-//        dpm($result);
-        return $result->data;
-      }
+    if (isset($entry['response'])) {
+      $message['Response:<pre>@response</pre>'] = array('@response' => $entry['response']);
     }
+    $messages[] = $message;
+  }
+  _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
+
+  if ($result !== NETWORK_ERROR) {
+    return $result;
   }
 
   // If none of the servers worked, activate the fallback mechanism.
@@ -2036,69 +1857,7 @@ function mollom($method, $data = array()) {
     _mollom_fallback();
   }
 
-  // If everything failed, we reset the server list to force Mollom to request
-  // a new list.
-  variable_del('mollom_servers');
-
-  // Report this error.
-  $messages[] = array(
-    'All servers unreachable or returning errors. The server list was emptied.' => array(),
-  );
-  _mollom_watchdog_multiple($messages, WATCHDOG_ERROR);
-
   return NETWORK_ERROR;
-}
-
-/**
- * Retrieve the list of Mollom servers.
- */
-function _mollom_get_servers() {
-  #return array('http://megatron.mollom.com/mollomresttest/myrest');
-  #return array($GLOBALS['base_url'] . '/mollom-test/rest');
-  $servers = variable_get('mollom_servers', array());
-  return !empty($servers) ? $servers : array('http://megatron.mollom.com/mollomresttest/myrest');
-
-  // If the stored server list is empty, retrieve a new one.
-  if (empty($servers)) {
-    $servers = _mollom_retrieve_server_list();
-    // If API keys are invalid, a XML-RPC error code is returned.
-    if (!is_array($servers)) {
-      return $servers;
-    }
-
-    // @todo Move into calling code? But calling code doesn't know whether the
-    //   stored list was empty...
-    $messages[] = array(
-      'Refreshed servers: %servers' => array('%servers' => implode(', ', $servers)),
-    );
-
-    // Store the list of servers in the database.
-    variable_set('mollom_servers', $servers);
-  }
-
-  return $servers;
-}
-
-/**
- * Converts a SimpleXmlIterator structure into an associative array.
- */
-function _mollom_parse_xml($sxi) {
-  $a = array();
-  for ($sxi->rewind(); $sxi->valid(); $sxi->next()) {
-    $key = $sxi->key();
-    // Convert CamelCase to lowercase with underscores.
-    $key = strtolower(preg_replace('@(?<=[a-z])([A-Z])@', '_$1', $key));
-
-    // Recurse into scalar values.
-    if ($sxi->hasChildren()) {
-      $a[$key] = _mollom_parse_xml($sxi->current());
-    }
-    // Use a simple key/value pair for non-scalar values.
-    else {
-      $a[$key] = strval($sxi->current());
-    }
-  }
-  return $a;
 }
 
 /**
@@ -2334,18 +2093,11 @@ function mollom_field_extra_fields() {
 /**
  * Get the HTML markup for a Mollom CAPTCHA.
  *
- * @param $type
- *   The CAPTCHA type to retrieve, e.g. 'image' or 'audio'.
- * @param $data
- *   An optional array of parameters to send to Mollom when requesting the
- *   CAPTCHA.
+ * @param $form_state
+ *   The current state of a form.
  *
  * @return
- *   An array with the following key/value pairs:
- *     - 'data': An array of parameters sent to Mollom when requesting the
- *       CAPTCHA.
- *     - 'response': An array with the response from Mollom.
- *     - 'markup': The markup of the CAPTCHA HTML.
+ *   The markup of the CAPTCHA HTML.
  */
 function mollom_get_captcha(&$form_state) {
   $key = 'captcha_url_' . $form_state['mollom']['captcha_type'];

@@ -576,6 +576,18 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
+   * Stores the local site as Mollom server to re-route all communication to this site.
+   */
+  protected function setTestingServer() {
+    if (variable_get('mollom_protocol', 'xmlrpc') == 'xmlrpc') {
+      variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    }
+    else {
+      variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
+    }
+  }
+
+  /**
    * Retrieve submitted XML-RPC values from testing server implementation.
    *
    * @param $method
@@ -1759,8 +1771,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp(array('mollom_test'));
     // Re-route Mollom communication to this testing site.
-    #variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
+    $this->setTestingServer();
 
     $this->drupalLogin($this->admin_user);
   }
@@ -2694,8 +2705,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     // Enable testing server implementation.
     parent::setUp(array('mollom_test'));
     // Re-route Mollom communication to this testing site.
-    #variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
+    $this->setTestingServer();
   }
 
   /**
