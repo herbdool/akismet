@@ -2601,37 +2601,6 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Ensure a comment can be updated by a moderator.
-   */
-  function testCommentUpdate() {
-    // Enable Mollom CAPTCHA protection for comments.
-    $this->drupalLogin($this->admin_user);
-    $this->setProtection('comment_node_article_form', MOLLOM_MODE_CAPTCHA);
-    $this->drupalLogout();
-
-    // Submit a comment.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $this->node->nid);
-    $session_id = $this->assertSessionIDInForm();
-    $edit = array(
-      'comment_body[und][0][value]' => 'spam',
-      'mollom[captcha]' => 'correct',
-    );
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('Your comment has been posted.'));
-    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
-    $this->assertMollomData('comment', $cid, $session_id);
-
-    // Edit the comment.
-    $this->drupalLogin($this->admin_user);
-    $edit = array(
-      'comment_body[und][0][value]' => 'ham',
-    );
-    $this->drupalPost('comment/' . $cid . '/edit', $edit, t('Save'));
-    $this->assertText(t('Your comment has been posted.'));
-  }
-
-  /**
    * Return the number of comments for a node of the given node ID.  We
    * can't use comment_num_all() here, because that is statically cached
    * and therefore will not work correctly with the SimpleTest browser.
