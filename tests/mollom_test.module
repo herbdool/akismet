@@ -378,10 +378,7 @@ function mollom_test_rest_content($contentId = NULL) {
 function mollom_test_rest_captcha($captchaId = NULL) {
   $data = mollom_test_rest_get_parameters();
   if ($_SERVER['REQUEST_METHOD'] == 'GET') {
-    // @todo List/read content.
-    if (empty($captchaId)) {
-      return FALSE;
-    }
+    // There is no GET /captcha[/{captchaId}].
     return FALSE;
   }
   else {
@@ -394,8 +391,7 @@ function mollom_test_rest_captcha($captchaId = NULL) {
       return array('captcha' => mollom_test_check_captcha($data));
     }
   }
-
-  // POST.
+  // Create a new CAPTCHA resource.
   return array('captcha' => mollom_test_get_captcha($data));
 }
 
@@ -613,8 +609,6 @@ function mollom_test_check_content($data) {
     if (isset($qualityScore)) {
       $response['qualityScore'] = $qualityScore;
     }
-    // @todo No idea how quality is calculated during testing without spam
-    //   results above.
     else {
       $response['qualityScore'] = 0;
     }

@@ -1289,10 +1289,6 @@ function _mollom_testing_mode_warning() {
  */
 function _mollom_fallback() {
   $fallback = variable_get('mollom_fallback', MOLLOM_FALLBACK_BLOCK);
-  // @todo Prevents mollom_admin_settings() from implementing a proper form
-  //   validation. Add !empty($_POST) to this condition + manually invoke from
-  //   mollom_process_form() on GET requests? Or don't call it from mollom()?
-  //   Anything, but just don't mix FAPI logic into XML-RPC logic.
   if ($fallback == MOLLOM_FALLBACK_BLOCK) {
     form_set_error('mollom', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
   }
@@ -1434,8 +1430,6 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   }
 
   // Add a spambot trap. Purposively use 'homepage' as field name.
-  // @todo Use a random field name (from the usual names of 'name', 'email',
-  //   'url', etc.) to make it harder to identify this trap.
   $element['homepage'] = array(
     '#type' => 'textfield',
     // Wrap the entire honeypot form element markup into a hidden container, so
@@ -1790,10 +1784,16 @@ function mollom_form_submit($form, &$form_state) {
 function mollom($class = NULL) {
   $instance = &drupal_static(__FUNCTION__);
   if (!isset($class)) {
-    $class = variable_get('mollom_class', 'MollomDrupal');
+    // @todo Testing mode configuration is not covered by tests.
+    if (variable_get('mollom_testing_mode', 0)) {
+      $class = 'MollomDrupalTest';
+    }
+    else {
+      $class = variable_get('mollom_class', 'MollomDrupal');
+    }
   }
-  // If there is no instance yet or if it is not from the configured class,
-  // create a new one.
+  // If there is no instance yet or if it is not of the desired class, create a
+  // new one.
   if (!isset($instance) || !($instance instanceof $class)) {
     $instance = new $class();
   }

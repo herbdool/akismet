@@ -231,9 +231,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   protected function assertResponseID($type, $id) {
     // Check whether watchdog messages indicate a refresh or redirect.
-    // @todo According to latest internal discussions, session/content/captcha
-    //   IDs are no longer reset and transparently known to all servers. Thus,
-    //   this can be removed?
     foreach ($this->messages as $message) {
       if ($message->message == 'Refreshed servers: %servers' || $message->message == 'Server %server redirected to: %next.') {
         // Reset all IDs.
@@ -309,19 +306,20 @@ class MollomWebTestCase extends DrupalWebTestCase {
       $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
     }
     // Dummy API keys required, or Mollom client class (rightfully) bails out.
-    $mollom->keyPublic = MOLLOM_TEST_PUBLIC_KEY;
-    $mollom->keyPrivate = MOLLOM_TEST_PRIVATE_KEY;
+    $mollom->publicKey = MOLLOM_TEST_PUBLIC_KEY;
+    $mollom->privateKey = MOLLOM_TEST_PRIVATE_KEY;
 
     $result = $mollom->createSite(array(
       'url' => $GLOBALS['base_url'],
+      'email' => variable_get('site_mail', 'mollom-drupal-test@example.com'),
     ));
 
     // Set testing class properties.
     $this->public_key = $result['publicKey'];
     $this->private_key = $result['privateKey'];
     // Set Mollom class properties; the instance may be re-used within the test.
-    $mollom->keyPublic = $this->public_key;
-    $mollom->keyPrivate = $this->private_key;
+    $mollom->publicKey = $this->public_key;
+    $mollom->privateKey = $this->private_key;
   }
 
   /**
@@ -345,10 +343,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Set the module key settings.
     variable_set('mollom_public_key', $this->public_key);
     variable_set('mollom_private_key', $this->private_key);
-
-    // Enable testing mode.
-    // @todo Obsolete?
-    variable_set('mollom_testing_mode', 1);
 
     // Delete any previously set Mollom servers to make sure we are using
     // the default ones.
@@ -999,8 +993,8 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertTrue(!empty($result['servers']) && is_array($result['servers']), 'Server list found.');
 
     $site = $result;
-    $mollom->keyPublic = $site['publicKey'];
-    $mollom->keyPrivate = $site['privateKey'];
+    $mollom->publicKey = $site['publicKey'];
+    $mollom->privateKey = $site['privateKey'];
 
     // Verify that getSite() response equals the createSite() response.
     $result = $mollom->getSite();
@@ -1052,8 +1046,8 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertIdentical($result, TRUE, 'Site was deleted.');
 
     // Verify that the site no longer appears in site list.
-    $mollom->keyPublic = $this->public_key;
-    $mollom->keyPrivate = $this->private_key;
+    $mollom->publicKey = $this->public_key;
+    $mollom->privateKey = $this->private_key;
     // FIXME: Site listing not supported by backend yet.
     /*
     $result = $mollom->getSites();
@@ -1073,15 +1067,15 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertEqual($result, 404, 'Attempt to get deleted site throws 404.');
 
     // Verify that authentication fails.
-    $mollom->keyPublic = $site['publicKey'];
-    $mollom->keyPrivate = $site['privateKey'];
+    $mollom->publicKey = $site['publicKey'];
+    $mollom->privateKey = $site['privateKey'];
     $result = $mollom->getSite();
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
     $this->assertEqual($mollom->lastResponseCode, 404, 'Attempt to authenticate with deleted site keys returns 404.');
 
     // Restore keys for tearDown().
-    $mollom->keyPublic = $this->public_key;
-    $mollom->keyPrivate = $this->private_key;
+    $mollom->publicKey = $this->public_key;
+    $mollom->privateKey = $this->private_key;
   }
 
   /**
@@ -3307,9 +3301,6 @@ class MollomDataCRUDTestCase extends MollomWebTestCase {
 
 /**
  * Tests text analysis functionality.
- *
- * @todo Verify that no button captions appear in the data that is sent for
- *   analyis; i.e., no "Add" string for mollom_test_form.
  */
 class MollomAnalysisTestCase extends MollomWebTestCase {
   protected $profile = 'testing';

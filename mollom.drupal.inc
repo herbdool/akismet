@@ -100,7 +100,8 @@ class MollomDrupal extends Mollom {
       $messages[] = $message;
 
       // Translate log messages for debugging without watchdog.
-      // @todo Temporary?
+      // @todo Move into mollom.unit.inc implementation.
+      /*
       $output = array();
       foreach ($message as $text => $args) {
         foreach ($args as &$arg) {
@@ -112,7 +113,8 @@ class MollomDrupal extends Mollom {
       }
       $this->log[$i]['message'] = implode("\n", $output);
       unset($this->log[$i]['arguments']);
-//      drupal_set_message(implode('<br />', $output), $this->log[$i]['type']);
+      drupal_set_message(implode('<br />', $output), $this->log[$i]['type']);
+      */
     }
     _mollom_watchdog_multiple($messages, $this->lastResponseCode === TRUE ? WATCHDOG_DEBUG : WATCHDOG_ERROR);
 
@@ -194,7 +196,6 @@ class MollomDrupal extends Mollom {
       // Replace HTTP status code with 'code' from response.
       $dhr->code = (int) $dhr->data['code'];
       // If there is no HTTP status message, take over 'message' from response.
-      // @todo Remove this condition when Mollom sends proper error messages.
       if (!isset($dhr->error) && isset($dhr->data['message'])) {
         $dhr->error = $dhr->data['message'];
       }
@@ -270,7 +271,7 @@ class MollomDrupalTest extends MollomDrupal {
   /**
    * Overrides Mollom::$serversInit.
    */
-  public $serversInit = array('http://megatron.mollom.com');
+  public $serversInit = array('http://rest.mollom.com');
 
   /**
    * Overrides Mollom::refreshServers().
@@ -320,66 +321,6 @@ class MollomDrupalTestLocal extends MollomDrupal {
     parent::__construct();
     // Replace initial server list with local fake server.
     $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
-  }
-}
-
-/**
- * Drupal Mollom client implementation talking XML-RPC.
- *
- * @todo Incomplete.
- */
-class MollomDrupalXMLRPC extends MollomDrupal {
-  /**
-   * Overrides Mollom::API_VERSION for XML-RPC requests.
-   */
-  const API_VERSION = '1.0';
-
-  /**
-   * Overrides Mollom::serversInit for XML-RPC requests.
-   */
-  public $serversInit = array('http://xmlrpc1.mollom.com', 'http://xmlrpc2.mollom.com', 'http://xmlrpc3.mollom.com');
-
-  function request1($server, $method, array $data) {
-    if ($method == 'getCaptcha') {
-      $method = ($data['type'] == 'image' ? 'getImageCaptcha' : 'getAudioCaptcha');
-      unset($data['type']);
-    }
-
-    $server .= '/' . self::API_VERSION;
-    $method = 'mollom.' . $method;
-    $result = xmlrpc($server, array(
-      $method => array($data),
-    ));
-    if ($error = xmlrpc_error()) {
-      $this->lastResponseCode = $error->code;
-      $this->log[] = array(
-        'type' => 'error',
-        'message' => 'Error @code: @method: %message',
-        'arguments' => array(
-          '@code' => $error->code,
-          '@method' => $server . '/' . $method,
-          '%message' => $error->message,
-        ),
-        'data' => $data,
-        'response' => $result,
-      );
-    }
-    else {
-      $this->lastResponseCode = TRUE;
-      $this->log[] = array(
-        'type' => 'debug',
-        'message' => '@method',
-        'arguments' => array(
-          '@method' => $server . '/' . $method,
-        ),
-        'data' => $data,
-        'response' => $result,
-      );
-      return $result;
-    }
-  }
-
-  protected function request($method, $server, $path, array $data, array $expected = array()) {
   }
 }
 

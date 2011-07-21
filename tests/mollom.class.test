@@ -193,7 +193,7 @@ EOF;
   <code>0</code>
   <message></message>
   <site>
-    <siteId>321</siteId>
+    <publicKey>321</publicKey>
     <servers>
       <server>http://foo</server>
       <server>http://bar</server>
@@ -205,7 +205,7 @@ EOF;
       'code' => 0,
       'message' => '',
       'site' => array(
-        'siteId' => 321,
+        'publicKey' => 321,
         'servers' => array(
           'http://foo',
           'http://bar',
