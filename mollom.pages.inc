@@ -23,7 +23,13 @@
  * @todo Add error handling.
  */
 function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
-  $captcha = mollom_get_captcha($type, array('session_id' => $mollom_session_id));
+  $dummy_state['mollom'] = array(
+    'captcha_type' => $type,
+    'response' => array(
+      'session_id' => $mollom_session_id,
+    ),
+  );
+  $captcha = mollom_get_captcha($dummy_state);
 
   // Update cached session id in the cached $form_state.
   // We rely on native form caching of Form API to store our Mollom session
@@ -36,19 +42,20 @@ function mollom_captcha_js($type, $form_build_id, $mollom_session_id) {
   // id. Therefore, we need to update the session id in the cached $form_state.
   // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
   //   functionality.
-  if (!empty($captcha['response']['session_id'])) {
+  if (!empty($dummy_state['mollom']['response']['session_id'])) {
     if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
       $form_state = $cache->data;
-      $form_state['mollom']['response']['session_id'] = $captcha['response']['session_id'];
+      $form_state['mollom']['response']['session_id'] = $dummy_state['mollom']['response']['session_id'];
+      // @todo Double-check $cid.
       cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
       // After successfully updating the cache, replace the original session id.
-      $mollom_session_id = $captcha['response']['session_id'];
+      $mollom_session_id = $form_state['mollom']['response']['session_id'];
     }
   }
 
   // Return new content and new session_id via JSON.
   $data = array(
-    'content' => $captcha['markup'],
+    'content' => $captcha,
     'session_id' => $mollom_session_id,
   );
   drupal_json_output($data);

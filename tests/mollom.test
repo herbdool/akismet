@@ -590,6 +590,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     drupal_load('module', 'mollom_test');
     $method_function_map = mollom_test_xmlrpc();
     $function = $method_function_map[$method];
+    $function = strtr($function, array('xmlrpc_' => ''));
 
     // Retrieve last recorded values.
     $storage = variable_get($function, array());
@@ -614,6 +615,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     drupal_load('module', 'mollom_test');
     $method_function_map = mollom_test_xmlrpc();
     $function = $method_function_map[$method];
+    $function = strtr($function, array('xmlrpc_' => ''));
 
     // Delete the variable.
     variable_del($function);
@@ -986,6 +988,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $data['session_id'] = $this->assertSessionID($result['session_id']);
 
     $captcha_data = array(
+      'type' => 'image',
       'session_id' => $data['session_id'],
       'author_ip' => $data['author_ip'],
     );
@@ -1016,6 +1019,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
   function testGetImageCaptcha() {
     // Ensure we get no SSL URL by default.
     $data = array(
+      'type' => 'image',
       'author_ip' => ip_address(),
     );
     $result = mollom('mollom.getImageCaptcha', $data);
@@ -1024,6 +1028,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
 
     // Ensure we get a SSL URL when passing the 'ssl' parameter.
     $data = array(
+      'type' => 'image',
       'author_ip' => ip_address(),
       'ssl' => TRUE,
     );
@@ -1041,6 +1046,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     // parameters would trigger a XML-RPC error.
     $uid = rand();
     $data = array(
+      'type' => 'image',
       'author_ip' => ip_address(),
       'author_id' => $uid,
     );
@@ -1274,7 +1280,8 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     variable_set('mollom_servers', array(
       'http://fake-host-1',
       'http://fake-host-2',
-      $GLOBALS['base_url'] . '/xmlrpc.php?version=',
+      #$GLOBALS['base_url'] . '/xmlrpc.php?version=',
+      $GLOBALS['base_url'] . '/mollom-test/rest',
       'http://xmlrpc1.mollom.com', // The real server.
       'http://fake-host-3',
     ));
@@ -1361,9 +1368,12 @@ class MollomLanguageDetectionTestCase extends MollomWebTestCase {
     );
 
     foreach ($strings as $language => $text) {
-      $result = mollom('mollom.detectLanguage', array('text' => $text));
-      $this->assertEqual($result[0]['language'], $language, t('A language code was specified and they match.'));
-      $this->assertTrue($result[0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));
+      $result = mollom('mollom.checkContent', array(
+        'checks' => 'language',
+        'post_body' => $text,
+      ));
+      $this->assertEqual($result['language'][0]['language'], $language, t('A language code was specified and they match.'));
+      $this->assertTrue($result['language'][0]['confidence'] > 0, t('A confidence value was specified and it is greater than 0.'));
     }
   }
 }
@@ -1400,13 +1410,22 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $blacklist = mollom('mollom.listBlacklistURL');
     foreach ($blacklist as $entry) {
       if (REQUEST_TIME - strtotime($entry['created']) > 86400) {
-        mollom('mollom.removeBlacklistURL', array('url' => $entry['url']));
+        mollom('mollom.removeBlacklistURL', array(
+          'text' => $entry['text'],
+          'context' => $entry['context'],
+          'reason' => $entry['reason'],
+        ));
       }
     }
 
     // Blacklist a URL.
     $domain = $this->randomName() . '.com';
-    $result = mollom('mollom.addBlacklistURL', array('url' => 'http://' . $domain));
+    $result = mollom('mollom.addBlacklistURL', array(
+      'text' => $domain,
+      'context' => 'everything',
+      'reason' => 'spam',
+      'match' => 'contains',
+    ));
     $this->assertTrue($result, t('The URL was blacklisted.'));
 
     // Check whether posts containing the blacklisted URL are properly blocked.
@@ -1438,7 +1457,11 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->assertEqual($result['spam'], MOLLOM_ANALYSIS_SPAM, t('Plain domain name with www-prefix was blocked.'));
     */
 
-    $result = mollom('mollom.removeBlacklistURL', array('url' => 'http://' . $domain));
+    $result = mollom('mollom.removeBlacklistURL', array(
+      'text' => $domain,
+      'context' => 'everything',
+      'reason' => 'spam',
+    ));
     $this->assertTrue($result, t('The blacklisted URL was removed.'));
   }
 
@@ -1736,7 +1759,8 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp(array('mollom_test'));
     // Re-route Mollom communication to this testing site.
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    #variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
 
     $this->drupalLogin($this->admin_user);
   }
@@ -2387,6 +2411,37 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   }
 
   /**
+   * Ensure a comment can be updated by a moderator.
+   */
+  function testCommentUpdate() {
+    // Enable Mollom CAPTCHA protection for comments.
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('comment_node_article_form', MOLLOM_MODE_CAPTCHA);
+    $this->drupalLogout();
+
+    // Submit a comment.
+    $this->drupalLogin($this->web_user);
+    $this->drupalGet('comment/reply/' . $this->node->nid);
+    $session_id = $this->assertSessionIDInForm();
+    $edit = array(
+      'comment_body[und][0][value]' => 'spam',
+      'mollom[captcha]' => 'correct',
+    );
+    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->assertText(t('Your comment has been posted.'));
+    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
+    $this->assertMollomData('comment', $cid, $session_id);
+
+    // Edit the comment.
+    $this->drupalLogin($this->admin_user);
+    $edit = array(
+      'comment_body[und][0][value]' => 'ham',
+    );
+    $this->drupalPost('comment/' . $cid . '/edit', $edit, t('Save'));
+    $this->assertText(t('Your comment has been posted.'));
+  }
+
+  /**
    * Return the number of comments for a node of the given node ID.  We
    * can't use comment_num_all() here, because that is statically cached
    * and therefore will not work correctly with the SimpleTest browser.
@@ -2639,7 +2694,8 @@ class MollomDataTestCase extends MollomWebTestCase {
     // Enable testing server implementation.
     parent::setUp(array('mollom_test'));
     // Re-route Mollom communication to this testing site.
-    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    #variable_set('mollom_servers', array($GLOBALS['base_url'] . '/xmlrpc.php?version='));
+    variable_set('mollom_servers', array($GLOBALS['base_url'] . '/mollom-test/rest'));
   }
 
   /**

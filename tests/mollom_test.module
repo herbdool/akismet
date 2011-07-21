@@ -6,34 +6,260 @@
  */
 
 /**
+ * @defgroup mollom_test_xmlrpc Mollom XML-RPC fake server functions
+ * @{
+ */
+
+/**
  * Implements hook_xmlrpc().
  */
 function mollom_test_xmlrpc() {
   return array(
     // $data contains a variable amount of properties, so we cannot specify a
     // signature.
-    'mollom.getServerList' => 'mollom_test_get_server_list',
-    'mollom.verifyKey' => 'mollom_test_verify_key',
-    'mollom.checkContent' => 'mollom_test_check_content',
-    'mollom.getImageCaptcha' => 'mollom_test_get_captcha',
-    'mollom.checkCaptcha' => 'mollom_test_check_captcha',
-    'mollom.sendFeedback' => 'mollom_test_send_feedback',
+    'mollom.getServerList' => 'mollom_test_xmlrpc_get_server_list',
+    'mollom.verifyKey' => 'mollom_test_xmlrpc_verify_key',
+    'mollom.checkContent' => 'mollom_test_xmlrpc_check_content',
+    'mollom.getImageCaptcha' => 'mollom_test_xmlrpc_get_captcha',
+    'mollom.checkCaptcha' => 'mollom_test_xmlrpc_check_captcha',
+    'mollom.sendFeedback' => 'mollom_test_xmlrpc_send_feedback',
  );
 }
 
 /**
  * XML-RPC callback for mollom.getServerList to retrieve new server list.
  */
+function mollom_test_xmlrpc_get_server_list($data) {
+  $servers = mollom_test_get_server_list($data);
+  foreach ($servers as $key => $url) {
+    $servers[$key] .= '/xmlrpc.php?version=';
+  }
+  return $servers;
+}
+
+/**
+ * XML-RPC callback for mollom.verifyKey to validate API keys.
+ */
+function mollom_test_xmlrpc_verify_key($data) {
+  $valid = mollom_test_verify_key($data);
+  if ($valid) {
+    return TRUE;
+  }
+  xmlrpc_error(MOLLOM_ERROR);
+}
+
+/**
+ * XML-RPC callback for mollom.checkContent to perform textual analysis.
+ */
+function mollom_test_xmlrpc_check_content($data) {
+  return mollom_test_check_content($data);
+}
+
+/**
+ * XML-RPC callback for mollom.getImageCaptcha to fetch a CATPCHA image.
+ */
+function mollom_test_xmlrpc_get_captcha($data) {
+  return mollom_test_get_captcha($data);
+}
+
+/**
+ * XML-RPC callback for mollom.checkCaptcha to validate a CAPTCHA response.
+ */
+function mollom_test_xmlrpc_check_captcha($data) {
+  if (isset($data['captcha_result'])) {
+    $data['solution'] = $data['captcha_result'];
+  }
+
+  return mollom_test_check_captcha($data);
+}
+
+/**
+ * XML-RPC callback for mollom.sendFeedback to send feedback for a moderated post.
+ */
+function mollom_test_xmlrpc_send_feedback($data) {
+  $result = mollom_test_send_feedback($data);
+  if ($result) {
+    return TRUE;
+  }
+  xmlrpc_error(MOLLOM_ERROR);
+}
+
+/**
+ * @} End of "defgroup mollom_test_xmlrpc".
+ */
+
+/**
+ * @defgroup mollom_test_rest Mollom REST fake server functions
+ * @{
+ */
+
+/**
+ * Implements hook_menu() for REST API endpoints.
+ */
+function mollom_test_rest() {
+  $path = 'mollom-test/rest';
+  $args = 2;
+  $base = array(
+    'access callback' => TRUE,
+    'type' => MENU_CALLBACK,
+    'delivery callback' => 'mollom_test_rest_deliver',
+  );
+  $items[$path . '/site/%/serverlist'] = $base + array(
+    'page callback' => 'mollom_test_rest_get_server_list',
+    'page arguments' => array($args + 1),
+  );
+  $items[$path . '/site/%/verify'] = $base + array(
+    'page callback' => 'mollom_test_rest_verify_key',
+    'page arguments' => array($args + 1),
+  );
+  $items[$path . '/content'] = $base + array(
+    'page callback' => 'mollom_test_rest_check_content',
+  );
+  $items[$path . '/captcha/%'] = $base + array(
+    'page callback' => 'mollom_test_rest_get_captcha',
+    'page arguments' => array($args + 1),
+  );
+  $items[$path . '/captcha/%/verify'] = $base + array(
+    'page callback' => 'mollom_test_rest_check_captcha',
+    'page arguments' => array($args + 1),
+  );
+  $items[$path . '/content/%/feedback'] = $base + array(
+    'page callback' => 'mollom_test_rest_send_feedback',
+    'page arguments' => array($args + 1),
+  );
+  // @todo Blacklist endpoints.
+
+  return $items;
+}
+
+/**
+ * Delivery callback for REST API endpoints.
+ */
+function mollom_test_rest_deliver($page_callback_result) {
+  #drupal_add_http_header('Content-Type', 'application/xml; charset=utf-8');
+  drupal_add_http_header('Content-Type', 'application/xml');
+
+  $xml = new DOMDocument('1.0', 'utf-8');
+  $element = $xml->createElement('mollomResponse');
+  mollom_test_rest_add_xml($xml, $element, $page_callback_result);
+  $xml->appendChild($element);
+
+  print $xml->saveXML();
+
+  // Perform end-of-request tasks.
+  drupal_page_footer();
+}
+
+function mollom_test_rest_add_xml(DOMDocument $doc, DOMNode $parent, $data, $key = NULL) {
+  if (is_scalar($data)) {
+    // Mimic official REST API.
+    if (is_bool($data)) {
+      $data = ($data ? 'true' : 'false');
+    }
+
+    $element = $doc->createTextNode($data);
+    $parent->appendChild($element);
+  }
+  else {
+    foreach ($data as $property => $value) {
+      $key = (is_numeric($property) ? 'item' : $property);
+      $element = $doc->createElement($key);
+      $parent->appendChild($element);
+      mollom_test_rest_add_xml($doc, $element, $value, $key);
+    }
+  }
+}
+
+/**
+ * REST callback for mollom.getServerList to retrieve new server list.
+ */
+function mollom_test_rest_get_server_list($public_key) {
+  $data = $_GET;
+  $data['public_key'] = $public_key;
+
+  $servers = mollom_test_get_server_list($data);
+  foreach ($servers as $key => $url) {
+    $servers[$key] .= '/mollom-test/rest';
+  }
+  return $servers;
+}
+
+/**
+ * REST callback for mollom.verifyKey to validate API keys.
+ */
+function mollom_test_rest_verify_key($public_key) {
+  $data = $_GET;
+  $data['public_key'] = $public_key;
+
+  $valid = mollom_test_verify_key($data);
+  return array('code' => (int) !$valid);
+  if ($valid) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * REST callback for mollom.checkContent to perform textual analysis.
+ */
+function mollom_test_rest_check_content() {
+  $data = $_POST;
+
+  return mollom_test_check_content($data);
+}
+
+/**
+ * REST callback for mollom.getImageCaptcha to fetch a CATPCHA image.
+ */
+function mollom_test_rest_get_captcha($type) {
+  $data = $_POST;
+  $data['type'] = $type;
+
+  return mollom_test_get_captcha($data);
+}
+
+/**
+ * REST callback for mollom.checkCaptcha to validate a CAPTCHA response.
+ */
+function mollom_test_rest_check_captcha($session_id) {
+  $data = $_POST;
+  $data['session_id'] = $session_id;
+
+  $result = mollom_test_check_captcha($data);
+  return array('result' => $result);
+}
+
+/**
+ * REST callback for mollom.sendFeedback to send feedback for a moderated post.
+ */
+function mollom_test_rest_send_feedback($session_id) {
+  $data = $_POST;
+  $data['session_id'] = $session_id;
+
+  $result = mollom_test_send_feedback($data);
+  if ($result) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * @} End of "defgroup mollom_test_rest".
+ */
+
+/**
+ * API callback for mollom.getServerList to retrieve new server list.
+ */
 function mollom_test_get_server_list($data) {
   $storage = variable_get(__FUNCTION__, array());
   $storage[] = $data;
   variable_set(__FUNCTION__, $storage);
 
-  return array($GLOBALS['base_url'] . '/xmlrpc.php?version=');
+  return array($GLOBALS['base_url']);
 }
 
 /**
- * XML-RPC callback for mollom.verifyKey to validate API keys.
+ * API callback for mollom.verifyKey to validate API keys.
  */
 function mollom_test_verify_key($data) {
   $storage = variable_get(__FUNCTION__, array());
@@ -44,14 +270,11 @@ function mollom_test_verify_key($data) {
   module_load_include('php', 'simpletest', 'drupal_web_test_case');
   module_load_include('test', 'mollom', 'tests/mollom');
 
-  if ($data['public_key'] === MOLLOM_TEST_PUBLIC_KEY) {
-    return TRUE;
-  }
-  xmlrpc_error(MOLLOM_ERROR);
+  return $data['public_key'] === MOLLOM_TEST_PUBLIC_KEY;
 }
 
 /**
- * XML-RPC callback for mollom.checkContent to perform textual analysis.
+ * API callback for mollom.checkContent to perform textual analysis.
  *
  * @todo Add support for 'redirect' and 'refresh' values.
  */
@@ -143,7 +366,7 @@ function mollom_test_check_content($data) {
 }
 
 /**
- * XML-RPC callback for mollom.getImageCaptcha to fetch a CATPCHA image.
+ * API callback for mollom.getImageCaptcha to fetch a CATPCHA image.
  */
 function mollom_test_get_captcha($data) {
   $storage = variable_get(__FUNCTION__, array());
@@ -165,7 +388,7 @@ function mollom_test_get_captcha($data) {
 }
 
 /**
- * XML-RPC callback for mollom.checkCaptcha to validate a CAPTCHA response.
+ * API callback for mollom.checkCaptcha to validate a CAPTCHA response.
  *
  * @todo Add support for 'redirect' and 'refresh' values.
  */
@@ -174,10 +397,10 @@ function mollom_test_check_captcha($data) {
   $storage[] = $data;
   variable_set(__FUNCTION__, $storage);
 
-  if ($data['captcha_result'] == 'correct') {
+  if ($data['solution'] == 'correct') {
     $result = TRUE;
   }
-  if ($data['captcha_result'] == 'incorrect') {
+  if ($data['solution'] == 'incorrect') {
     $result = FALSE;
   }
   $captcha_sessions = variable_get('mollom_test_check_captcha_sessions', array());
@@ -188,23 +411,22 @@ function mollom_test_check_captcha($data) {
 }
 
 /**
- * XML-RPC callback for mollom.sendFeedback to send feedback for a moderated post.
+ * API callback for mollom.sendFeedback to send feedback for a moderated post.
  */
 function mollom_test_send_feedback($data) {
   $storage = variable_get(__FUNCTION__, array());
   $storage[] = $data;
   variable_set(__FUNCTION__, $storage);
 
-  if (in_array($data['feedback'], array('spam', 'profanity', 'low-quality', 'unwanted', 'ham'))) {
-    return TRUE;
-  }
-  xmlrpc_error(MOLLOM_ERROR);
+  return in_array($data['feedback'], array('spam', 'profanity', 'low-quality', 'unwanted', 'ham'));
 }
 
 /**
  * Implements hook_menu().
  */
 function mollom_test_menu() {
+  $items = mollom_test_rest();
+
   $items['mollom-test/form'] = array(
     'title' => 'Mollom test form',
     'page callback' => 'drupal_get_form',
