@@ -113,7 +113,7 @@ class MollomDrupal extends Mollom {
       }
       $this->log[$i]['message'] = implode("\n", $output);
       unset($this->log[$i]['arguments']);
-      drupal_set_message(implode('<br />', $output), $this->log[$i]['type']);
+      drupal_set_message(implode('<br />', $output), $this->log[$i]['severity']);
       */
     }
     _mollom_watchdog_multiple($messages, $this->lastResponseCode === TRUE ? WATCHDOG_DEBUG : WATCHDOG_ERROR);
@@ -247,7 +247,7 @@ class MollomDrupal extends Mollom {
     else {
       $this->lastResponseCode = TRUE;
       $this->log[] = array(
-        'type' => 'debug',
+        'severity' => 'debug',
         'message' => '@code @method @uri',
         'arguments' => array(
           '@code' => $dhr->code,

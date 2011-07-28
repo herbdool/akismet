@@ -373,7 +373,7 @@ function mollom_test_rest_content($contentId = NULL) {
 }
 
 /**
- * REST callback for mollom.getCaptcha to fetch a CAPTCHA.
+ * REST callback to for CAPTCHAs.
  */
 function mollom_test_rest_captcha($captchaId = NULL) {
   $data = mollom_test_rest_get_parameters();

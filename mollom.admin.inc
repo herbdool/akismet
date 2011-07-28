@@ -450,7 +450,6 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
       if ($entry['reason'] != $type) {
         continue;
       }
-      $id = $entry['id'];
       // #class property is internally used by
       // theme_mollom_admin_blacklist_form().
       $row = array(
@@ -475,7 +474,7 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
           'query' => drupal_get_destination(),
         ),
       );
-      $form['blacklist'][$id] = $row;
+      $form['blacklist'][$entry['id']] = $row;
     }
   }
 
@@ -536,7 +535,7 @@ function mollom_admin_blacklist_form_submit($form, &$form_state) {
     'match' => $form_state['values']['entry']['match'],
     'reason' => $form_state['values']['entry']['reason'],
   );
-  $result = mollom()->createBlacklistEntry($data);
+  $result = mollom()->saveBlacklistEntry($data);
 
   $args = array(
     '@value' => $data['value'],

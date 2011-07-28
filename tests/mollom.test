@@ -1192,7 +1192,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
       'contentId' => $contentId,
       'authorIp' => $data['authorIp'],
     );
-    $result = $mollom->getCaptcha($captcha_data);
+    $result = $mollom->createCaptcha($captcha_data);
     $this->assertMollomWatchdogMessages();
     $data['captchaId'] = $captchaId = $this->assertResponseID('captchaId', $result['id']);
 
@@ -1261,13 +1261,13 @@ class MollomResponseTestCase extends MollomWebTestCase {
       'type' => 'image',
       'authorIp' => ip_address(),
     );
-    $result = $mollom->getCaptcha($data);
+    $result = $mollom->createCaptcha($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(strpos($result['url'], 'http://') === 0, t('CAPTCHA URL uses HTTP protocol.'));
 
     // Ensure we get a SSL URL when passing the 'ssl' parameter.
     $data['ssl'] = TRUE;
-    $result = $mollom->getCaptcha($data);
+    $result = $mollom->createCaptcha($data);
     $this->assertMollomWatchdogMessages();
     $this->assertTrue(strpos($result['url'], 'https://') === 0, t('CAPTCHA URL uses HTTPS protocol.'));
   }
@@ -1286,7 +1286,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
       'authorIp' => ip_address(),
       'authorId' => $uid,
     );
-    $result = $mollom->getCaptcha($data);
+    $result = $mollom->createCaptcha($data);
     $this->assertMollomWatchdogMessages();
     $data['id'] = $this->assertResponseID('captchaId', $result['id']);
 
@@ -1616,7 +1616,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
 
     // Blacklist a URL.
     $domain = drupal_strtolower($this->randomName()) . '.com';
-    $entry = $mollom->createBlacklistEntry(array(
+    $entry = $mollom->saveBlacklistEntry(array(
       'value' => $domain,
       'context' => 'allFields',
       'reason' => 'spam',
@@ -1661,7 +1661,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     // Blacklist a word.
     // @todo As of now, only non-numeric, lower-case text seems to be supported.
     $term = drupal_strtolower(preg_replace('/[^a-zA-Z]/', '', $this->randomName()));
-    $entry = $mollom->createBlacklistEntry(array(
+    $entry = $mollom->saveBlacklistEntry(array(
       'value' => $term,
       'context' => 'everything',
       'reason' => 'spam',
@@ -1696,7 +1696,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $this->assertEqual($result['spamClassification'], 'spam', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
-    $entry = $mollom->updateBlacklistEntry(array(
+    $entry = $mollom->saveBlacklistEntry(array(
       'id' => $entry['id'],
       'value' => $term,
       'context' => 'everything',

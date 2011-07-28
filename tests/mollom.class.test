@@ -23,7 +23,7 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
   function setUp() {
     parent::setUp();
     // DrupalUnitTestCase does not autoload classes for whatever reason.
-    module_load_include('inc', 'mollom');
+    module_load_include('inc', 'mollom', 'includes/mollom.class');
   }
 
   /**
