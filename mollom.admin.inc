@@ -433,9 +433,12 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
 
   // Translate internal reason values for rendering and select list in form.
   $contexts = array(
-    'everything' => t('All fields'),
+    'allFields' => t('All fields'),
     'links' => t('Links'),
-    'author' => t('Author name'),
+    'authorName' => t('Author name'),
+    'authorMail' => t('Author e-mail'),
+    'authorIp' => t('IP address'),
+    'authorId' => t('User ID'),
   );
   $matches = array(
     'contains' => t('contains'),
@@ -478,14 +481,11 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
     }
   }
 
-  // The value NULL in the following select lists will intentionally trigger a
-  // form validation error, since the elements are #required.
-  // @see http://drupal.org/node/140783
   $form['entry']['context'] = array(
     '#type' => 'select',
     '#title' => t('Context'),
     '#title_display' => 'invisible',
-    '#options' => array(NULL => t('- Any -')) + $contexts,
+    '#options' => $contexts,
     '#required' => TRUE,
     '#id' => 'mollom-blacklist-filter-context',
   );
@@ -493,7 +493,7 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
     '#type' => 'select',
     '#title' => t('Match'),
     '#title_display' => 'invisible',
-    '#options' => array(NULL => t('- Any -')) + $matches,
+    '#options' => $matches,
     '#required' => TRUE,
     '#id' => 'mollom-blacklist-filter-match',
   );

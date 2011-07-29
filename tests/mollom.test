@@ -1245,7 +1245,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
       // Parse result values.
       $actual = array();
       foreach ($result['languages'] as $language) {
-        $actual[$language['languageCode']] = $language['confidence'];
+        $actual[$language['languageCode']] = $language['languageScore'];
       }
       $this->assertSame($string, $actual, $expected);
     }

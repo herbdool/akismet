@@ -359,7 +359,7 @@ function mollom_test_rest_content($contentId = NULL) {
     // correct.
     if (isset($data['moderated'])) {
       $valid = is_string($data['moderated']);
-      $valid = $valid && in_array($data['moderated'], array('spam', 'profanity', 'low-quality', 'unwanted', 'approve', 'escalate', 'delete', 'ignore'));
+      $valid = $valid && in_array($data['moderated'], array('spam', 'profanity', 'quality', 'unwanted', 'approve', 'escalate', 'delete', 'ignore'));
       return $valid;
     }
     // Content ID in request parameters must match the one in path.
@@ -635,21 +635,21 @@ function mollom_test_check_content($data) {
     if (empty($matches[1])) {
       $languages[] = array(
         'languageCode' => 'zxx',
-        'confidence' => 1.0,
+        'languageScore' => 1.0,
       );
     }
     elseif (count($matches[1]) > 3) {
       $languages[] = array(
         'languageCode' => LANGUAGE_NONE,
-        'confidence' => 1.0,
+        'languageScore' => 1.0,
       );
     }
     else {
-      $confidence = 1 / count($matches[1]);
+      $languageScore = 1 / count($matches[1]);
       foreach ($matches[1] as $language) {
         $languages[] = array(
           'languageCode' => $language,
-          'confidence' => $confidence,
+          'languageScore' => $languageScore,
         );
       }
     }

@@ -164,12 +164,12 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
     <contentId>321</contentId>
     <languages>
       <language>
-        <code>en</code>
-        <confidence>1.0</confidence>
+        <languageCode>en</languageCode>
+        <languageScore>1.0</languageScore>
       </language>
       <language>
-        <code>de</code>
-        <confidence>0.5</confidence>
+        <languageCode>de</languageCode>
+        <languageScore>0.5</languageScore>
       </language>
     </languages>
   </content>
@@ -181,8 +181,8 @@ EOF;
       'content' => array(
         'contentId' => 321,
         'languages' => array(
-          array('code' => 'en', 'confidence' => 1.0),
-          array('code' => 'de', 'confidence' => 0.5),
+          array('languageCode' => 'en', 'languageScore' => 1.0),
+          array('languageCode' => 'de', 'languageScore' => 0.5),
         ),
       ),
     );

@@ -536,7 +536,7 @@ function mollom_data_delete_form_alter(&$form, &$form_state) {
       0 => t('Do not report'),
       'spam' => t('Spam, unsolicited advertising'),
       'profanity' => t('Obscene, violent, profane'),
-      'low-quality' => t('Low-quality'),
+      'quality' => t('Low-quality'),
       'unwanted' => t('Unwanted, taunting, off-topic'),
     ),
     '#default_value' => 0,
@@ -1892,9 +1892,10 @@ function _mollom_watchdog_multiple($messages, $severity) {
  *   - captchaId: The CAPTCHA ID to send feedback for.
  * @param $reason
  *   The feedback to send, one of 'spam', 'profanity', 'quality', 'unwanted',
- *   'approve', 'delete'.
+ *   'approve'.
  */
 function _mollom_send_feedback($data, $reason = 'spam') {
+  $params = array();
   if (!empty($data->captchaId)) {
     $params['captchaId'] = $data->captchaId;
     $resource = 'CAPTCHA';
@@ -1910,15 +1911,18 @@ function _mollom_send_feedback($data, $reason = 'spam') {
   if (!isset($id)) {
     return FALSE;
   }
-  $result = mollom()->sendFeedback($params + array(
+  $params += array(
     'reason' => $reason,
-  ));
+  );
+  $result = mollom()->sendFeedback($params);
   _mollom_watchdog(array(
     'Reported %feedback for @resource %id.' => array(
       '%feedback' => $reason,
       '@resource' => $resource,
       '%id' => $id,
     ),
+    'Data:<pre>@data</pre>' => array('@data' => $params),
+    'Result:<pre>@result</pre>' => array('@result' => $result),
   ));
   return $result;
 }
