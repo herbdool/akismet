@@ -95,7 +95,9 @@ class MollomDrupal extends Mollom {
         unset($entry['request'], $entry['data']);
       }
       if (isset($entry['response'])) {
-        $message['Response:<pre>@response</pre>'] = array('@response' => $entry['response']);
+        $message['Response:<pre>@response</pre>'] = array(
+          '@response' => $entry['response'],
+        );
       }
       $messages[] = $message;
 
@@ -137,130 +139,39 @@ class MollomDrupal extends Mollom {
   /**
    * Implements Mollom::request().
    */
-  protected function request($method, $server, $path, array $data, array $expected = array()) {
-    // Build the REST request path.
-    $rest_path = $path;
-    $query = NULL;
-    if ($data) {
-      $query = $this->httpBuildQuery($data);
-      if (in_array($method, array('GET', 'HEAD'))) {
-        $rest_path .= '?' . $query;
+  protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
+    $request = array(
+      'method' => $method,
+      'headers' => $headers,
+    );
+    if (isset($query)) {
+      if ($method == 'GET') {
+        $path .= '?' . $query;
+      }
+      elseif ($method == 'POST') {
+        $request['data'] = $query;
       }
     }
 
-    $request_data = array(
-      'method' => $method,
-      'headers' => array(
-        'Accept' => 'application/xml, application/json;q=0.8, */*;q=0.5',
-      ),
-    );
-    if (in_array($method, array('POST', 'PUT'))) {
-      $request_data['data'] = $query;
-      $request_data['headers']['Content-Type'] = 'application/x-www-form-urlencoded';
-    }
-
-    $dhr = drupal_http_request($server . '/' . $rest_path, $request_data);
+    $dhr = drupal_http_request($server . '/' . $path, $request);
     // @todo Core: Ensure that $dhr->code is an integer.
     $dhr->code = (int) $dhr->code;
-    // @todo Core: Any other code than 200 as interpreted as error.
-    $error = (isset($dhr->error) && ($dhr->code < 200 || $dhr->code >= 300));
+    // @todo Core: Any other code than 200 is interpreted as error.
+    if ($dhr->code >= 200 && $dhr->code < 300) {
+      unset($dhr->error);
+    }
     // @todo Core: data property is not assigned if there is no response body.
     if (!isset($dhr->data)) {
       $dhr->data = NULL;
     }
 
-    // Parse the response body into a PHP array.
-    if (isset($dhr->headers['content-type'])) {
-      if (strstr($dhr->headers['content-type'], 'application/json')) {
-        $dhr->data = drupal_json_decode($dhr->data);
-      }
-      elseif (strstr($dhr->headers['content-type'], 'application/xml')) {
-        $dhr->elements = new SimpleXmlIterator($dhr->data);
-        $dhr->data = $this->parseXML($dhr->elements);
-      }
-    }
-
-    // @todo The above is all that may vary between client implementations. All
-    //   of the below logic should live in a separate method that clients don't
-    //   have to re-implement:
-    //     handleResponse($http_code, $http_message, $response)
-    //   Or alternatively, since handleResponse() is required for every request,
-    //   move the above into a new sub-method invoked from request():
-    //     executeRequest($method, $server, $path, array $data)
-    //   and make it return $http_code, $http_message, array $response.
-
-    // If a 'code' exists in the response, it has precedence, regardless of a
-    // possible HTTP error code.
-    if (isset($dhr->data['code']) && is_array($dhr->data) && $dhr->data['code'] != 200) {
-      $error = TRUE;
-      // Replace HTTP status code with 'code' from response.
-      $dhr->code = (int) $dhr->data['code'];
-      // If there is no HTTP status message, take over 'message' from response.
-      if (!isset($dhr->error) && isset($dhr->data['message'])) {
-        $dhr->error = $dhr->data['message'];
-      }
-    }
-
-    // Verify that an expected element exists in the response.
-    // Normally, a response validation like this would likely be done using XML
-    // schemas, so the XML parser would already (in)validate the response.
-    // However, when using the JSON protocol, there is no comparable notion of a
-    // schema. Instead of checking for only one particular element in the
-    // response, the client could also introduce dedicated classes for each
-    // resource, but that feels like over-engineering for the average use-case.
-    $key_exists = TRUE;
-    if (!$error && !empty($expected)) {
-      $key_exists = FALSE;
-      if (is_array($dhr->data)) {
-        $key_exists = $this->arrayKeyExists($dhr->data, $expected);
-      }
-      if (!$key_exists) {
-        $error = TRUE;
-        $dhr->code = self::RESPONSE_ERROR;
-        $dhr->error = 'Unexpected server response.';
-      }
-    }
-
-    if ($error) {
-      $arguments = array(
-        'request' => $method . ' ' . $server . '/' . $path,
-        'data' => $data,
-        'response' => $dhr->data,
-      );
-      if ($dhr->code <= 0) {
-        throw new MollomNetworkException(t('Network error.'), self::NETWORK_ERROR, NULL, $this, $arguments);
-      }
-      if ($dhr->code == self::AUTH_ERROR || $dhr->code == 401) {
-        throw new MollomAuthenticationException(t('Invalid authentication.'), self::AUTH_ERROR, NULL, $this, $arguments);
-      }
-      if ($dhr->code == self::REDIRECT_ERROR || ($dhr->code >= 300 && $dhr->code < 400)) {
-        throw new MollomRedirectException(t('Server redirected to next.'), self::REDIRECT_ERROR, NULL, $this, $arguments);
-      }
-      if ($dhr->code == self::REFRESH_ERROR) {
-        throw new MollomRefreshException(t('Refresh of server list required.'), self::REFRESH_ERROR, NULL, $this, $arguments);
-      }
-      if (!$key_exists || $dhr->code >= 500) {
-        throw new MollomResponseException(t('Unexpected server response.'), self::RESPONSE_ERROR, NULL, $this, $arguments);
-      }
-      throw new MollomException($dhr->error, $dhr->code, NULL, $this, $arguments);
-    }
-    else {
-      $this->lastResponseCode = TRUE;
-      $this->log[] = array(
-        'severity' => 'debug',
-        'message' => '@code @method @uri',
-        'arguments' => array(
-          '@code' => $dhr->code,
-          '@method' => $method,
-          '@uri' => $path,
-        ),
-        'request' => $method . ' ' . $server . '/' . $path,
-        'data' => $data,
-        'response' => $dhr->data,
-      );
-
-      return $dhr->data;
-    }
+    $response = (object) array(
+      'code' => $dhr->code,
+      'message' => isset($dhr->error) ? $dhr->error : NULL,
+      'headers' => isset($dhr->headers) ? $dhr->headers : array(),
+      'body' => $dhr->data,
+    );
+    return $response;
   }
 }
 
