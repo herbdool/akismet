@@ -138,8 +138,12 @@ function mollom_schema() {
         'length' => 16,
         'not null' => FALSE,
       ),
-      // @todo Add Content API result 'reason'.
-      // @todo Add CAPTCHA API results 'solved', 'reason'.
+      'solved' => array(
+        'description' => 'Whether a CAPTCHA has been solved (1) or not (0).',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => FALSE,
+      ),
       'qualityScore' => array(
         'description' => 'Text analysis quality check result.',
         'type' => 'float',
@@ -151,6 +155,13 @@ function mollom_schema() {
         'type' => 'float',
         'size' => 'tiny',
         'not null' => FALSE,
+      ),
+      'reason' => array(
+        'description' => 'A special reason for why a post was blocked.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
       ),
       'languages' => array(
         'description' => 'Text analysis language check result.',
@@ -897,6 +908,8 @@ function mollom_update_7012() {
       'size' => 'tiny',
       'not null' => FALSE,
     ));
+  }
+  if (!db_field_exists('mollom', 'profanityScore')) {
     // Change 'profanity' into 'profanityScore' double.
     db_change_field('mollom', 'profanity', 'profanityScore', array(
       'description' => 'Text analysis profanity check result.',
@@ -904,12 +917,33 @@ function mollom_update_7012() {
       'size' => 'tiny',
       'not null' => FALSE,
     ));
+  }
+  if (!db_field_exists('mollom', 'qualityScore')) {
     // Change 'quality' into 'qualityScore' double.
     db_change_field('mollom', 'quality', 'qualityScore', array(
       'description' => 'Text analysis quality check result.',
       'type' => 'float',
       'size' => 'tiny',
       'not null' => FALSE,
+    ));
+  }
+  if (!db_field_exists('mollom', 'solved')) {
+    // Add 'solved'.
+    db_add_field('mollom', 'solved', array(
+      'description' => 'Whether a CAPTCHA has been solved (1) or not (0).',
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => FALSE,
+    ));
+  }
+  if (!db_field_exists('mollom', 'reason')) {
+    // Add 'reason'.
+    db_add_field('mollom', 'reason', array(
+      'description' => 'A special reason for why a post was blocked.',
+      'type' => 'varchar',
+      'length' => 255,
+      'not null' => TRUE,
+      'default' => '',
     ));
   }
 }

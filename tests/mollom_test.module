@@ -572,6 +572,7 @@ function mollom_test_check_content($data) {
     if ($matches = mollom_test_check_content_blacklist($post, $blacklist, 'spam')) {
       $spam = TRUE;
       $ham = FALSE;
+      $response['reason'] = 'blacklist';
       $response['blacklistSpam'] = $matches;
     }
 

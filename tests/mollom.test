@@ -1754,7 +1754,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $text = $this->randomName();
     $edit = array(
       'entry[value]' => $text,
-      'entry[context]' => 'everything',
+      'entry[context]' => 'allFields',
       'entry[match]' => 'contains',
     );
     $this->drupalPost(NULL, $edit, t('Add'));
@@ -1777,7 +1777,7 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
     $text = $this->randomName();
     $edit = array(
       'entry[value]' => $text,
-      'entry[context]' => 'everything',
+      'entry[context]' => 'allFields',
       'entry[match]' => 'contains',
     );
     $this->drupalPost(NULL, $edit, t('Add'));
