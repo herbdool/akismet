@@ -47,7 +47,7 @@ function mollom_test_schema() {
  */
 function mollom_test_uninstall() {
   db_delete('variable')
-    ->condition('name', db_like('mollom_test_') . '%', 'LIKE')
+    ->condition('name', db_like('mollom_test.') . '%', 'LIKE')
     ->execute();
 }
 

@@ -105,8 +105,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $modules = (isset($modules[0]) ? $modules[0] : array());
 
     // Automatically enable local testing server implementation.
-    if (strstr($this->mollomClass, 'Local') && !in_array('mollom_test', $modules)) {
-      $modules[] = 'mollom_test';
+    if (strstr($this->mollomClass, 'Local') && !in_array('mollom_test_server', $modules)) {
+      $modules[] = 'mollom_test_server';
     }
 
     // If not explicitly disabled by a test, setup with Mollom.
@@ -144,7 +144,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
 
   function tearDown() {
     // Delete the testing site.
-    $this->deleteKeys();
+    // Not (always) possible when working with local testing server, since
+    // getServerRecord() removes server records upon retrieval, so the site
+    // record may no longer exist.
+    if (!strstr($this->mollomClass, 'Local')) {
+      $this->deleteKeys();
+    }
     // Capture any (remaining) watchdog messages.
     $this->assertMollomWatchdogMessages();
     parent::tearDown();
@@ -668,24 +673,16 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Retrieve submitted XML-RPC values from testing server implementation.
+   * Retrieve sent request parameter values from testing server implementation.
    *
-   * @param $method
-   *   (optional) The XML-RPC method name to retrieve submitted values from.
-   *   Defaults to 'mollom.checkContent'.
+   * @param $resource
+   *   (optional) The resource name to retrieve submitted values from. Defaults
+   *   to 'content'.
    *
    * @see MollomWebTestCase::resetServerRecords()
-   * @see mollom_test_xmlrpc()
-   *
-   * @todo Needs update. May directly use the short name suffixes of testing
-   *   server API functions; i.e., 'content', 'captcha', 'blacklist', etc.
    */
-  protected function getServerRecord($method = 'mollom.checkContent') {
-    // Map the XML-RPC method name to the corresponding function callback name.
-    drupal_load('module', 'mollom_test');
-    $method_function_map = mollom_test_xmlrpc();
-    $function = $method_function_map[$method];
-    $function = strtr($function, array('xmlrpc_' => ''));
+  protected function getServerRecord($resource = 'content') {
+    $function = 'mollom_test_server_' . $resource;
 
     // Retrieve last recorded values.
     $storage = variable_get($function, array());
@@ -698,19 +695,13 @@ class MollomWebTestCase extends DrupalWebTestCase {
   /**
    * Resets recorded XML-RPC values.
    *
-   * @param $method
-   *   (optional) The XML-RPC method name to reset records of. Defaults to
-   *   'mollom.checkContent'.
+   * @param $resource
+   *   (optional) The resource name to reset records of. Defaults to 'content'.
    *
    * @see MollomWebTestCase::getServerRecord()
-   * @see mollom_test_xmlrpc()
    */
-  protected function resetServerRecords($method = 'mollom.checkContent') {
-    // Map the XML-RPC method name to the corresponding function callback name.
-    drupal_load('module', 'mollom_test');
-    $method_function_map = mollom_test_xmlrpc();
-    $function = $method_function_map[$method];
-    $function = strtr($function, array('xmlrpc_' => ''));
+  protected function resetServerRecords($resource = 'content') {
+    $function = 'mollom_test_server_' . $resource;
 
     // Delete the variable.
     variable_del($function);
@@ -1951,7 +1942,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   }
 
   function setUp() {
-    parent::setUp();
+    parent::setUp(array('mollom_test'));
 
     $this->drupalLogin($this->admin_user);
   }
@@ -2221,7 +2212,7 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     $this->assertCaptchaField();
 
     // Conditionally disable protection and verify again.
-    variable_set('mollom_test_disable_mollom', TRUE);
+    variable_set('mollom_test.disable_mollom', TRUE);
     $this->drupalGet('user/password');
     $this->assertNoCaptchaField();
   }
@@ -2854,6 +2845,10 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
   }
 
+  function setUp() {
+    parent::setUp(array('mollom_test'));
+  }
+
   /**
    * Test mollom_form_get_values().
    */
@@ -3022,7 +3017,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertTrue($comment, t('Comment exists in database.'));
 
     // Verify that submitted data equals post data.
-    $data = $this->getServerRecord('mollom.checkCaptcha');
+    $data = $this->getServerRecord('captcha');
     $this->assertSame('authorId', $data['authorId'], $this->web_user->uid);
 
     // Allow anonymous users to post comments without approval.
@@ -3070,7 +3065,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertTrue($comment, t('Comment exists in database.'));
 
     // Verify that submitted data equals post data.
-    $data = $this->getServerRecord('mollom.checkCaptcha');
+    $data = $this->getServerRecord('captcha');
     $this->assertFalse(isset($data['authorId']), t('authorId: Undefined.'));
 
     // Log in admin user and edit comment containing spam.
@@ -3116,7 +3111,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
     $data = $this->getServerRecord();
     $this->assertSame('honeypot', $data['honeypot'], $edit['mollom[homepage]']);
-    $data = $this->getServerRecord('mollom.checkCaptcha');
+    $data = $this->getServerRecord('captcha');
     $this->assertSame('honeypot', $data['honeypot'], $edit['mollom[homepage]']);
 
     // Change form protection to CAPTCHA only.
@@ -3143,7 +3138,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     );
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertText('Successful form submission.');
-    $data = $this->getServerRecord('mollom.checkCaptcha');
+    $data = $this->getServerRecord('captcha');
     $this->assertSame('honeypot', $data['honeypot'], $edit['mollom[homepage]']);
   }
 
@@ -3211,7 +3206,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/config/content/mollom/settings');
 
     // Verify that we additionally sent version data.
-    $data = $this->getServerRecord('mollom.verifyKey');
+    $data = $this->getServerRecord('site');
     $info = mollom()->getClientInformation();
     $this->assertTrue(!empty($info['platformName']), t('Version information found.'));
     $this->assertSame('platformName', $data['platformName'], $info['platformName']);
