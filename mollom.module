@@ -1406,7 +1406,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   if ($form_state['mollom']['require_captcha'] && !$form_state['mollom']['passed_captcha'] && empty($form_state['mollom']['response']['captcha']['id'])) {
     mollom_form_add_captcha($element, $form_state);
   }
-  // If no CAPTCHA is required or it was solved already, hide the CAPTCHA.
+  // If no CAPTCHA is required or it was solved already, hide the element.
   elseif (!$form_state['mollom']['require_captcha'] || $form_state['mollom']['passed_captcha']) {
     $element['captcha']['#access'] = FALSE;
   }
@@ -1447,8 +1447,6 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
  *   The current state of the form. Passed by reference.
  */
 function mollom_form_add_captcha(&$element, &$form_state) {
-  $element['captcha']['#access'] = TRUE;
-  $element['captcha']['#required'] = TRUE;
   // UX: Empty the CAPTCHA field value, as the user has to re-enter a new one.
   $element['captcha']['#value'] = '';
 
@@ -1458,14 +1456,16 @@ function mollom_form_add_captcha(&$element, &$form_state) {
   $captcha = mollom_get_captcha($form_state);
   // If we get a response, add the image CAPTCHA to the form element.
   if (!empty($captcha)) {
+    $element['captcha']['#access'] = TRUE;
+    $element['captcha']['#required'] = TRUE;
     $element['captcha']['#field_prefix'] = $captcha;
     // Assign the session ID returned by Mollom.
     $element['captchaId']['#value'] = $form_state['mollom']['response']['captcha']['id'];
   }
   // Otherwise, we have a communication or configuration error.
-  // @todo Short-cut form processing entirely in this case; see also
-  //   mollom_validate_captcha().
   else {
+    $element['captcha']['#access'] = FALSE;
+    $element['captcha']['#required'] = FALSE;
     $form_state['mollom']['require_analysis'] = FALSE;
     $form_state['mollom']['require_captcha'] = FALSE;
     // Trigger fallback mode.
