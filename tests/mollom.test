@@ -228,17 +228,22 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
    * @param $id
    *   The ID of $type in the last request, as returned from Mollom.
+   * @param $new_expected
+   *   (optional) Boolean indicating whether a new ID is expected; e.g., after
+   *   incorrectly solving a CAPTCHA.
    */
-  protected function assertResponseID($type, $id) {
-    // Check whether watchdog messages indicate a refresh or redirect.
-    foreach ($this->messages as $message) {
-      if ($message->message == 'Refreshed servers: %servers' || $message->message == 'Server %server redirected to: %next.') {
-        // Reset all IDs.
-        $this->resetResponseID();
+  protected function assertResponseID($type, $id, $new_expected = FALSE) {
+    if (!$new_expected) {
+      // Check whether watchdog messages indicate a refresh or redirect.
+      foreach ($this->messages as $message) {
+        if ($message->message == 'Refreshed servers: %servers' || $message->message == 'Server %server redirected to: %next.') {
+          // Reset all IDs.
+          $this->resetResponseID();
+        }
       }
     }
 
-    if (!isset($this->responseIds[$type])) {
+    if (!isset($this->responseIds[$type]) || $new_expected) {
       // Use assertTrue() instead of pass(), to test !empty().
       $this->assertTrue($id, t('New %type: %id', array(
         '%type' => $type,
@@ -285,10 +290,13 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *
    * @param $type
    *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
+   * @param $new_expected
+   *   (optional) Boolean indicating whether a new ID is expected; e.g., after
+   *   incorrectly solving a CAPTCHA.
    */
-  protected function assertResponseIDInForm($type) {
+  protected function assertResponseIDInForm($type, $new_expected = FALSE) {
     $id = $this->getFieldValueByName('mollom[' . $type . ']');
-    return $this->assertResponseID($type, $id);
+    return $this->assertResponseID($type, $id, $new_expected);
   }
 
   /**
@@ -470,7 +478,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
       '@data' => var_export($data, TRUE),
     )));
     if (isset($response_id)) {
-      $this->assertSame(t('Stored session id'), $data->$response_type, $response_id);
+      $this->assertSame(t('Stored @type ID', array('@type' => $response_type)), $data->$response_type, $response_id);
     }
     return $data;
   }
@@ -2494,7 +2502,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
     // required field.
     $this->postIncorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $this->assertResponseIDInForm('captchaId');
+    $this->assertResponseIDInForm('captchaId', TRUE);
     $this->assertNoPrivacyLink();
 
     // Try to submit a correct answer for the CAPTCHA, still without required
