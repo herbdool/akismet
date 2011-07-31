@@ -1239,7 +1239,7 @@ function _mollom_status($reset = FALSE) {
 
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
-    $status['keys valid'] = mollom()->verifyKey();
+    $status['keys valid'] = mollom()->verifyKeys();
   }
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {

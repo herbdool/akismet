@@ -363,8 +363,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Call the mollom.verifyKey function directly and check that the current
-   * keys are valid.
+   * Calls _mollom_status() directly to verify that current API keys are valid.
    */
   protected function assertValidKeys() {
     $status = _mollom_status(TRUE);
@@ -1009,7 +1008,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertSame('servers', $result['servers'], $site['servers']);
 
     // Test that verifying keys updates client information.
-    $result = $mollom->verifyKey();
+    $result = $mollom->verifyKeys();
     $this->assertMollomWatchdogMessages();
     $this->assertIdentical($result, TRUE, 'Site was updated.');
 
@@ -1564,13 +1563,13 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
       // Verify that Mollom::query() fails with an invalid server list and
       // appropriate messages are logged.
       $mollom = mollom();
-      $key_is_valid = $mollom->verifyKey();
+      $key_is_valid = $mollom->verifyKeys();
       $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
       $this->assertIdentical($key_is_valid, Mollom::NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
 
       // Verify that Mollom::query() automatically empties the server list and
       // a directly following, subsequent request attempt succeeds.
-      $key_is_valid = $mollom->verifyKey();
+      $key_is_valid = $mollom->verifyKeys();
       $this->assertMollomWatchdogMessages();
       $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
     }
@@ -3201,9 +3200,9 @@ class MollomDataTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Tests data sent for mollom.verifyKey.
+   * Tests data sent for Mollom::verifyKeys().
    */
-  function testVerifyKey() {
+  function testVerifyKeys() {
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('admin/config/content/mollom/settings');
 
