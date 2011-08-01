@@ -49,6 +49,12 @@ function mollom_test_server_menu() {
  * @see http://php.net/manual/en/wrappers.php.php
  */
 function mollom_test_server_rest_get_parameters() {
+  $data = &drupal_static(__FUNCTION__);
+
+  if (isset($data)) {
+    return $data;
+  }
+
   if ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD') {
     $data = Mollom::httpParseQuery($_SERVER['QUERY_STRING']);
   }
@@ -59,11 +65,32 @@ function mollom_test_server_rest_get_parameters() {
 }
 
 /**
+ * Returns the parsed HTTP Authorization request header as an array.
+ */
+function mollom_test_server_rest_get_auth_header() {
+  $header = &drupal_static(__FUNCTION__);
+
+  if (isset($header)) {
+    return $header;
+  }
+
+  if (function_exists('apache_request_headers')) {
+    $headers = apache_request_headers();
+    $input = $headers['Authorization'];
+  }
+  else {
+    $input = $_SERVER['HTTP_AUTHORIZATION'];
+  }
+  preg_match_all('@([^, =]+)="([^"]*)"@', $input, $header);
+  $header = array_combine($header[1], $header[2]);
+  return $header;
+}
+
+/**
  * Delivery callback for REST API endpoints.
  */
 function mollom_test_server_rest_deliver($page_callback_result) {
-  #drupal_add_http_header('Content-Type', 'application/xml; charset=utf-8');
-  drupal_add_http_header('Content-Type', 'application/xml');
+  drupal_add_http_header('Content-Type', 'application/xml; charset=utf-8');
 
   $xml = new DOMDocument('1.0', 'utf-8');
   $element = $xml->createElement('response');
@@ -131,6 +158,36 @@ function mollom_test_server_rest_add_xml(DOMDocument $doc, DOMNode $parent, $dat
 }
 
 /**
+ * Returns whether the OAuth request signature is valid.
+ */
+function mollom_test_server_rest_validate_auth() {
+  $data = mollom_test_server_rest_get_parameters();
+  $header = mollom_test_server_rest_get_auth_header();
+  $sites = variable_get('mollom_test_server_site', array());
+
+  $sent_signature = $header['oauth_signature'];
+  unset($header['oauth_signature']);
+
+  $base_string = implode('&', array(
+    $_SERVER['REQUEST_METHOD'],
+    Mollom::rawurlencode($GLOBALS['base_url'] . '/' . $_GET['q']),
+    Mollom::rawurlencode(Mollom::httpBuildQuery($data + $header)),
+  ));
+  $time = $header['oauth_timestamp'];
+  $nonce = $header['oauth_nonce'];
+
+  if (!isset($sites[$header['oauth_consumer_key']]['privateKey'])) {
+    return FALSE;
+  }
+  $privateKey = $sites[$header['oauth_consumer_key']]['privateKey'];
+  $key = Mollom::rawurlencode($privateKey) . '&' . '';
+
+  $signature = rawurlencode(base64_encode(hash_hmac('sha1', $base_string, $key, TRUE)));
+
+  return $signature === $sent_signature;
+}
+
+/**
  * REST callback for CRUD site operations.
  *
  * @param $publicKey
@@ -156,11 +213,7 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
       return MENU_NOT_FOUND;
     }
     // Validate authentication.
-    $time = $data['time'];
-    $nonce = $data['nonce'];
-    $request_data = $time . ':' . $nonce . ':' . $sites[$publicKey]['privateKey'];
-    $hash = base64_encode(hash_hmac('sha1', $request_data, $sites[$publicKey]['privateKey'], TRUE));
-    if ($hash !== $data['hash']) {
+    if (!mollom_test_server_rest_validate_auth()) {
       return Mollom::AUTH_ERROR;
     }
   }
@@ -168,6 +221,9 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
   if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     // Return existing site.
     if (isset($publicKey)) {
+      if (!isset($sites[$publicKey])) {
+        return MENU_NOT_FOUND;
+      }
       $response = $sites[$publicKey];
     }
     // Return list of existing sites.
@@ -184,9 +240,6 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
   else {
     // Update site.
     if (isset($publicKey) && !$delete) {
-      // Remove authentication parameters.
-      unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
-
       $sites[$publicKey] = $data + $sites[$publicKey];
       variable_set($bin, $sites);
       $response = $sites[$publicKey];
@@ -194,9 +247,6 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
     // Create new site.
     // Authentication is ignored in this case.
     elseif (!$delete) {
-      // Remove authentication parameters.
-      unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
-
       $data['publicKey'] = $publicKey = md5(rand() . REQUEST_TIME);
       $data['privateKey'] = $privateKey = md5(rand() . REQUEST_TIME);
       // Apply default values.
@@ -276,7 +326,11 @@ function mollom_test_server_rest_captcha($captchaId = NULL) {
     }
     // Verify CAPTCHA.
     if (isset($data['id'])) {
-      return array('captcha' => mollom_test_server_check_captcha($data));
+      $response = mollom_test_server_check_captcha($data);
+      if (!is_array($response)) {
+        return $response;
+      }
+      return array('captcha' => $response);
     }
   }
   // Create a new CAPTCHA resource.
@@ -296,8 +350,6 @@ function mollom_test_server_rest_blacklist($public_key, $entryId = NULL, $delete
     return FALSE;
   }
   $data = mollom_test_server_rest_get_parameters();
-  // Remove authentication parameters.
-  unset($data['publicKey'], $data['time'], $data['hash'], $data['nonce']);
 
   // Prepare text value.
   if (isset($data['value'])) {
@@ -419,8 +471,11 @@ function mollom_test_server_check_content($data) {
     $data['checks'] = array($data['checks']);
   }
 
+  $header = mollom_test_server_rest_get_auth_header();
+  $publicKey = $header['oauth_consumer_key'];
+
   // Fetch blacklist.
-  $blacklist = variable_get('mollom_test_server_blacklist_' . $data['publicKey'], array());
+  $blacklist = variable_get('mollom_test_server_blacklist_' . $publicKey, array());
 
   $post = implode('\n', array_intersect_key($data, array('postTitle' => 1, 'postBody' => 1)));
 
@@ -532,7 +587,7 @@ function mollom_test_server_check_content($data) {
   }
 
   $storage = variable_get('mollom_test_server_content', array());
-  $contentId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
+  $contentId = (!empty($data['id']) ? $data['id'] : md5(mt_rand()));
   $storage[$contentId] = $data;
   $response['id'] = $contentId;
   variable_set('mollom_test_server_content', $storage);
@@ -576,7 +631,7 @@ function mollom_test_server_get_captcha($data) {
   $response['url'] = $base_url . '/' . drupal_get_path('module', 'mollom') . '/images/powered-by-mollom-2.gif';
 
   $storage = variable_get('mollom_test_server_captcha', array());
-  $captchaId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
+  $captchaId = (!empty($data['id']) ? $data['id'] : md5(mt_rand()));
   $storage[$captchaId] = $data;
   $response['id'] = $captchaId;
   variable_set('mollom_test_server_captcha', $storage);
@@ -601,7 +656,10 @@ function mollom_test_server_check_captcha($data) {
   }
 
   $storage = variable_get('mollom_test_server_captcha', array());
-  $captchaId = (!empty($data['id']) ? (int) $data['id'] : max(array_keys($storage)) + 1);
+  $captchaId = $data['id'];
+  if (!isset($storage[$captchaId])) {
+    return MENU_NOT_FOUND;
+  }
   $storage[$captchaId] = $data;
   $response['id'] = $captchaId;
   variable_set('mollom_test_server_captcha', $storage);

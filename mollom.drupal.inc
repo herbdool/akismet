@@ -87,12 +87,16 @@ class MollomDrupal extends Mollom {
       $message = array(
         $entry['message'] => $entry['arguments'],
       );
-      if (isset($entry['data'])) {
+      if (isset($entry['request'])) {
         $message['Request: @request<pre>@parameters</pre>'] = array(
           '@request' => $entry['request'],
-          '@parameters' => $entry['data'],
+          '@parameters' => !empty($entry['data']) ? $entry['data'] : '',
         );
-        unset($entry['request'], $entry['data']);
+      }
+      if (isset($entry['headers'])) {
+        $message['Request headers:<pre>@headers</pre>'] = array(
+          '@headers' => $entry['headers'],
+        );
       }
       if (isset($entry['response'])) {
         $message['Response:<pre>@response</pre>'] = array(
@@ -115,7 +119,7 @@ class MollomDrupal extends Mollom {
       }
       $this->log[$i]['message'] = implode("\n", $output);
       unset($this->log[$i]['arguments']);
-      drupal_set_message(implode('<br />', $output), $this->log[$i]['severity']);
+      drupal_set_message(implode('<br />', $output)); //, $this->log[$i]['severity']);
       */
     }
     _mollom_watchdog_multiple($messages, $this->lastResponseCode === TRUE ? WATCHDOG_DEBUG : WATCHDOG_ERROR);
@@ -129,6 +133,11 @@ class MollomDrupal extends Mollom {
    */
   protected function refreshServers() {
     $servers = parent::refreshServers();
+    // FIXME: Server list contains XML-RPC servers.
+    if (empty($servers)) {
+      return $servers;
+    }
+    return $this->serversInit;
 
     // Allow other modules to alter the server list. Internal use only.
     drupal_alter('mollom_server_list', $servers);
@@ -182,7 +191,7 @@ class MollomDrupalTest extends MollomDrupal {
   /**
    * Overrides Mollom::$serversInit.
    */
-  public $serversInit = array('http://rest.mollom.com');
+  public $serversInit = array('http://dev.mollom.com/v1');
 
   /**
    * Overrides Mollom::refreshServers().
@@ -205,6 +214,8 @@ class MollomDrupalTest extends MollomDrupal {
     if (empty($servers)) {
       return $servers;
     }
+    // FIXME: rest.mollom.com not contained in returned server list.
+    return $this->serversInit;
 
     // Append API version to serversInit.
     $known = array();
@@ -231,7 +242,34 @@ class MollomDrupalTestLocal extends MollomDrupal {
   function __construct() {
     parent::__construct();
     // Replace initial server list with local fake server.
-    $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
+    $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest/' . self::API_VERSION);
+  }
+
+  /**
+   * Overrides MollomDrupal::request().
+   *
+   * Passes-through SimpleTest assertion HTTP headers from child-child-site and
+   * triggers errors to make them appear in parent site (where tests are ran).
+   *
+   * @todo Remove when in core.
+   * @see http://drupal.org/node/875342
+   */
+  protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
+    $response = parent::request($method, $server, $path, $query, $headers);
+    $keys = preg_grep('@^x-drupal-assertion-@', array_keys($response->headers));
+    foreach ($keys as $key) {
+      $header = $response->headers[$key];
+      $header = unserialize(urldecode($header));
+      $message = strtr('%type: !message in %function (line %line of %file).', array(
+        '%type' => $header[1],
+        '!message' => $header[0],
+        '%function' => $header[2]['function'],
+        '%line' => $header[2]['line'],
+        '%file' => $header[2]['file'],
+      ));
+      trigger_error($message, E_USER_ERROR);
+    }
+    return $response;
   }
 }
 

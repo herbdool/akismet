@@ -315,17 +315,23 @@ class MollomWebTestCase extends DrupalWebTestCase {
   protected function createKeys($public = MOLLOM_TEST_PUBLIC_KEY, $private = MOLLOM_TEST_PRIVATE_KEY) {
     $mollom = mollom();
     // Hardcoded servers required, or any request will fail.
-    foreach ($mollom->serversInit as $server) {
-      $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
-    }
+    // FIXME:
+    $mollom->servers = $mollom->serversInit;
+//    foreach ($mollom->serversInit as $server) {
+//      $mollom->servers[] = $server . '/' . Mollom::API_VERSION;
+//    }
     // Dummy API keys required, or Mollom client class (rightfully) bails out.
     $mollom->publicKey = MOLLOM_TEST_PUBLIC_KEY;
     $mollom->privateKey = MOLLOM_TEST_PRIVATE_KEY;
 
+    // Skip authorization for initial testing site record creation.
+    $oAuthStrategy = $mollom->oAuthStrategy;
+    $mollom->oAuthStrategy = '';
     $result = $mollom->createSite(array(
       'url' => $GLOBALS['base_url'],
       'email' => variable_get('site_mail', 'mollom-drupal-test@example.com'),
     ));
+    $mollom->oAuthStrategy = $oAuthStrategy;
 
     // Set testing class properties.
     $this->public_key = $result['publicKey'];
