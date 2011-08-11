@@ -872,7 +872,9 @@ function mollom_update_7011() {
 /**
  * Change {mollom}: Add 'spamResult', change 'spam', replace 'session_id' with 'contentId' and 'captchaId'.
  */
-function mollom_update_7012() {
+function mollom_update_7200() {
+  variable_del('mollom_servers');
+
   if (db_field_exists('mollom', 'session_id')) {
     // Truncate table. Old session IDs cannot be migrated.
     db_truncate('mollom')->execute();

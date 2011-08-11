@@ -57,6 +57,8 @@ function mollom_test_server_rest_get_parameters() {
 
   if ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD') {
     $data = Mollom::httpParseQuery($_SERVER['QUERY_STRING']);
+    // Remove $_GET['q'].
+    unset($data['q']);
   }
   elseif ($_SERVER['REQUEST_METHOD'] == 'POST' || $_SERVER['REQUEST_METHOD'] == 'PUT') {
     $data = Mollom::httpParseQuery(file_get_contents('php://input'));
@@ -74,15 +76,20 @@ function mollom_test_server_rest_get_auth_header() {
     return $header;
   }
 
+  $header = array();
   if (function_exists('apache_request_headers')) {
     $headers = apache_request_headers();
-    $input = $headers['Authorization'];
+    if (isset($headers['Authorization'])) {
+      $input = $headers['Authorization'];
+    }
   }
-  else {
+  elseif (isset($_SERVER['HTTP_AUTHORIZATION'])) {
     $input = $_SERVER['HTTP_AUTHORIZATION'];
   }
-  preg_match_all('@([^, =]+)="([^"]*)"@', $input, $header);
-  $header = array_combine($header[1], $header[2]);
+  if (isset($input)) {
+    preg_match_all('@([^, =]+)="([^"]*)"@', $input, $header);
+    $header = array_combine($header[1], $header[2]);
+  }
   return $header;
 }
 

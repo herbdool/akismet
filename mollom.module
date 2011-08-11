@@ -1376,7 +1376,7 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     $form_state['mollom']['discard'] = TRUE;
   }
 
-  // Add the Mollom session element.
+  // Add the Mollom session elements.
   $element['contentId'] = array(
     '#type' => 'hidden',
     '#default_value' => isset($form_state['mollom']['response']['content']['id']) ? $form_state['mollom']['response']['content']['id'] : '',

@@ -24,7 +24,8 @@
  */
 function mollom_captcha_js($type, $form_build_id, $contentId = NULL) {
   // Load $form_state from cache or create a dummy state.
-  if ($cache = cache_get('form_state_' . $form_build_id, 'cache_form')) {
+  $cid = 'form_state_' . $form_build_id;
+  if ($cache = cache_get($cid, 'cache_form')) {
     $form_state = $cache->data;
   }
   else {
@@ -49,7 +50,7 @@ function mollom_captcha_js($type, $form_build_id, $contentId = NULL) {
     // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
     //   functionality.
     if ($cache) {
-      cache_set('form_state_' . $form_build_id, $form_state, 'cache_form', REQUEST_TIME + 21600);
+      cache_set($cid, $form_state, 'cache_form', REQUEST_TIME + 21600);
     }
     // Return new content and CAPTCHA ID via JSON.
     $data = array(

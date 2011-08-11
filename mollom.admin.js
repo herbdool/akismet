@@ -28,7 +28,7 @@ Drupal.behaviors.mollomBlacklistFilter = {
       self.lastSearch = {};
       var filterRows = function () {
         // Prepare static variables and conditions only once.
-        var i, text, visible, changed;
+        var i, value, visible, changed;
         var search = {
           // Blacklist entries are stored in lowercase, so to get any filter
           // results, the entered text must be converted to lowercase, too.
