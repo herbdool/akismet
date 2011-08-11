@@ -207,23 +207,20 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
   $bin = 'mollom_test_server_site';
   $sites = variable_get($bin, array());
 
-  // Check whether publicKey exists.
   if (isset($publicKey)) {
-    if (!isset($sites[$publicKey])) {
-      return MENU_NOT_FOUND;
-    }
     // Validate authentication.
     if (!mollom_test_server_rest_validate_auth()) {
       return Mollom::AUTH_ERROR;
+    }
+    // Check whether publicKey exists.
+    if (!isset($sites[$publicKey])) {
+      return MENU_NOT_FOUND;
     }
   }
 
   if ($_SERVER['REQUEST_METHOD'] == 'GET') {
     // Return existing site.
     if (isset($publicKey)) {
-      if (!isset($sites[$publicKey])) {
-        return MENU_NOT_FOUND;
-      }
       $response = $sites[$publicKey];
     }
     // Return list of existing sites.
@@ -534,7 +531,7 @@ function mollom_test_server_check_content($data) {
   }
 
   // Quality filter.
-  if (!isset($data['checks']) || in_array('quality', $data['checks'])) {
+  if (isset($data['checks']) && in_array('quality', $data['checks'])) {
     if (isset($qualityScore)) {
       $response['qualityScore'] = $qualityScore;
     }

@@ -1075,7 +1075,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $mollom->privateKey = $site['privateKey'];
     $result = $mollom->getSite();
     $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
-    $this->assertEqual($mollom->lastResponseCode, 404, 'Attempt to authenticate with deleted site keys returns 404.');
+    $this->assertEqual($mollom->lastResponseCode, Mollom::AUTH_ERROR, 'Attempt to authenticate with deleted site keys fails.');
 
     // Restore keys for tearDown().
     $mollom->publicKey = $this->public_key;
@@ -1102,7 +1102,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 0.0);
     $this->assertSame('spamClassification', $result['spamClassification'], 'ham');
-    $this->assertSame('qualityScore', $result['qualityScore'], 1.0);
+    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
     $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
@@ -1112,7 +1112,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 1.0);
     $this->assertSame('spamClassification', $result['spamClassification'], 'spam');
-    $this->assertSame('qualityScore', $result['qualityScore'], 0.0);
+    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
     $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
@@ -1122,7 +1122,7 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages();
     $this->assertSame('spamScore', $result['spamScore'], 0.5);
     $this->assertSame('spamClassification', $result['spamClassification'], 'unsure');
-    $this->assertSame('qualityScore', $result['qualityScore'], 0.5);
+    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
     $data['id'] = $this->assertResponseID('contentId', $result['id']);
 
