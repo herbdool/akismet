@@ -152,6 +152,7 @@ class MollomDrupal extends Mollom {
     $request = array(
       'method' => $method,
       'headers' => $headers,
+      'timeout' => 5.0,
     );
     if (isset($query)) {
       if ($method == 'GET') {
@@ -172,6 +173,11 @@ class MollomDrupal extends Mollom {
     // @todo Core: data property is not assigned if there is no response body.
     if (!isset($dhr->data)) {
       $dhr->data = NULL;
+    }
+    // @todo Core: Timeout produces a bogus non-negative status code.
+    // @see http://drupal.org/node/1246376
+    if ($dhr->code === 1) {
+      $dhr->code = -1;
     }
 
     $response = (object) array(
