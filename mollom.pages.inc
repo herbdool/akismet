@@ -30,23 +30,16 @@ function mollom_captcha_js($type, $form_build_id, $contentId = NULL) {
   }
   else {
     $form_state['mollom'] = array();
-    $form_state['mollom']['captcha_type'] = $type;
     if (isset($contentId)) {
       $form_state['mollom']['response']['content']['id'] = $contentId;
     }
   }
+  $form_state['mollom']['captcha_type'] = $type;
   $captcha = mollom_get_captcha($form_state);
 
   if (!empty($form_state['mollom']['response']['captcha']['id'])) {
-    // Update cached session id in the cached $form_state.
-    // We rely on native form caching of Form API to store our Mollom session
-    // data. When retrieving a new CAPTCHA through this JavaScript callback, the
-    // cached $form_state is not updated and still contains the Mollom session
-    // data that was known when rendering the form. Since above XML-RPC requests
-    // may return a new Mollom session id for the new CAPTCHA, the user would not
-    // be able to successfully complete the CAPTCHA, because we would try to
-    // validate the user's response in combination with the old/previous session
-    // id. Therefore, we need to update the session id in the cached $form_state.
+    // Update the CAPTCHA ID in the cached $form_state, since it might have
+    // changed.
     // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
     //   functionality.
     if ($cache) {
