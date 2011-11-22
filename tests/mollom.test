@@ -820,7 +820,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
  * Tests module installation and global status handling.
  */
 class MollomInstallationTestCase extends MollomWebTestCase {
-/*
   public static function getInfo() {
     return array(
       'name' => 'Installation and key handling',
@@ -828,7 +827,6 @@ class MollomInstallationTestCase extends MollomWebTestCase {
       'group' => 'Mollom',
     );
   }
-*/
 
   function setUp() {
     $this->disableDefaultSetup = TRUE;
@@ -931,6 +929,9 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
     // Create a testing site on backend to have some API keys.
+    // createKeys() calls mollom(), but mollom.module may not be enabled in
+    // the parent site executing this test.
+    drupal_load('module', 'mollom');
     $this->createKeys();
 
     // Verify that valid keys work.
