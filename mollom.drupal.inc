@@ -183,6 +183,18 @@ class MollomDrupal extends Mollom {
     );
     return $response;
   }
+
+  /**
+   * Overrides Mollom::getServerParameters().
+   */
+  public static function getServerParameters() {
+    $data = parent::getServerParameters();
+    if ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD') {
+      // Remove $_GET['q'].
+      unset($data['q']);
+    }
+    return $data;
+  }
 }
 
 /**

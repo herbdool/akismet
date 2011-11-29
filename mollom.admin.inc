@@ -737,6 +737,17 @@ function mollom_admin_settings($form, &$form_state) {
     )),
   );
 
+  $form['mollom_moderation_integration'] = array(
+    '#type' => 'checkbox',
+    '#title' => t('Integrate with Mollom Moderation'),
+    '#default_value' => variable_get('mollom_moderation_integration', 0),
+    '#description' => t('Sends new content to <a href="@product-url">Mollom Moderation</a> and allows content to be moderated from <a href="@moderation-url">my.mollom.com</a>.', array(
+      '@product-url' => 'http://mollom.com/beta',
+      '@moderation-url' => 'http://my.mollom.com',
+    )),
+  );
+  $form['mollom_moderation_integration']['#description'] .= '<br /><strong>' . t('Only available after Mollom confirmed participation of this site in the beta program.') . '</strong>';
+
   $form['mollom_privacy_link'] = array(
     '#type' => 'checkbox',
     '#title' => t("Link to Mollom's privacy policy on forms protected by textual analysis"),
