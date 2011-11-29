@@ -939,7 +939,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $edit = array(
       'mollom_public_key' => $this->public_key,
       'mollom_private_key' => $this->private_key,
-      'mollom_testing_mode' => 1,
+//      'mollom_testing_mode' => 1,
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'));
     $this->assertText(t('The configuration options have been saved.'));
@@ -947,9 +947,9 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertNoText('The Mollom API keys are not configured yet.');
     $this->assertNoText('The configured Mollom API keys are invalid.');
 
-    // Verify presence of testing mode warning.
-    $this->drupalGet('admin/config/content/mollom');
-    $this->assertText('Mollom testing mode is still enabled.');
+//    // Verify presence of testing mode warning.
+//    $this->drupalGet('admin/config/content/mollom');
+//    $this->assertText('Mollom testing mode is still enabled.');
 
     // Verify that deleting keys throws the correct error message again.
     $this->drupalGet('admin/config/content/mollom/settings');

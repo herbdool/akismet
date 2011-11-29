@@ -754,6 +754,9 @@ function mollom_admin_settings($form, &$form_state) {
     '#title' => t('Enable testing mode'),
     '#default_value' => variable_get('mollom_testing_mode', 0),
     '#description' => t('Submitting "ham", "unsure", or "spam" on a protected form will trigger the corresponding behavior, and similarly, word verifications will only respond to "correct" and "incorrect", instead of the actual characters asked for. This option should be disabled in production environments.'),
+    // @todo Temporarily disabled.
+    // @see http://drupal.org/node/1264850
+    '#access' => FALSE,
   );
 
   return system_settings_form($form);
