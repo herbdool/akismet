@@ -308,6 +308,9 @@ function mollom_test_server_rest_content($contentId = NULL) {
     if (isset($data['id']) && $data['id'] != $contentId) {
       return FALSE;
     }
+    if (isset($contentId)) {
+      $data['id'] = $contentId;
+    }
   }
 
   // Default POST: Create or update content and check it.
@@ -329,7 +332,8 @@ function mollom_test_server_rest_captcha($captchaId = NULL) {
       return FALSE;
     }
     // Verify CAPTCHA.
-    if (isset($data['id'])) {
+    if (isset($captchaId)) {
+      $data['id'] = $captchaId;
       $response = mollom_test_server_check_captcha($data);
       if (!is_array($response)) {
         return $response;
