@@ -27,15 +27,7 @@ define('MOLLOM_TEST_RESELLER_KEY', FALSE);
  * Common base test class for Mollom tests.
  */
 class MollomWebTestCase extends DrupalWebTestCase {
-  /**
-   * The Mollom administrator user account.
-   */
-  protected $admin_user;
-
-  /**
-   * A normal web user account.
-   */
-  protected $web_user;
+  protected $profile = 'testing';
 
   /**
    * The text the user should see when they are blocked from submitting a form
@@ -820,6 +812,9 @@ class MollomWebTestCase extends DrupalWebTestCase {
  * Tests module installation and global status handling.
  */
 class MollomInstallationTestCase extends MollomWebTestCase {
+  // @todo Use mollom_test instead of comment form instead.
+  protected $profile = 'standard';
+
   public static function getInfo() {
     return array(
       'name' => 'Installation and key handling',
@@ -970,8 +965,6 @@ class MollomInstallationTestCase extends MollomWebTestCase {
  * Tests low-level XML-RPC communication with Mollom servers.
  */
 class MollomResponseTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Server responses',
@@ -1327,6 +1320,9 @@ class MollomResponseLocalTestCase extends MollomResponseTestCase {
 }
 
 class MollomAccessTestCase extends MollomWebTestCase {
+  // @todo Required by testBypassAccess().
+  protected $profile = 'standard';
+
   public static function getInfo() {
     return array(
       'name' => 'Access checking',
@@ -1447,8 +1443,6 @@ class MollomAccessTestCase extends MollomWebTestCase {
 }
 
 class MollomFallbackTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   // Re-route Mollom communication to this testing site.
   protected $mollomClass = 'MollomDrupalTestLocal';
 
@@ -1543,8 +1537,6 @@ class MollomFallbackTestCase extends MollomWebTestCase {
 }
 
 class MollomServerListRecoveryTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Server list recovery',
@@ -1598,8 +1590,6 @@ class MollomServerListRecoveryTestCase extends MollomWebTestCase {
  * the same blacklist. You can configure a custom key to avoid this.
  */
 class MollomBlacklistTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Blacklist',
@@ -1815,6 +1805,9 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
  * Tests Mollom form profanity filtering functionality.
  */
 class MollomProfanityTestCase extends MollomWebTestCase {
+  // @todo Required by testProfanitySpam().
+  protected $profile = 'standard';
+
   public static function getInfo() {
     return array(
       'name' => 'Profanity checking',
@@ -2234,6 +2227,9 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
 }
 
 class MollomUserFormsTestCase extends MollomWebTestCase {
+  // @todo Configure user registration settings like in Standard profile.
+  protected $profile = 'standard';
+
   public static function getInfo() {
     return array(
       'name' => 'User registration and password protection',
@@ -2310,8 +2306,6 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
  * Tests Profile module integration.
  */
 class MollomProfileFormsTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Profile integration',
@@ -2379,6 +2373,8 @@ class MollomProfileFormsTestCase extends MollomWebTestCase {
  * Tests Node module integration.
  */
 class MollomNodeFormTestCase extends MollomWebTestCase {
+  protected $profile = 'standard';
+
   private $node;
 
   public static function getInfo() {
@@ -2450,6 +2446,8 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
 }
 
 class MollomCommentFormTestCase extends MollomWebTestCase {
+  protected $profile = 'standard';
+
   private $node;
 
   public static function getInfo() {
@@ -2637,8 +2635,6 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
 }
 
 class MollomContactFormTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Contact form protection',
@@ -2849,6 +2845,9 @@ class MollomResellerTestCase extends MollomWebTestCase {
  * Tests form value processing.
  */
 class MollomDataTestCase extends MollomWebTestCase {
+  // @todo Required by testAnalysis().
+  protected $profile = 'standard';
+
   // Re-route Mollom communication to this testing site.
   protected $mollomClass = 'MollomDrupalTestLocal';
 
@@ -3235,8 +3234,6 @@ class MollomDataTestCase extends MollomWebTestCase {
  * Verify that Mollom data can be created, read, updated, and deleted.
  */
 class MollomDataCRUDTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Data CRUD',
@@ -3321,8 +3318,6 @@ class MollomDataCRUDTestCase extends MollomWebTestCase {
  * Tests text analysis functionality.
  */
 class MollomAnalysisTestCase extends MollomWebTestCase {
-  protected $profile = 'testing';
-
   public static function getInfo() {
     return array(
       'name' => 'Text analysis',
@@ -3591,6 +3586,8 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
  * Tests report to Mollom functionality.
  */
 class MollomReportTestCase extends MollomWebTestCase {
+  protected $profile = 'standard';
+
   public static function getInfo() {
     return array(
       'name' => 'Reporting functionality',
