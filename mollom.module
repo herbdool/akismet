@@ -157,8 +157,7 @@ function mollom_menu() {
     'file' => 'mollom.pages.inc',
     'type' => MENU_CALLBACK,
   );
-  // @todo Change into mollom/moderate/%.
-  $items['mollom/%/%'] = array(
+  $items['mollom/moderate/%/%'] = array(
     'page callback' => 'mollom_moderate',
     'page arguments' => array(1, 2),
     'access callback' => 'mollom_moderate_access',
