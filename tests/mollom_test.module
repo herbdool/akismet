@@ -6,6 +6,31 @@
  */
 
 /**
+ * Implements hook_entity_info().
+ */
+function mollom_test_entity_info() {
+  $info['mollom_test'] = array(
+    'label' => 'Mollom test record',
+    'base table' => 'mollom_test',
+    'uri callback' => 'mollom_test_uri',
+    'entity keys' => array(
+      'id' => 'mid',
+      'label' => 'title',
+    ),
+  );
+  return $info;
+}
+
+/**
+ * Entity URI callback.
+ */
+function mollom_test_uri($record) {
+  return array(
+    'path' => 'mollom-test/form/' . $record->mid,
+  );
+}
+
+/**
  * Implements hook_menu().
  */
 function mollom_test_menu() {
@@ -188,21 +213,17 @@ function mollom_test_form_submit($form, &$form_state) {
   $form_state['values']['field'][] = $form_state['values']['field']['new'];
   unset($form_state['values']['field']['new']);
 
-  // Allow modules to alter the record before saving. This is done for code
-  // consistency only.
-  // @see mollom_mollom_test_presave()
-  form_state_values_clean($form_state);
-  module_invoke_all('mollom_test_presave', $form_state['values']);
-
   // Store submission.
-  $update = !empty($form_state['values']['mid']) ? 'mid' : array();
-  drupal_write_record('mollom_test', $form_state['values'], $update);
+  form_state_values_clean($form_state);
+  $record = (object) $form_state['values'];
+  mollom_test_save($record);
+  $form_state['values']['mid'] = $record->mid;
 
   // Redirect to stored entry.
-  $form_state['redirect'] = 'mollom-test/form/' . $form_state['values']['mid'];
+  $form_state['redirect'] = 'mollom-test/form/' . $record->mid;
 
   drupal_set_message('Successful form submission.');
-  drupal_set_message('<pre>' . var_export($form_state['values'], TRUE) . '</pre>');
+  drupal_set_message('<pre>' . var_export($record, TRUE) . '</pre>');
 }
 
 /**
@@ -228,8 +249,8 @@ function mollom_test_mollom_form_moderation(&$form, &$form_state) {
 function mollom_mollom_test_presave($record) {
   // If an existing record is published and we have session data stored for it,
   // mark the data as moderated.
-  if (!empty($record['mid']) && $record['status']) {
-    mollom_data_moderate('mollom_test', $record['mid']);
+  if (!empty($record->mid) && $record->status) {
+    mollom_data_moderate('mollom_test', $record->mid);
   }
 }
 
@@ -241,12 +262,43 @@ function mollom_test_load($mid) {
 }
 
 /**
+ * Saves a {mollom_test} data record.
+ */
+function mollom_test_save($record) {
+  // Allow modules to alter the record before saving. This is done for code
+  // consistency only.
+  // @see mollom_mollom_test_presave()
+  module_invoke_all('mollom_test_presave', $record);
+
+  $update = !empty($record->mid) ? array('mid') : array();
+  $status = drupal_write_record('mollom_test', $record, $update);
+  if ($status === SAVED_NEW) {
+    module_invoke_all('mollom_test_insert', $record);
+    module_invoke_all('entity_insert', $record, 'mollom_test');
+  }
+  else {
+    $status = SAVED_UPDATED;
+    module_invoke_all('mollom_test_update', $record);
+    module_invoke_all('entity_update', $record, 'mollom_test');
+  }
+  return $status;
+}
+
+/**
  * Deletes multiple stored {mollom_test} data records.
  *
  * @param $mids
  *   The mids to delete.
  */
 function mollom_test_delete_multiple(array $mids) {
+  foreach ($mids as $mid) {
+    // @todo The core entity system expects objects.
+    $record = (object) mollom_test_load($mid);
+    if ($record) {
+      module_invoke_all('entity_delete', $record, 'mollom_test');
+    }
+  }
+
   db_delete('mollom_test')
     ->condition('mid', $mids)
     ->execute();

@@ -675,15 +675,22 @@ class MollomWebTestCase extends DrupalWebTestCase {
    * @param $resource
    *   (optional) The resource name to retrieve submitted values from. Defaults
    *   to 'content'.
+   * @param $retain
+   *   (optional) Whether to retain the (last) record being read. Defaults to
+   *   FALSE; i.e., the record being read is removed.
    *
    * @see MollomWebTestCase::resetServerRecords()
    */
-  protected function getServerRecord($resource = 'content') {
+  protected function getServerRecord($resource = 'content', $retain = FALSE) {
     $function = 'mollom_test_server_' . $resource;
+
+    // Ensure that we do not read obsolete/outdated data from variable_get()'s
+    // static cache while variables might have been updated in the child site.
+    $this->refreshVariables();
 
     // Retrieve last recorded values.
     $storage = variable_get($function, array());
-    $return = array_shift($storage);
+    $return = ($retain ? end($storage) : array_shift($storage));
     variable_set($function, $storage);
 
     return $return;
@@ -3855,3 +3862,120 @@ class MollomReportTestCase extends MollomWebTestCase {
   }
 }
 
+/**
+ * Tests integration with Mollom Moderation services.
+ */
+class MollomModerationIntegrationTestCase extends MollomWebTestCase {
+  protected $mollomClass = 'MollomDrupalTestLocal';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Moderation integration',
+      'description' => 'Tests integration with Mollom Moderation services.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('mollom_test'));
+
+    // Enable Mollom Moderation integration.
+    variable_set('mollom_moderation_integration', 1);
+
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
+      'mollom[discard]' => 0,
+    ));
+    $this->drupalLogout();
+  }
+
+  /**
+   * Tests that the 'stored' property of checked content is updated according to local events.
+   *
+   * @todo
+   * - Verify that a form protecting a non-entity-API-entity does not throw a
+   *   fatal error (on entity_load()).
+   */
+  function testStored() {
+    // Post something.
+    $edit = array(
+      'title' => 'ham',
+    );
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $this->assertText('Successful form submission');
+    $mid = $this->getFieldValueByName('mid');
+
+    // Verify that 'stored=1' was passed to Mollom.
+    $record = $this->getServerRecord('content', TRUE);
+    $this->assertIdentical($record['stored'], '1');
+
+    // Delete the post.
+    // @todo Implement a delete (confirmation) form.
+    mollom_test_delete_multiple(array($mid));
+    $this->assertMollomWatchdogMessages();
+
+    // Verify that 'stored=0' was passed to Mollom.
+    $record = $this->getServerRecord('content');
+    $this->assertIdentical($record['stored'], '0');
+  }
+
+  /**
+   * Tests moderation request authorization.
+   *
+   * @todo
+   * - Test invalid/missing public key.
+   * - Test invalid time(stamp).
+   * - Test (nonce) replay attack.
+   * - Test wrong signature.
+   * - Test unsupported signature hashing algo.
+   */
+
+
+  /**
+   * Tests that a stored content can be moderated.
+   */
+  function testModeration() {
+    $actions = array('approve', 'spam', 'delete');
+
+    foreach ($actions as $action) {
+      // Post something.
+      $edit = array(
+        'title' => 'spam',
+      );
+      $this->drupalPost('mollom-test/form', $edit, 'Submit');
+      $this->assertText('Successful form submission');
+      $mid = $this->getFieldValueByName('mid');
+      $record = mollom_test_load($mid);
+      $this->assertSame('Publishing status', $record['status'], 0);
+      $data = mollom_data_load('mollom_test', $mid);
+      $this->assertTrue($data, 'Mollom data for post exists.');
+
+      // Send a moderation request for the post.
+      $mollom = mollom();
+      $endpoint = $GLOBALS['base_url'];
+      $path = 'mollom/moderate/' . $data->contentId . '/' . $action;
+      $params = array();
+      $headers = array();
+      $auth = $mollom->addAuthentication('POST', $endpoint, $path, $params, $headers);
+      $result = drupal_http_request($endpoint . '/' . $path, array(
+        'method' => 'POST',
+        'headers' => $headers,
+        'data' => !empty($params) ? $params : NULL,
+      ));
+      $this->assertMollomWatchdogMessages();
+
+      // Verify that the post was published.
+      if ($action == 'approve') {
+        $record = mollom_test_load($mid);
+        $this->assertSame('Publishing status', $record['status'], 1);
+        $approved = mollom_data_load('mollom_test', $mid);
+        $this->assertTrue($approved, 'Mollom data for approved post still exists.');
+      }
+      // Verify that the post was deleted.
+      else {
+        $deleted = mollom_data_load('mollom_test', $mid);
+        $this->assertFalse($deleted, 'Moderated/deleted record no longer exists.');
+      }
+    }
+  }
+}

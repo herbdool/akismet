@@ -157,11 +157,11 @@ function mollom_menu() {
     'file' => 'mollom.pages.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['mollom/moderate/%/%'] = array(
+  $items['mollom/moderate/%mollom_content/%'] = array(
     'page callback' => 'mollom_moderate',
-    'page arguments' => array(1, 2),
+    'page arguments' => array(2, 3),
     'access callback' => 'mollom_moderate_access',
-    'access arguments' => array(1, 2),
+    'access arguments' => array(2, 3),
     'type' => MENU_CALLBACK,
   );
 
@@ -381,6 +381,16 @@ function mollom_cron() {
   db_delete('mollom')
     ->condition('changed', $expired, '<')
     ->execute();
+}
+
+/**
+ * Load a Mollom data record by contentId.
+ *
+ * @param $contentId
+ *   The contentId to retrieve data for.
+ */
+function mollom_content_load($contentId) {
+  return mollom_db_query_range('SELECT * FROM {mollom} WHERE contentId = :contentId', 0, 1, array(':contentId' => $contentId))->fetchObject();
 }
 
 /**
@@ -2224,9 +2234,12 @@ function mollom_mollom_data_insert($data) {
   $params['stored'] = 1;
 
   // Add the URL of the posted content itself.
-  $entity = entity_load($data->entity, array($data->id));
-  $entity = (isset($entity[$data->id]) ? $entity[$data->id] : FALSE);
-  if ($entity) {
+  $entity_info = entity_get_info();
+  if (isset($entity_info[$data->entity])) {
+    $entity = entity_load($data->entity, array($data->id));
+    $entity = (isset($entity[$data->id]) ? $entity[$data->id] : FALSE);
+  }
+  if (!empty($entity)) {
     $options = entity_uri($data->entity, $entity);
     $options['absolute'] = TRUE;
     $params['url'] = url($options['path'], $options);
@@ -2287,7 +2300,7 @@ function mollom_mollom_data_delete($data) {
     return;
   }
 
-  // Mark the content as not stored.
+  // Mark the content as discarded (not stored).
   $params['stored'] = 0;
 
   $result = mollom()->checkContent($params);
@@ -2302,29 +2315,29 @@ function mollom_mollom_data_delete($data) {
 /**
  * Menu access callback; Validates an inbound Mollom Moderation request.
  *
+ * @param object $data
+ *   The Mollom data record associated with the content to moderate.
+ * @param string $action
+ *   The moderation action to perform; e.g., 'spam', 'delete', 'approve'.
+ *
+ * @return bool
+ *   Whether the moderation request is valid and authorized.
+ *
  * @see mollom_moderate()
  */
-function mollom_moderate_access($contentId, $action) {
+function mollom_moderate_access($data, $action) {
   // Check global opt-in configuration setting.
   if (!variable_get('mollom_moderation_integration', 0)) {
     return FALSE;
   }
   // Check required request parameters.
-  if (empty($contentId) || empty($action)) {
-    _mollom_watchdog(array(
-      'Insufficient moderation request parameters' => array(),
-      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
-      'Data:<pre>@data</pre>' => array('@data' => $_REQUEST + array('action' => $action)),
-    ), WATCHDOG_WARNING);
+  if (empty($data) || empty($action)) {
     return FALSE;
   }
-
   // Validate authentication protocol parameters.
   if (!mollom_moderate_validate_oauth()) {
-    // FIXME: Temporarily disabled.
     return FALSE;
   }
-
   return TRUE;
 }
 
@@ -2345,31 +2358,64 @@ function mollom_moderate_validate_oauth() {
   unset($header['oauth_signature']);
 
   $valid = TRUE;
+  $allowed_timeframe = 900;
 
   // Validate consumer key.
-  if ($header['oauth_consumer_key'] != $publicKey) {
+  if ($header['oauth_consumer_key'] !== $publicKey) {
     $valid = FALSE;
     _mollom_watchdog(array(
       'Invalid public/consumer key' => array(),
       '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
       'Headers:<pre>@headers</pre>' => array('@headers' => $header),
       'My key:<pre>@publickey</pre>' => array('@publickey' => $publicKey),
-    ), WATCHDOG_ERROR);
+    ), WATCHDOG_WARNING);
+    return FALSE;
   }
 
   // Validate timestamp.
-  if ($header['oauth_timestamp'] <= REQUEST_TIME - 900) {
+  if ($header['oauth_timestamp'] <= REQUEST_TIME - $allowed_timeframe) {
     $valid = FALSE;
+    $diff = $header['oauth_timestamp'] - REQUEST_TIME;
+    $diff_sign = ($diff < 0 ? '-' : '+');
+    if ($diff < 0) {
+      $diff *= -1;
+    }
     _mollom_watchdog(array(
       'Outdated authentication timestamp' => array(),
       '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
       'Headers:<pre>@headers</pre>' => array('@headers' => $header),
-      'My time:<pre>@time</pre>' => array('@time' => REQUEST_TIME - 900),
-    ), WATCHDOG_ERROR);
+      'Time difference:<pre>@time</pre>' => array('@time' => $diff_sign . format_interval($diff)),
+    ), WATCHDOG_WARNING);
+    return FALSE;
   }
+
   // Validate nonce.
-  // @todo (Ab)use cache?
-  $nonce = $header['oauth_nonce'];
+  if (empty($header['oauth_nonce'])) {
+    $valid = FALSE;
+    return FALSE;
+  }
+  if ($cached = cache_get('mollom_moderation_nonces', 'cache')) {
+    $nonces = $cached->data;
+  }
+  else {
+    $nonces = array();
+  }
+  if (isset($nonces[$header['oauth_nonce']])) {
+    $valid = FALSE;
+    _mollom_watchdog(array(
+      'Replay attack' => array(),
+      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
+      'Headers:<pre>@headers</pre>' => array('@headers' => $header),
+    ), WATCHDOG_WARNING);
+    return FALSE;
+  }
+  foreach ($nonces as $nonce => $created) {
+    if ($created < REQUEST_TIME - $allowed_timeframe) {
+      unset($nonces[$nonce]);
+    }
+  }
+  $nonces[$header['oauth_nonce']] = REQUEST_TIME;
+  cache_set('mollom_moderation_nonces', $nonces, 'cache');
 
   // Validate signature.
   $base_string = implode('&', array(
@@ -2383,35 +2429,23 @@ function mollom_moderate_validate_oauth() {
 
   $valid = $valid && ($signature === $sent_signature);
 
-  if (!$valid) {
-    _mollom_watchdog(array(
-      'Invalid authentication' => array(),
-      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
-      'Headers:<pre>@headers</pre>' => array('@headers' => apache_request_headers()),
-      'OAuth Headers:<pre>@oauth-header</pre>' => array('@oauth-header' => $header),
-      '<p>Sent signature: @signature</p>' => array('@signature' => $sent_signature),
-      '<p>Expected signature: @signature-expected</p>' => array('@signature-expected' => $signature),
-      '<p>My base string: @basestring</p>' => array('@basestring' => $base_string),
-      '<p>My secret: @secret</p>' => array('@secret' => $key),
-      'Data:<pre>@data</pre>' => array('@data' => $_REQUEST),
-    ), WATCHDOG_ERROR);
-  }
-
   return $valid;
 }
 
 /**
  * Menu callback; Performs an inbound Mollom Moderation request action.
  *
+ * @param object $data
+ *   The Mollom data record associated with the content to moderate.
+ * @param string $action
+ *   The moderation action to perform; e.g., 'spam', 'delete', 'approve'.
+ *
+ * @return void
+ *   The request is terminated.
+ *
  * @see mollom_moderate_access()
  */
-function mollom_moderate($contentId, $action) {
-  $data = mollom_db_query_range('SELECT * FROM {mollom} WHERE contentId = :contentId', 0, 1, array(
-    ':contentId' => $contentId,
-  ))->fetchObject();
-  if (!$data) {
-    return MENU_NOT_FOUND;
-  }
+function mollom_moderate($data, $action) {
   $result = FALSE;
 
   // Retrieve 'delete form' id from registered information.
@@ -2432,9 +2466,17 @@ function mollom_moderate($contentId, $action) {
         }
       }
     }
+    // Invoke entity delete multiple callback.
+    elseif (!empty($form_info['entity delete multiple callback'])) {
+      if (function_exists($form_info['entity delete multiple callback'])) {
+        $function = $form_info['entity delete multiple callback'];
+        $function(array($data->id));
+        // Entity delete callbacks do not return success or failure, so we can
+        // only assume success.
+        $result = TRUE;
+      }
+    }
     // Programmatically invoke delete confirmation form.
-    // @todo Since Mollom Moderation sends feedback to Mollom already, we should
-    //   be able to "simply" delete the locally stored entity.
     elseif (isset($form_info['delete form'])) {
       if (isset($form_info['delete form file'])) {
         $file = $form_info['delete form file'] + array(
