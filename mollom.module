@@ -1251,14 +1251,16 @@ function _mollom_status($reset = FALSE) {
     'keys valid' => FALSE,
   ));
 
+  $mollom = mollom();
+
   // Both API keys are required.
-  $public_key = variable_get('mollom_public_key', '');
-  $private_key = variable_get('mollom_private_key', '');
+  $public_key = $mollom->loadConfiguration('publicKey');
+  $private_key = $mollom->loadConfiguration('privateKey');
   $status['keys'] = (!empty($public_key) && !empty($private_key));
 
   // If we have keys and are asked to reset, check whether keys are valid.
   if ($status['keys'] && $reset) {
-    $status['keys valid'] = mollom()->verifyKeys();
+    $status['keys valid'] = $mollom->verifyKeys();
   }
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {
@@ -1267,7 +1269,7 @@ function _mollom_status($reset = FALSE) {
 
   // In case of an error, indicate whether we have a non-empty server list.
   if ($status['keys valid'] !== TRUE) {
-    $servers = variable_get('mollom_servers', array());
+    $servers = $mollom->loadConfiguration('servers');
     $status['servers'] = !empty($servers);
   }
 
@@ -1821,7 +1823,6 @@ function mollom_form_submit($form, &$form_state) {
 function mollom($class = NULL) {
   $instance = &drupal_static(__FUNCTION__);
   if (!isset($class)) {
-    // @todo Testing mode configuration is not covered by tests.
     if (variable_get('mollom_testing_mode', 0)) {
       $class = 'MollomDrupalTest';
     }

@@ -14,7 +14,7 @@ class MollomDrupal extends Mollom {
    *
    * @see Mollom::loadConfiguration()
    */
-  private $configuration_map = array(
+  public $configuration_map = array(
     'publicKey' => 'mollom_public_key',
     'privateKey' => 'mollom_private_key',
     'servers' => 'mollom_servers',
@@ -198,26 +198,146 @@ class MollomDrupal extends Mollom {
 }
 
 /**
- * Drupal Mollom client implementation using production testing servers.
+ * Drupal Mollom client implementation using testing API servers.
  */
 class MollomDrupalTest extends MollomDrupal {
   /**
    * Overrides Mollom::$serversInit.
    */
   public $serversInit = array('http://dev.mollom.com');
+
+  /**
+   * Flag indicating whether to verify and automatically create testing API keys upon class instantiation.
+   *
+   * @var bool
+   */
+  public $createKeys;
+
+  /**
+   * Overrides Mollom::__construct().
+   *
+   * This class accounts for multiple scenarios:
+   * - Straight low-level requests against the testing API from a custom script,
+   *   caring for API keys on its own. Even for this most basic case, the class
+   *   needs to ensure to load and write the server list to a different system
+   *   variable, since requests will fail when intended to communicate with
+   *   production servers but those were replaced with testing servers.
+   * - Whenever the testing mode is enabled (either through the module's
+   *   settings page or by changing the mollom_testing_mode system variable),
+   *   the client requires valid testing API keys to perform any calls. Testing
+   *   API keys are different to production API keys, need to be created first,
+   *   and may vanish at any time (whenever the testing API server is
+   *   redeployed). Since they are different, the class stores them in different
+   *   system variables. Since they can vanish at any time, the class verifies
+   *   the keys upon every instantiation, and automatically creates new testing
+   *   API keys if necessary.
+   * - Some automated unit tests attempt to verify that authentication errors
+   *   and an invalid server list is handled correctly by the class' error
+   *   handling. The automatic creation and recovery of testing API keys would
+   *   break the assertions in those cases, so said tests can disable it by
+   *   pre-emptively setting $createKeys or the mollom_testing_create_keys
+   *   system variable to FALSE, and manually create testing API keys (once).
+   */
+  function __construct() {
+    // The server list is always different, regardless of testing mode. Prevent
+    // overwriting of production servers to ensure that testing API requests
+    // never go to production servers, or vice-versa.
+    $this->configuration_map['servers'] = 'mollom_test_servers';
+
+    // Do not destroy production variables when testing mode is enabled.
+    if (variable_get('mollom_testing_mode', 0)) {
+      $this->configuration_map['publicKey'] = 'mollom_test_public_key';
+      $this->configuration_map['privateKey'] = 'mollom_test_private_key';
+    }
+
+    parent::__construct();
+
+    // Any Mollom API request requires valid API keys. Verify that testing API
+    // keys exist and are still valid. Without valid API keys the client cannot
+    // retrieve a server list, and without a server list, no API calls can be
+    // executed.
+    if (!isset($this->createKeys)) {
+      $this->createKeys = (bool) variable_get('mollom_testing_create_keys', TRUE);
+    }
+    // If valid client API keys are expected, verify API keys whenever this
+    // class is instantiated.
+    if ($this->createKeys) {
+      // Verifying keys may return an authentication error, from which we will
+      // automatically recover below, so do not write the request log (yet).
+      $this->writeLog = FALSE;
+      if (!empty($this->publicKey)) {
+        $result = $this->verifyKeys();
+      }
+      else {
+        $result = self::AUTH_ERROR;
+      }
+      $this->writeLog = TRUE;
+
+      // If current keys are invalid, create and save new testing API keys.
+      if ($result === self::AUTH_ERROR) {
+        $this->createKeys();
+        $this->saveKeys();
+      }
+    }
+  }
+
+  /**
+   * Creates new testing API keys.
+   *
+   * @todo Move site properties into $data argument (Drupal-specific values),
+   *   rename to createTestingSite(), and move into Mollom class?
+   */
+  public function createKeys() {
+    // Do not attempt to create API keys repeatedly.
+    $this->createKeys = FALSE;
+
+    // Without valid API keys, we do not have a server list and cannot retrieve
+    // one. Use the intial server list to skip the server list retrieval.
+    $this->servers = $this->serversInit;
+    // Without any API keys, the client does not even attempt to perform a
+    // request. Set dummy API keys to overcome that sanity check.
+    $this->publicKey = 'public';
+    $this->privateKey = 'private';
+
+    // Skip authorization for creating testing API keys.
+    $oAuthStrategy = $this->oAuthStrategy;
+    $this->oAuthStrategy = '';
+    $result = $this->createSite(array(
+      'url' => $GLOBALS['base_url'],
+      'email' => variable_get('site_mail', 'mollom-drupal-test@example.com'),
+    ));
+    $this->oAuthStrategy = $oAuthStrategy;
+
+    // Set class properties.
+    if (is_array($result) && isset($result['publicKey'])) {
+      $this->publicKey = $result['publicKey'];
+      $this->privateKey = $result['privateKey'];
+    }
+    else {
+      unset($this->publicKey, $this->privateKey);
+    }
+  }
+
+  /**
+   * Saves API keys to local configuration store.
+   */
+  public function saveKeys() {
+    $this->saveConfiguration('publicKey', $this->publicKey);
+    $this->saveConfiguration('privateKey', $this->privateKey);
+  }
 }
 
 /**
  * Drupal Mollom client implementation using local dummy/fake REST server.
  */
-class MollomDrupalTestLocal extends MollomDrupal {
+class MollomDrupalTestLocal extends MollomDrupalTest {
   /**
    * Overrides Mollom::__construct().
    */
   function __construct() {
-    parent::__construct();
     // Replace initial server list with local fake server.
     $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
+    parent::__construct();
   }
 
   /**
