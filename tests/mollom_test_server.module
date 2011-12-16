@@ -113,8 +113,8 @@ function mollom_test_server_rest_deliver($page_callback_result) {
         break;
 
       case Mollom::AUTH_ERROR:
-        $code = 1000;
-        $message = 'Authentication failure';
+        $code = 401;
+        $message = 'Unauthorized';
         break;
 
       default:

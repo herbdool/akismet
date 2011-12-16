@@ -40,7 +40,7 @@ abstract class Mollom {
    *
    * @see MollomAuthenticationException
    */
-  const AUTH_ERROR = 1000;
+  const AUTH_ERROR = 401;
 
   /**
    * Server communication failure code: Client is asked to update the server list.
@@ -629,7 +629,7 @@ abstract class Mollom {
       if ($response->code <= 0) {
         throw new MollomNetworkException('Network error.', self::NETWORK_ERROR, NULL, $this, $arguments);
       }
-      if ($response->code == self::AUTH_ERROR || $response->code == 401) {
+      if ($response->code == self::AUTH_ERROR) {
         throw new MollomAuthenticationException('Invalid authentication.', self::AUTH_ERROR, NULL, $this, $arguments);
       }
       if ($response->code == self::REDIRECT_ERROR || ($response->code >= 300 && $response->code < 400)) {
@@ -1083,11 +1083,6 @@ abstract class Mollom {
   public function verifyKeys() {
     $data = $this->getClientInformation();
     $result = $this->updateSite($data);
-    // If the public key could not be found, make sure to return an
-    // authentication error.
-    if ($this->lastResponseCode === 404) {
-      return self::AUTH_ERROR;
-    }
     // lastResponseCode will either be TRUE, AUTH_ERROR, or NETWORK_ERROR.
     return $this->lastResponseCode === TRUE ? TRUE : $this->lastResponseCode;
   }
