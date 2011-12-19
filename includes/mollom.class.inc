@@ -751,7 +751,7 @@ abstract class Mollom {
         $oauth[$key] = $key . '="' . self::rawurlencode($value) . '"';
       }
       // Header parameters are joined and delimited by comma. (3.5.1)
-      $headers['Authorization'] = 'OAuth ' . implode(',', $oauth);
+      $headers['Authorization'] = 'OAuth ' . implode(', ', $oauth);
     }
     elseif ($this->oAuthStrategy == 'query') {
       $oauth['oauth_signature'] = rawurlencode($oauth['oauth_signature']);
