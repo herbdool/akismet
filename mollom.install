@@ -89,7 +89,7 @@ function mollom_schema() {
       'id' => array(
         'description' => 'Unique entity ID of the content.',
         'type' => 'varchar',
-        'length' => 32,
+        'length' => 36,
         'not null' => TRUE,
         'default' => '',
       ),
@@ -953,5 +953,18 @@ function mollom_update_7200() {
       'default' => '',
     ));
   }
+}
+
+/**
+ * Enlarge {mollom}.id to fit contentId and captchaId returned by Mollom.
+ */
+function mollom_update_7201() {
+  db_change_field('mollom', 'id', 'id', array(
+    'description' => 'Unique entity ID of the content.',
+    'type' => 'varchar',
+    'length' => 36,
+    'not null' => TRUE,
+    'default' => '',
+  ));
 }
 

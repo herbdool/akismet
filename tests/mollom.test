@@ -662,6 +662,72 @@ class MollomWebTestCase extends DrupalWebTestCase {
   }
 
   /**
+   * Asserts that the most recently sent mail contains a "Report to Mollom" link.
+   *
+   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
+   * sent mail from the internally recorded stack.
+   *
+   * @param string $entity_type
+   *   (optional) The expected entity type contained in the report link.
+   *   Defaults to 'mollom_content'.
+   *
+   * @return array|false
+   *   FALSE if the link was not found, or an associative array containing:
+   *   - url: The full report link URL.
+   *   - entity: The entity type contained in the report link URL.
+   *   - id: The entity ID contained in the report link URL.
+   *   - mail: The full mail message array, as recorded by TestingMailSystem.
+   */
+  protected function assertMailMollomReportLink($entity_type = 'mollom_content') {
+    // Grab the last sent mail.
+    // @see DrupalWebTestCase::assertMail()
+    $captured_emails = variable_get('drupal_test_email_collector', array());
+    $message = array_pop($captured_emails);
+    variable_set('drupal_test_email_collector', $captured_emails);
+
+    $found = FALSE;
+    if (preg_match('@http.+?mollom/report/([^/]+)/([^\s]+)@', $message['body'], $matches)) {
+      $found = array(
+        'url' => $matches[0],
+        'entity' => $matches[1],
+        'id' => $matches[2],
+        'mail' => $message,
+      );
+    }
+    $this->assertTrue($found, t('Report to Mollom link found in e-mail: %url', array('%url' => $found['url'])));
+    $this->assertSame('Report link entity type', $found['entity'], $entity_type);
+    $this->assertMollomData($found['entity'], $found['id']);
+    return $found;
+  }
+
+  /**
+   * Asserts that the most recently sent mail does NOT contain a "Report to Mollom" link.
+   *
+   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
+   * sent mail from the internally recorded stack.
+   *
+   * @return bool
+   *   TRUE if no link was found, FALSE otherwise.
+   */
+  protected function assertNoMailMollomReportLink() {
+    // Grab the last sent mail.
+    // @see DrupalWebTestCase::assertMail()
+    $captured_emails = variable_get('drupal_test_email_collector', array());
+    $message = array_pop($captured_emails);
+    if (empty($message)) {
+      $this->fail('No mail to assert.');
+      return;
+    }
+    variable_set('drupal_test_email_collector', $captured_emails);
+
+    $found = preg_match('@http.+?mollom/report/([^/]+)/([^\s]+)@', $message['body'], $matches);
+    $this->assertFalse($found, 'Report to Mollom link not found in e-mail.');
+    if ($found) {
+      debug($message);
+    }
+  }
+
+  /**
    * Retrieve a field value by ID.
    */
   protected function getFieldValueByID($id) {
@@ -1614,7 +1680,6 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     $this->mollom->saveConfiguration('servers', array('http://fake-host'));
 
     // Check the password request form.
-    // @todo Test mail sending with assertMail() now that it is available.
     $this->drupalGet('user/password', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoCaptchaField();
     $this->assertText($this->fallback_message);
@@ -1646,8 +1711,6 @@ class MollomFallbackTestCase extends MollomWebTestCase {
   /**
    * Make sure that spam protection is still active even when some of the
    * Mollom servers are unavailable.
-   *
-   * @todo Test mail sending with assertMail() now that it is available.
    */
   function testFailoverMechanism() {
     $this->drupalLogin($this->admin_user);
@@ -2371,22 +2434,20 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
   }
 }
 
+/**
+ * Tests protection of User module forms.
+ */
 class MollomUserFormsTestCase extends MollomWebTestCase {
-  // @todo Configure user registration settings like in Standard profile.
-  protected $profile = 'standard';
-
   public static function getInfo() {
     return array(
-      'name' => 'User registration and password protection',
-      'description' => 'Check that the user registration and password request forms can be protected.',
+      'name' => 'User integration',
+      'description' => 'Tests protection of User module forms.',
       'group' => 'Mollom',
     );
   }
 
   /**
    * Make sure that the request password form is protected correctly.
-   *
-   * @todo Test mail sending with assertMail() now that it is available.
    */
   function testProtectRequestPassword() {
     // We first enable Mollom for the request password form.
@@ -2395,7 +2456,7 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     $this->drupalLogout();
 
     // Create a new user.
-    $this->web_user = $this->drupalCreateUser();
+    $this->web_user = $this->drupalCreateUser(array());
 
     $this->drupalGet('user/password');
 
@@ -2403,10 +2464,12 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     $edit = array('name' => $this->web_user->name);
     $this->postIncorrectCaptcha('user/password', $edit, t('E-mail new password'));
     $this->postCorrectCaptcha(NULL, array(), t('E-mail new password'));
+    $this->assertNoMailMollomReportLink();
 
     // Try to reset the user's password by specifying a valid CAPTCHA.
     $this->postCorrectCaptcha('user/password', $edit, t('E-mail new password'));
     $this->assertText(t('Further instructions have been sent to your e-mail address.'));
+    $this->assertNoMailMollomReportLink();
   }
 
   /**
@@ -2444,6 +2507,11 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
     $this->assertText(t('Your account is currently pending approval by the site administrator.'));
     $this->assertTrue(user_load_by_name($name), t('The user who attempted to register appears in the database when the CAPTCHA is valid.'));
+
+    // First mail sent is the site administrator approval.
+    $this->assertMailMollomReportLink('mollom_captcha');
+    // Second mail goes to the user who registered.
+    $this->assertNoMailMollomReportLink();
   }
 }
 
@@ -2779,13 +2847,16 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   }
 }
 
+/**
+ * Tests protection of Contact module forms.
+ */
 class MollomContactFormTestCase extends MollomWebTestCase {
   protected $disableDefaultSetup = TRUE;
 
   public static function getInfo() {
     return array(
-      'name' => 'Contact form protection',
-      'description' => 'Check that the contact form can be protected.',
+      'name' => 'Contact integration',
+      'description' => 'Tests protection of Contact module forms.',
       'group' => 'Mollom',
     );
   }
@@ -2805,8 +2876,6 @@ class MollomContactFormTestCase extends MollomWebTestCase {
 
   /**
    * Make sure that the user contact form is protected correctly.
-   *
-   * @todo Test mail sending with assertMail() now that it is available.
    */
   function testProtectContactUserForm() {
     // Enable Mollom for the contact form.
@@ -2826,16 +2895,17 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     // Submit a 'ham' message.  This should be accepted.
     $this->assertHamSubmit($url, array('subject', 'message'), array(), $button);
     $this->assertText($success);
+    $this->assertMailMollomReportLink();
 
     // Submit an 'unsure' message.  This should be accepted only after the
     // CAPTCHA has been solved.
     $this->assertUnsureSubmit($url, array('subject', 'message'), array(), $button, $success);
+    $this->assertText($success);
+    $this->assertMailMollomReportLink();
   }
 
   /**
    * Make sure that the site-wide contact form is protected correctly.
-   *
-   * @todo Test mail sending with assertMail() now that it is available.
    */
   function testProtectContactSiteForm() {
     // Enable Mollom for the contact form.
@@ -2865,51 +2935,21 @@ class MollomContactFormTestCase extends MollomWebTestCase {
     // Submit a 'ham' message.  This should be accepted.
     $this->assertHamSubmit($url, array('subject', 'message'), array(), $button);
     $this->assertText($success);
-    $report_link = $this->parseMollomMailReportLink();
-    $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
-    $this->assertEqual($report_link['entity'], 'mollom_content', t('Report link in e-mail uses entity type "session".'));
-    $this->assertMollomData($report_link['entity'], $report_link['id']);
+    $this->assertMailMollomReportLink();
 
     // Submit an 'unsure' message.  This should be accepted only after the
     // CAPTCHA has been solved.
     $this->assertUnsureSubmit($url, array('subject', 'message'), array(), $button, $success);
-    $report_link = $this->parseMollomMailReportLink();
-    $this->assertTrue($report_link, t('Report to Mollom link found in e-mail.'));
-    $this->assertEqual($report_link['entity'], 'mollom_content', t('Report link in e-mail uses entity type "session".'));
-    $this->assertMollomData($report_link['entity'], $report_link['id']);
+    $this->assertText($success);
+    $found = $this->assertMailMollomReportLink();
 
     // Report the mail to Mollom.
-    $this->drupalGet($report_link['url']);
+    $this->drupalGet($found['url']);
     $edit = array(
       'mollom[feedback]' => 'spam',
     );
     $this->drupalPost(NULL, $edit, t('Delete'));
     $this->assertText(t('The content was successfully reported as inappropriate.'));
-  }
-
-  /**
-   * Returns data about the report to Mollom link in the last sent mail.
-   *
-   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
-   * sent mail from the internally recorded stack.
-   */
-  function parseMollomMailReportLink() {
-    // Grab the last sent mail.
-    // @see DrupalWebTestCase::assertMail()
-    $captured_emails = variable_get('drupal_test_email_collector', array());
-    $email = array_pop($captured_emails);
-    variable_set('drupal_test_email_collector', $captured_emails);
-
-    $found = FALSE;
-    if (preg_match('@http.+?mollom/report/([^/]+)/([^\s]+)@', $email['body'], $matches)) {
-      $found = array(
-        'url' => $matches[0],
-        'entity' => $matches[1],
-        'id' => $matches[2],
-        'mail' => $email,
-      );
-    }
-    return $found;
   }
 }
 

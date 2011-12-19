@@ -2771,6 +2771,7 @@ function user_mollom_form_info($form_id) {
       $form_info = array(
         'bypass access' => array('administer users'),
         'moderation callback' => 'user_mollom_form_moderation',
+        'mail ids' => array('user_register_pending_approval_admin'),
         'mapping' => array(
           'post_id' => 'uid',
           'author_name' => 'name',
