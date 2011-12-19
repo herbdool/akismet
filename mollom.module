@@ -2258,10 +2258,10 @@ function mollom_mollom_data_insert($data) {
   $result = mollom()->checkContent($params);
 
   // If we did not have a contentId yet, inject it.
-  if (is_array($result) && isset($result['id']) && empty($data->contentId)) {
+  if (is_array($result) && !empty($result['id']) && empty($data->contentId)) {
     $data->contentId = $result['id'];
     db_update('mollom')
-      ->fields(array('contentId' => $result['id']))
+      ->fields(array('contentId' => $data->contentId))
       ->condition('captchaId', $data->captchaId)
       ->execute();
   }
@@ -2287,20 +2287,13 @@ function mollom_mollom_data_delete($data) {
   if ($data->entity == 'mollom_content' || $data->entity == 'mollom_captcha') {
     return;
   }
-
-  $params = array();
-  if (!empty($data->contentId)) {
-    $params['id'] = $data->contentId;
-  }
-  if (!empty($data->captchaId)) {
-    $params['captchaId'] = $data->captchaId;
-  }
-  // Break if we neither have a content nor a CAPTCHA ID.
-  if (empty($params)) {
+  // Only content can be deleted.
+  if (empty($data->contentId)) {
     return;
   }
 
   // Mark the content as discarded (not stored).
+  $params['id'] = $data->contentId;
   $params['stored'] = 0;
 
   $result = mollom()->checkContent($params);
@@ -2326,19 +2319,28 @@ function mollom_mollom_data_delete($data) {
  * @see mollom_moderate()
  */
 function mollom_moderate_access($data, $action) {
+  static $access;
+
+  // Drupal invokes _menu_translate() once more when rendering local tasks for
+  // the page, which breaks the OAuth nonce validation.
+  // @see http://drupal.org/node/1373072
+  if (isset($access)) {
+    return $access;
+  }
+  $access = TRUE;
   // Check global opt-in configuration setting.
   if (!variable_get('mollom_moderation_integration', 0)) {
-    return FALSE;
+    $access = FALSE;
   }
   // Check required request parameters.
   if (empty($data) || empty($action)) {
-    return FALSE;
+    $access = FALSE;
   }
   // Validate authentication protocol parameters.
   if (!mollom_moderate_validate_oauth()) {
-    return FALSE;
+    $access = FALSE;
   }
-  return TRUE;
+  return $access;
 }
 
 /**
@@ -2354,15 +2356,18 @@ function mollom_moderate_validate_oauth() {
   $data = MollomDrupal::getServerParameters();
   $header = MollomDrupal::getServerAuthentication();
 
+  // Validate protocol parameters.
+  if (!isset($header['oauth_consumer_key'], $header['oauth_nonce'], $header['oauth_timestamp'], $header['oauth_signature_method'], $header['oauth_signature'])) {
+    return FALSE;
+  }
+
   $sent_signature = $header['oauth_signature'];
   unset($header['oauth_signature']);
 
-  $valid = TRUE;
   $allowed_timeframe = 900;
 
   // Validate consumer key.
   if ($header['oauth_consumer_key'] !== $publicKey) {
-    $valid = FALSE;
     _mollom_watchdog(array(
       'Invalid public/consumer key' => array(),
       '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
@@ -2374,7 +2379,6 @@ function mollom_moderate_validate_oauth() {
 
   // Validate timestamp.
   if ($header['oauth_timestamp'] <= REQUEST_TIME - $allowed_timeframe) {
-    $valid = FALSE;
     $diff = $header['oauth_timestamp'] - REQUEST_TIME;
     $diff_sign = ($diff < 0 ? '-' : '+');
     if ($diff < 0) {
@@ -2391,7 +2395,6 @@ function mollom_moderate_validate_oauth() {
 
   // Validate nonce.
   if (empty($header['oauth_nonce'])) {
-    $valid = FALSE;
     return FALSE;
   }
   if ($cached = cache_get('mollom_moderation_nonces', 'cache')) {
@@ -2401,7 +2404,6 @@ function mollom_moderate_validate_oauth() {
     $nonces = array();
   }
   if (isset($nonces[$header['oauth_nonce']])) {
-    $valid = FALSE;
     _mollom_watchdog(array(
       'Replay attack' => array(),
       '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
@@ -2424,12 +2426,9 @@ function mollom_moderate_validate_oauth() {
     Mollom::rawurlencode(Mollom::httpBuildQuery($data + $header)),
   ));
   $key = Mollom::rawurlencode($privateKey) . '&' . '';
-
   $signature = rawurlencode(base64_encode(hash_hmac('sha1', $base_string, $key, TRUE)));
 
-  $valid = $valid && ($signature === $sent_signature);
-
-  return $valid;
+  return $signature === $sent_signature;
 }
 
 /**
@@ -2447,6 +2446,11 @@ function mollom_moderate_validate_oauth() {
  */
 function mollom_moderate($data, $action) {
   $result = FALSE;
+
+  // Verify that action is supported or respond with a 404.
+  if (!in_array($action, array('approve', 'spam', 'delete'))) {
+    return MENU_NOT_FOUND;
+  }
 
   // Retrieve 'delete form' id from registered information.
   $form_info = mollom_form_load($data->form_id);

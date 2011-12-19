@@ -295,22 +295,29 @@ class MollomDrupalTest extends MollomDrupal {
     // If valid client API keys are expected, verify API keys whenever this
     // class is instantiated.
     if ($this->createKeys) {
-      // Verifying keys may return an authentication error, from which we will
-      // automatically recover below, so do not write the request log (yet).
-      $this->writeLog = FALSE;
-      if (!empty($this->publicKey)) {
-        $result = $this->verifyKeys();
-      }
-      else {
-        $result = self::AUTH_ERROR;
-      }
-      $this->writeLog = TRUE;
+      $this->checkKeys();
+    }
+  }
 
-      // If current keys are invalid, create and save new testing API keys.
-      if ($result === self::AUTH_ERROR) {
-        $this->createKeys();
-        $this->saveKeys();
-      }
+  /**
+   * Checks whether current API keys are valid and creates new keys if they are not.
+   */
+  public function checkKeys() {
+    // Verifying keys may return an authentication error, from which we will
+    // automatically recover below, so do not write the request log (yet).
+    $this->writeLog = FALSE;
+    if (!empty($this->publicKey)) {
+      $result = $this->verifyKeys();
+    }
+    else {
+      $result = self::AUTH_ERROR;
+    }
+    $this->writeLog = TRUE;
+
+    // If current keys are invalid, create and save new testing API keys.
+    if ($result === self::AUTH_ERROR) {
+      $this->createKeys();
+      $this->saveKeys();
     }
   }
 
@@ -371,6 +378,30 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
     // Replace initial server list with local fake server.
     $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
     parent::__construct();
+  }
+
+  /**
+   * Overrides MollomDrupal::saveKeys().
+   */
+  public function saveKeys() {
+    parent::saveKeys();
+
+    // Ensure that the site exists on the local fake server. Not required for
+    // remote REST testing API, because our testing API keys persist there.
+    // @see mollom_test_server_rest_site()
+    $bin = 'mollom_test_server_site';
+    $sites = variable_get($bin, array());
+    if (!isset($sites[$this->publicKey])) {
+      // Apply default values.
+      $sites[$this->publicKey] = array(
+        'publicKey' => $this->publicKey,
+        'privateKey' => $this->privateKey,
+        'url' => '',
+        'email' => '',
+        'servers' => $this->servers,
+      );
+      variable_set($bin, $sites);
+    }
   }
 
   /**

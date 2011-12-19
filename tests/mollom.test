@@ -151,9 +151,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Not (always) possible when working with local testing server, since
     // getServerRecord() removes server records upon retrieval, so the site
     // record may no longer exist.
+    // @todo Only remove keys after running the last test in a test case.
+    /*
     if ($this->mollomClass == 'MollomDrupalTest') {
       $this->deleteKeys();
     }
+    */
     // Capture any (remaining) watchdog messages.
     $this->assertMollomWatchdogMessages();
     parent::tearDown();
@@ -338,15 +341,20 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // 'mollom_testing_create_keys' variable, MollomDrupalTest::__construct()
     // will automatically setup testing API keys.
     $this->getClient();
+
     if ($force) {
       $this->mollom->createKeys();
-      $this->mollom->saveKeys();
     }
 
     // Make API keys available to test methods.
     if (!empty($this->mollom->publicKey)) {
       $this->publicKey = $this->mollom->publicKey;
       $this->privateKey = $this->mollom->privateKey;
+
+      // Multiple tests might be executed in a single request. Every test sets
+      // up a new child site from scratch. The Mollom class with testing API
+      // keys still exists in the test, but the configuration is gone.
+      $this->mollom->saveKeys();
     }
   }
 
@@ -3890,6 +3898,78 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
   }
 
   /**
+   * Creates a mollom_test post.
+   *
+   * @param array $edit
+   *   (optional) Custom form input for mollom_test form.
+   *
+   * @return stdClass
+   *   The Mollom data object for the created post.
+   */
+  protected function drupalCreateTestPost(array $edit = array()) {
+    $edit += array(
+      'title' => 'spam',
+    );
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $this->assertText('Successful form submission');
+    $mid = $this->getFieldValueByName('mid');
+    $record = mollom_test_load($mid);
+    $this->assertSame('Publishing status', $record['status'], 0);
+    $data = mollom_data_load('mollom_test', $mid);
+    $this->assertTrue($data, 'Mollom data for post exists.');
+    return $data;
+  }
+
+  /**
+   * Performs a Mollom moderation HTTP request against the child site.
+   *
+   * @param string $method
+   *   The HTTP method to use; GET or POST.
+   * @param string $path
+   *   The Drupal system path to request; e.g., 'mollom/moderate/123/spam'.
+   * @param array $oauth_hacks
+   *   (optional) An associative array of hacks (replacements) to apply to the
+   *   OAuth Authorization HTTP header. E.g., array('oauth_nonce' => 'foo')
+   *   replaces the 'oauth_nonce' parameter value with "foo".
+   *
+   * @return mixed
+   *   An object containing the response of the Drupal page callback, as
+   *   returned by drupal_http_request().
+   */
+  protected function mollomRequest($method, $path, array $oauth_hacks = array()) {
+    $endpoint = $GLOBALS['base_url'];
+    $data = array();
+    $headers = array();
+    $this->mollom->addAuthentication($method, $endpoint, $path, $data, $headers);
+
+    // Apply any OAuth header hacks.
+    foreach ($oauth_hacks as $name => $value) {
+      $headers['Authorization'] = preg_replace('@(' . $name . ')="[^"]*"@', '$1="' . $value . '"', $headers['Authorization']);
+    }
+
+    // curlexec() expects HTTP headers as "name: value" strings.
+    $curl_headers = array();
+    foreach ($headers as $name => $value) {
+      $curl_headers[] = $name . ': ' . $value;
+    }
+    // @see DrupalWebTestCase::drupalPost()
+    $out = $this->curlExec(array(
+      CURLOPT_URL => $endpoint . '/' . $path,
+      CURLOPT_POST => TRUE,
+      CURLOPT_POSTFIELDS => $data,
+      CURLOPT_HTTPHEADER => $curl_headers,
+    ));
+    // Ensure that any changes to variables in the other thread are picked up.
+    $this->refreshVariables();
+    $this->verbose('POST request to: ' . $path .
+                   '<hr />Ending URL: ' . $this->getUrl() .
+                   '<hr />Headers: ' . highlight_string('<?php ' . var_export($headers, TRUE), TRUE) .
+                   '<hr />Fields: ' . highlight_string('<?php ' . var_export($data, TRUE), TRUE) .
+                   '<hr />' . $out);
+    return $out;
+  }
+
+  /**
    * Tests that the 'stored' property of checked content is updated according to local events.
    *
    * @todo
@@ -3920,61 +4000,111 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Tests moderation request authorization.
-   *
-   * @todo
-   * - Test invalid/missing public key.
-   * - Test invalid time(stamp).
-   * - Test (nonce) replay attack.
-   * - Test wrong signature.
-   * - Test unsupported signature hashing algo.
+   * Tests validation of moderation request authorization.
    */
+  function testAuthorization() {
+    $data = $this->drupalCreateTestPost();
+    $path = 'mollom/moderate/' . $data->contentId . '/spam';
 
+    // Test no Mollom moderation access with disabled integration.
+    variable_set('mollom_moderation_integration', 0);
+    $this->mollomRequest('POST', $path);
+    $this->assertResponse(403);
+    $this->assertMollomWatchdogMessages();
+    $record = mollom_test_load($data->id);
+    $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+    variable_set('mollom_moderation_integration', 1);
+
+    $replay_attack_nonce = md5(microtime() . mt_rand());
+    $tests = array(
+      // Test entirely missing OAuth header throws no notices or exceptions.
+      array('class' => array('oAuthStrategy' => '')),
+      // Test OAuth query parameters are not supported.
+      array('class' => array('oAuthStrategy' => 'query')),
+      // Test missing or invalid public key.
+      array('class' => array('publicKey' => ''), 'watchdog' => WATCHDOG_WARNING),
+      array('class' => array('publicKey' => md5('foo')), 'watchdog' => WATCHDOG_WARNING),
+      // Test missing or invalid private key.
+      // Only impacts the resulting oauth_signature and there is no Mollom log
+      // message on a signature mismatch, just a regular 403 response.
+      array('class' => array('privateKey' => '')),
+      array('class' => array('privateKey' => md5('foo'))),
+      // Test nonce replay attack, more than once.
+      array('hacks' => array('oauth_nonce' => $replay_attack_nonce)),
+      array('hacks' => array('oauth_nonce' => $replay_attack_nonce), 'watchdog' => WATCHDOG_WARNING),
+      array('hacks' => array('oauth_nonce' => $replay_attack_nonce), 'watchdog' => WATCHDOG_WARNING),
+      // Test invalid/oudated timestamp.
+      array('hacks' => array('oauth_timestamp' => REQUEST_TIME - 1000), 'watchdog' => WATCHDOG_WARNING),
+      // Test invalid signature.
+      array('hacks' => array('oauth_signature' => base64_encode(hash_hmac('sha1', 'foo', 'bar', TRUE)))),
+      // Test unsupported signature hashing algo.
+      array('hacks' => array('oauth_signature_method' => 'HMAC-SHA256')),
+    );
+    foreach ($tests as $test) {
+      // Backup and override properties on Mollom client.
+      $this->mollomBackup = new stdClass;
+      $test += array(
+        'class' => array(),
+        'hacks' => array(),
+        // Watchdog log message assertion only accounts for Mollom messages,
+        // not for generic 403s.
+        'watchdog' => WATCHDOG_NOTICE,
+      );
+      foreach ($test['class'] as $key => $value) {
+        $this->mollomBackup->$key = $this->mollom->$key;
+        $this->mollom->$key = $value;
+      }
+      // Execute test.
+      $this->mollomRequest('POST', $path, $test['hacks']);
+      $this->assertResponse(403);
+      $this->assertMollomWatchdogMessages($test['watchdog']);
+      $record = mollom_test_load($data->id);
+      $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+
+      // Restore original properties on Mollom client.
+      foreach ($test['class'] as $key => $value) {
+        $this->mollom->$key = $this->mollomBackup->$key;
+      }
+    }
+  }
 
   /**
    * Tests that a stored content can be moderated.
    */
   function testModeration() {
-    $actions = array('approve', 'spam', 'delete');
+    // Also test invalid/unsupported moderation actions.
+    $actions = array('approve', 'spam', 'delete', 'invalid', '');
 
     foreach ($actions as $action) {
       // Post something.
-      $edit = array(
-        'title' => 'spam',
-      );
-      $this->drupalPost('mollom-test/form', $edit, 'Submit');
-      $this->assertText('Successful form submission');
-      $mid = $this->getFieldValueByName('mid');
-      $record = mollom_test_load($mid);
-      $this->assertSame('Publishing status', $record['status'], 0);
-      $data = mollom_data_load('mollom_test', $mid);
-      $this->assertTrue($data, 'Mollom data for post exists.');
+      $data = $this->drupalCreateTestPost();
 
       // Send a moderation request for the post.
-      $mollom = mollom();
-      $endpoint = $GLOBALS['base_url'];
       $path = 'mollom/moderate/' . $data->contentId . '/' . $action;
-      $params = array();
-      $headers = array();
-      $auth = $mollom->addAuthentication('POST', $endpoint, $path, $params, $headers);
-      $result = drupal_http_request($endpoint . '/' . $path, array(
-        'method' => 'POST',
-        'headers' => $headers,
-        'data' => !empty($params) ? $params : NULL,
-      ));
+      $this->mollomRequest('POST', $path);
       $this->assertMollomWatchdogMessages();
+
+      $record = mollom_test_load($data->id);
+      $new_data = mollom_data_load('mollom_test', $data->id);
 
       // Verify that the post was published.
       if ($action == 'approve') {
-        $record = mollom_test_load($mid);
+        $this->assertResponse(200);
         $this->assertSame('Publishing status', $record['status'], 1);
-        $approved = mollom_data_load('mollom_test', $mid);
-        $this->assertTrue($approved, 'Mollom data for approved post still exists.');
+        $this->assertTrue($new_data, 'Mollom data for approved post still exists.');
+        $this->assertFalse($new_data->moderate, 'Post is flagged as moderated.');
       }
       // Verify that the post was deleted.
+      elseif ($action == 'spam' || $action == 'delete') {
+        $this->assertResponse(200);
+        $this->assertFalse($record, 'Test post not found.');
+        $this->assertFalse($new_data, 'Moderated/deleted record no longer exists.');
+      }
+      // Verify that post still exists after invalid/unsupported action.
       else {
-        $deleted = mollom_data_load('mollom_test', $mid);
-        $this->assertFalse($deleted, 'Moderated/deleted record no longer exists.');
+        $this->assertResponse(404);
+        $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+        $this->assertTrue($new_data->moderate, 'Post is not flagged as moderated.');
       }
     }
   }
