@@ -2139,17 +2139,22 @@ function mollom_mail_alter(&$message) {
   // report link is added to mails sent by actual users and not any mails sent
   // by Drupal since they should never be reported as spam.
   if (!empty($GLOBALS['mollom']['mail ids']) && in_array($message['id'], $GLOBALS['mollom']['mail ids'])) {
-    mollom_mail_add_report_link($message);
+    mollom_mail_add_report_link($message, $GLOBALS['mollom']);
   }
 }
 
 /**
  * Add the 'Report as innapropriate' link to an e-mail message.
  *
+ * @param array $message
+ *   The message to alter.
+ * @param array $mollom
+ *   The Mollom state for the mail; typically $form_state['mollom'], as set up
+ *   by mollom_process_mollom().
+ *
  * @see mollom_mail_alter()
  */
-function mollom_mail_add_report_link(&$message) {
-  $mollom = $GLOBALS['mollom'];
+function mollom_mail_add_report_link(array &$message, array $mollom) {
   if (!empty($mollom['response']['content']['id']) || !empty($mollom['response']['captcha']['id'])) {
     $data = (object) $mollom['response'];
     if (!empty($mollom['response']['content']['id'])) {
