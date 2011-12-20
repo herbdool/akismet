@@ -1482,7 +1482,7 @@ function mollom_form_add_captcha(&$element, &$form_state) {
   $element['captcha']['#value'] = '';
 
   // Prevent the page cache from storing a form containing a CAPTCHA element.
-  $GLOBALS['conf']['cache'] = 0;
+  drupal_page_is_cacheable(FALSE);
 
   $captcha = mollom_get_captcha($form_state);
   // If we get a response, add the image CAPTCHA to the form element.
