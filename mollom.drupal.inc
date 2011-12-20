@@ -17,7 +17,6 @@ class MollomDrupal extends Mollom {
   public $configuration_map = array(
     'publicKey' => 'mollom_public_key',
     'privateKey' => 'mollom_private_key',
-    'servers' => 'mollom_servers',
   );
 
   /**
@@ -129,25 +128,13 @@ class MollomDrupal extends Mollom {
   }
 
   /**
-   * Overrides Mollom::refreshServers().
-   */
-  protected function refreshServers() {
-    $servers = parent::refreshServers();
-
-    // Allow other modules to alter the server list. Internal use only.
-    drupal_alter('mollom_server_list', $servers);
-
-    return $servers;
-  }
-
-  /**
    * Implements Mollom::request().
    */
   protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
     $request = array(
       'method' => $method,
       'headers' => $headers,
-      'timeout' => 5.0,
+      'timeout' => $this->requestTimeout,
     );
     if (isset($query)) {
       if ($method == 'GET') {
@@ -235,9 +222,9 @@ class MollomDrupal extends Mollom {
  */
 class MollomDrupalTest extends MollomDrupal {
   /**
-   * Overrides Mollom::$serversInit.
+   * Overrides Mollom::$server.
    */
-  public $serversInit = array('http://dev.mollom.com');
+  public $server = 'dev.mollom.com';
 
   /**
    * Flag indicating whether to verify and automatically create testing API keys upon class instantiation.
@@ -251,10 +238,7 @@ class MollomDrupalTest extends MollomDrupal {
    *
    * This class accounts for multiple scenarios:
    * - Straight low-level requests against the testing API from a custom script,
-   *   caring for API keys on its own. Even for this most basic case, the class
-   *   needs to ensure to load and write the server list to a different system
-   *   variable, since requests will fail when intended to communicate with
-   *   production servers but those were replaced with testing servers.
+   *   caring for API keys on its own.
    * - Whenever the testing mode is enabled (either through the module's
    *   settings page or by changing the mollom_testing_mode system variable),
    *   the client requires valid testing API keys to perform any calls. Testing
@@ -265,18 +249,13 @@ class MollomDrupalTest extends MollomDrupal {
    *   the keys upon every instantiation, and automatically creates new testing
    *   API keys if necessary.
    * - Some automated unit tests attempt to verify that authentication errors
-   *   and an invalid server list is handled correctly by the class' error
-   *   handling. The automatic creation and recovery of testing API keys would
-   *   break the assertions in those cases, so said tests can disable it by
-   *   pre-emptively setting $createKeys or the mollom_testing_create_keys
-   *   system variable to FALSE, and manually create testing API keys (once).
+   *   are handled correctly by the class' error handling. The automatic
+   *   creation and recovery of testing API keys would break those assertions,
+   *   so said tests can disable the behavior by preemptively setting
+   *   $createKeys or the 'mollom_testing_create_keys' system variable to FALSE,
+   *   and manually create testing API keys (once).
    */
   function __construct() {
-    // The server list is always different, regardless of testing mode. Prevent
-    // overwriting of production servers to ensure that testing API requests
-    // never go to production servers, or vice-versa.
-    $this->configuration_map['servers'] = 'mollom_test_servers';
-
     // Do not destroy production variables when testing mode is enabled.
     if (variable_get('mollom_testing_mode', 0)) {
       $this->configuration_map['publicKey'] = 'mollom_test_public_key';
@@ -285,10 +264,8 @@ class MollomDrupalTest extends MollomDrupal {
 
     parent::__construct();
 
-    // Any Mollom API request requires valid API keys. Verify that testing API
-    // keys exist and are still valid. Without valid API keys the client cannot
-    // retrieve a server list, and without a server list, no API calls can be
-    // executed.
+    // Any Mollom API request requires valid API keys, or no API calls can be
+    // executed. Verify that testing API keys exist and are still valid.
     if (!isset($this->createKeys)) {
       $this->createKeys = (bool) variable_get('mollom_testing_create_keys', TRUE);
     }
@@ -331,9 +308,6 @@ class MollomDrupalTest extends MollomDrupal {
     // Do not attempt to create API keys repeatedly.
     $this->createKeys = FALSE;
 
-    // Without valid API keys, we do not have a server list and cannot retrieve
-    // one. Use the intial server list to skip the server list retrieval.
-    $this->servers = $this->serversInit;
     // Without any API keys, the client does not even attempt to perform a
     // request. Set dummy API keys to overcome that sanity check.
     $this->publicKey = 'public';
@@ -376,7 +350,8 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
    */
   function __construct() {
     // Replace initial server list with local fake server.
-    $this->serversInit = array($GLOBALS['base_url'] . '/mollom-test/rest');
+    list(, $server) = explode('://', $GLOBALS['base_url'], 2);
+    $this->server = $server . '/mollom-test/rest';
     parent::__construct();
   }
 
@@ -398,7 +373,6 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
         'privateKey' => $this->privateKey,
         'url' => '',
         'email' => '',
-        'servers' => $this->servers,
       );
       variable_set($bin, $sites);
     }
@@ -432,3 +406,47 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
   }
 }
 
+/**
+ * Drupal Mollom client implementation using an invalid server.
+ */
+class MollomDrupalTestInvalid extends MollomDrupalTest {
+  /**
+   * Overrides Mollom::$server.
+   */
+  public $server = 'fake-host';
+
+  /**
+   * Overrides MollomDrupalTest::$createKeys.
+   *
+   * Do not attempt to verify API keys against invalid server.
+   */
+  public $createKeys = FALSE;
+
+  private $currentAttempt = 0;
+
+  /**
+   * Overrides Mollom::query().
+   */
+  protected function query($method, $path, array $data = array(), array $expected = array()) {
+    $this->currentAttempt = 0;
+    return parent::query($method, $path, $data, $expected);
+  }
+
+  /**
+   * Overrides Mollom::handleRequest().
+   *
+   * Mollom::$server is replaced with an invalid server, so all requests will
+   * result in a network error. However, if the 'mollom_testing_server_failover'
+   * variable is set to TRUE, then the last request attempt will succeed.
+   */
+  protected function handleRequest($method, $server, $path, $data, $expected = array()) {
+    $this->currentAttempt++;
+
+    if (variable_get('mollom_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
+      // Prior to PHP 5.3, there is no late static binding, so there is no way
+      // to access the original value of MollomDrupalTest::$server.
+      $server = strtr($server, array($this->server => 'dev.mollom.com'));
+    }
+    return parent::handleRequest($method, $server, $path, $data, $expected);
+  }
+}

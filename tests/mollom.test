@@ -248,16 +248,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   incorrectly solving a CAPTCHA.
    */
   protected function assertResponseID($type, $id, $new_expected = FALSE) {
-    if (!$new_expected) {
-      // Check whether watchdog messages indicate a refresh or redirect.
-      foreach ($this->messages as $message) {
-        if ($message->message == 'New server list: %servers' || $message->message == 'Server %server redirected to: %next.') {
-          // Reset all IDs.
-          $this->resetResponseID();
-        }
-      }
-    }
-
     if (!isset($this->responseIds[$type]) || $new_expected) {
       // Use assertTrue() instead of pass(), to test !empty().
       $this->assertTrue($id, t('New %type: %id', array(
@@ -1092,17 +1082,12 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText('The configured Mollom API keys are invalid.');
 
-    $this->getClient();
-
     // Ensure unreachable servers.
-    $this->mollom->saveConfiguration('servers', array('http://fake-host'));
+    variable_set('mollom_class', 'MollomDrupalTestInvalid');
 
     // Verify presence of 'network error' message.
     $this->drupalGet('admin/config/content/mollom/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText(t('The Mollom servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.'));
-
-    // Ensure unreachable servers.
-    $this->mollom->saveConfiguration('servers', array('http://fake-host'));
 
     // Verify requirements error about network error.
     $this->drupalGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1110,7 +1095,9 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
     // Create a testing site on backend to have some API keys.
+    $this->getClient();
     $this->mollom->createKeys();
+    variable_set('mollom_class', $this->mollomClass);
 
     // Verify that valid keys work.
     $this->drupalGet('admin/config/content/mollom/settings', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1173,7 +1160,6 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
     $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
     $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
-    $this->assertTrue(!empty($result['servers']) && is_array($result['servers']), 'Server list found.');
 
     $site = $result;
     $mollom->publicKey = $site['publicKey'];
@@ -1190,7 +1176,6 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
     $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
     $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
-    $this->assertSame('servers', $result['servers'], $site['servers']);
 
     // Test that verifying keys updates client information.
     $result = $mollom->verifyKeys();
@@ -1207,7 +1192,6 @@ class MollomResponseTestCase extends MollomWebTestCase {
     $this->assertSame('platformVersion', $result['platformVersion'], $info['platformVersion']);
     $this->assertSame('clientName', $result['clientName'], $info['clientName']);
     $this->assertSame('clientVersion', $result['clientVersion'], $info['clientVersion']);
-    $this->assertSame('servers', $result['servers'], $site['servers']);
 
     // Verify that the site is listed.
     // FIXME: Site listing not supported by backend yet.
@@ -1632,18 +1616,7 @@ class MollomBypassAccessTestCase extends MollomWebTestCase {
   }
 }
 
-class MollomFallbackTestCase extends MollomWebTestCase {
-  // Re-route Mollom communication to this testing site.
-  protected $mollomClass = 'MollomDrupalTestLocal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Fallback behavior',
-      'description' => 'Check that the module uses the correct fallback mechanism when one or more of the specified Mollom servers are not available.',
-      'group' => 'Mollom',
-    );
-  }
-
+class MollomFallbackModeTestCase extends MollomWebTestCase {
   /**
    * Disable automated creation and recovery of testing API keys.
    *
@@ -1659,28 +1632,36 @@ class MollomFallbackTestCase extends MollomWebTestCase {
    */
   protected $createKeys = FALSE;
 
+  public static function getInfo() {
+    return array(
+      'name' => 'Fallback mode',
+      'description' => 'Tests expected fallback behavior when Mollom servers are not available.',
+      'group' => 'Mollom',
+    );
+  }
+
   function setUp() {
     parent::setUp();
+
+    // Setup valid testing API keys.
     $this->setKeys(TRUE);
     $this->assertValidKeys();
   }
 
   /**
-   * Make sure that "request new password" submissions can be blocked when
-   * the Mollom servers are unreachable.
+   * Tests that form submissions are blocked when Mollom servers are unreachable.
    */
-  function testFallbackMechanismBlock() {
+  function testBlock() {
     // Enable Mollom for the request password form.
     $this->drupalLogin($this->admin_user);
     $this->setProtection('user_pass', MOLLOM_MODE_CAPTCHA);
-    // Set the fallback strategy to 'blocking mode'.
-    $this->drupalPost('admin/config/content/mollom/settings', array('mollom_fallback' => MOLLOM_FALLBACK_BLOCK), t('Save configuration'));
-    $this->assertText('The configuration options have been saved.');
     $this->drupalLogout();
 
-    // Configure Mollom to use a non-existent server as that should trigger
-    // the fallback mechanism.
-    $this->mollom->saveConfiguration('servers', array('http://fake-host'));
+    // Set the fallback strategy to 'blocking mode'.
+    variable_set('mollom_fallback', MOLLOM_FALLBACK_BLOCK);
+
+    // Make all requests to Mollom fail.
+    variable_set('mollom_class', 'MollomDrupalTestInvalid');
 
     // Check the password request form.
     $this->drupalGet('user/password', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1689,21 +1670,19 @@ class MollomFallbackTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Make sure that "request new password" submissions can be allowed when
-   * the Mollom servers are unreachable.
+   * Tests that form submissions are accepted when Mollom servers are unreachable.
    */
-  function testFallbackMechanismAccept() {
+  function testAccept() {
     // Enable Mollom for the request password form.
     $this->drupalLogin($this->admin_user);
     $this->setProtection('user_pass', MOLLOM_MODE_CAPTCHA);
-    // Set the fallback strategy to 'accept mode'.
-    $this->drupalPost('admin/config/content/mollom/settings', array('mollom_fallback' => MOLLOM_FALLBACK_ACCEPT), t('Save configuration'));
-    $this->assertText('The configuration options have been saved.');
     $this->drupalLogout();
 
-    // Configure Mollom to use a non-existent server as that should trigger
-    // the fallback mechanism.
-    $this->mollom->saveConfiguration('servers', array('http://fake-host'));
+    // Set the fallback strategy to 'accept mode'.
+    variable_set('mollom_fallback', MOLLOM_FALLBACK_ACCEPT);
+
+    // Make all requests to Mollom fail.
+    variable_set('mollom_class', 'MollomDrupalTestInvalid');
 
     // Check the password request form.
     $this->drupalGet('user/password', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1712,10 +1691,9 @@ class MollomFallbackTestCase extends MollomWebTestCase {
   }
 
   /**
-   * Make sure that spam protection is still active even when some of the
-   * Mollom servers are unavailable.
+   * Tests that form submissions are accepted when only last request attempt to Mollom servers succeeds.
    */
-  function testFailoverMechanism() {
+  function testFailover() {
     $this->drupalLogin($this->admin_user);
     $this->setProtection('user_pass', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
@@ -1724,14 +1702,11 @@ class MollomFallbackTestCase extends MollomWebTestCase {
     // mechanism does not work, we would expect to get a warning.
     variable_set('mollom_fallback', MOLLOM_FALLBACK_BLOCK);
 
-    // Configure Mollom to use a list of servers that have a number of
-    // unknown servers, but one real server.
-    $this->mollom->saveConfiguration('servers', array(
-      'http://fake-host-1',
-      'http://fake-host-2',
-      $GLOBALS['base_url'] . '/mollom-test/rest', // A real server.
-      'http://fake-host-3',
-    ));
+    // Make all requests to Mollom fail.
+    variable_set('mollom_class', 'MollomDrupalTestInvalid');
+    // Enable pseudo server fail-over.
+    // @see MollomDrupalTestInvalid::handleRequest()
+    variable_set('mollom_testing_server_failover', TRUE);
 
     // Validate that the request password form has a CAPTCHA text field and
     // that a user is not blocked from submitting it.
@@ -1741,54 +1716,6 @@ class MollomFallbackTestCase extends MollomWebTestCase {
 
     $this->postCorrectCaptcha('user/password', array('name' => $this->admin_user->name), t('E-mail new password'));
     $this->assertText(t('Further instructions have been sent to your e-mail address.'));
-  }
-}
-
-class MollomServerListRecoveryTestCase extends MollomWebTestCase {
-  public static function getInfo() {
-    return array(
-      'name' => 'Server list recovery',
-      'description' => 'Check that the module can recover from an invalid server list.',
-      'group' => 'Mollom',
-    );
-  }
-
-  /**
-   * Make sure the server list is reset when the Mollom servers are unavailable or incorrect.
-   */
-  function testServerListRecovery() {
-    $list = array(
-      array(
-        'http://not-a-valid-server-1',
-        'http://not-a-valid-server-2',
-      ),
-      // The lack of the http://-schema results in different error codes
-      array(
-        'not-a-valid-server-url-1',
-        'not-a-valid-server-url-2',
-      ),
-    );
-
-    foreach ($list as $servers) {
-      // Reset static, since the Mollom instance is statically cached.
-      drupal_static_reset('mollom');
-
-      $mollom = mollom();
-      $mollom->servers = $servers;
-      $mollom->saveConfiguration('servers', $servers);
-
-      // Verify that Mollom::query() fails with an invalid server list and
-      // appropriate messages are logged.
-      $key_is_valid = $mollom->verifyKeys();
-      $this->assertMollomWatchdogMessages(WATCHDOG_EMERGENCY);
-      $this->assertIdentical($key_is_valid, Mollom::NETWORK_ERROR, t('The Mollom servers could not be contacted.'));
-
-      // Verify that Mollom::query() automatically empties the server list and
-      // a directly following, subsequent request attempt succeeds.
-      $key_is_valid = $mollom->verifyKeys();
-      $this->assertMollomWatchdogMessages();
-      $this->assertIdentical($key_is_valid, TRUE, t('The Mollom servers could be contacted.'));
-    }
   }
 }
 

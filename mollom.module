@@ -1245,7 +1245,6 @@ function _mollom_get_openid($account) {
  *   - keys: Boolean whether Mollom API keys have been configured.
  *   - keys valid: TRUE if Mollom API keys are valid, or the error code as
  *     returned by Mollom servers.
- *   - servers: Boolean whether there is a non-empty list of Mollom servers.
  *
  * @see mollom_init()
  * @see mollom_admin_settings()
@@ -1273,12 +1272,6 @@ function _mollom_status($reset = FALSE) {
   // Otherwise, if there are no keys, they cannot be valid.
   elseif (!$status['keys']) {
     $status['keys valid'] = FALSE;
-  }
-
-  // In case of an error, indicate whether we have a non-empty server list.
-  if ($status['keys valid'] !== TRUE) {
-    $servers = $mollom->loadConfiguration('servers');
-    $status['servers'] = !empty($servers);
   }
 
   // Update stored status upon reset, but only if the status changed, as a

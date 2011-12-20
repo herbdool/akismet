@@ -205,12 +205,6 @@ function mollom_test_server_rest_validate_auth() {
 function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
   $data = mollom_test_server_rest_get_parameters();
 
-  // Prepare server list.
-  $servers = mollom_test_server_get_server_list($data);
-  foreach ($servers as $key => &$url) {
-    $url .= '/mollom-test/rest';
-  }
-
   $bin = 'mollom_test_server_site';
   $sites = variable_get($bin, array());
 
@@ -260,13 +254,6 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
         'languages' => array(),
         'subscriptionType' => 0, // Mollom Free.
         // Client version info is not defined by default.
-        /*
-        'platformName' => '',
-        'platformVersion' => '',
-        'clientName' => '',
-        'clientVersion' => '',
-        */
-        'servers' => $servers,
       );
       $sites[$publicKey] = $data;
       variable_set($bin, $sites);
@@ -453,17 +440,6 @@ function mollom_test_server_rest_send_feedback() {
 
   $result = in_array($data['reason'], array('spam', 'profanity', 'quality', 'unwanted', 'approve', 'delete'));
   return $result ? TRUE : 400;
-}
-
-/**
- * API callback for mollom.getServerList to retrieve new server list.
- */
-function mollom_test_server_get_server_list($data) {
-  $storage = variable_get(__FUNCTION__, array());
-  $storage[] = $data;
-  variable_set(__FUNCTION__, $storage);
-
-  return array($GLOBALS['base_url'], $GLOBALS['base_url']);
 }
 
 /**

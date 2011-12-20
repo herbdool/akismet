@@ -2,6 +2,8 @@ A generic Mollom client PHP class.
 
 This base class aims to ease integration of the [Mollom](http://mollom.com) content moderation service into PHP based applications.  The class implements essential code logic expected from Mollom clients and provides many helper functions to communicate with Mollom's [REST API](http://mollom.com/api/rest).
 
+Make sure that your server time is synchronized with the world clocks, and that you do not share your private key with anyone else.
+
 To submit bug reports and feature suggestions, or to track changes:
   https://github.com/Mollom/MollomPHP/issues
 

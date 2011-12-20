@@ -992,3 +992,10 @@ function mollom_update_7202() {
   }
 }
 
+/**
+ * Remove server list variables.
+ */
+function mollom_update_7203() {
+  variable_del('mollom_servers');
+  variable_del('mollom_test_servers');
+}
