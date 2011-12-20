@@ -311,6 +311,26 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
             ),
           ),
         );
+
+        $form['mollom']['moderation'] = array(
+          '#type' => 'checkbox',
+          '#title' => t('Allow content to be moderated from <a href="@moderation-url">@moderation-name</a>.', array(
+            '@moderation-url' => 'http://my.mollom.com',
+            '@moderation-name' => 'Mollom Moderation service',
+          )),
+          '#default_value' => $mollom_form['moderation'],
+          // Only possible for forms which result in a locally stored entity.
+          '#access' => !empty($mollom_form['entity']),
+          // Only possible for forms protected via text analysis.
+          '#states' => array(
+            'visible' => array(
+              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
+            ),
+          ),
+          '#description' => t("Requires participation in Mollom's <a href=\"@beta-url\">beta program</a>.", array(
+            '@beta-url' => 'http://mollom.com/beta',
+          )),
+        );
       }
 
       $form['actions']['submit'] = array(
@@ -745,17 +765,6 @@ function mollom_admin_settings($form, &$form_state) {
       '@sla-url' => 'http://mollom.com/standard-service-level-agreement',
     )),
   );
-
-  $form['mollom_moderation_integration'] = array(
-    '#type' => 'checkbox',
-    '#title' => t('Integrate with Mollom Moderation'),
-    '#default_value' => variable_get('mollom_moderation_integration', 0),
-    '#description' => t('Sends new content to <a href="@product-url">Mollom Moderation</a> and allows content to be moderated from <a href="@moderation-url">my.mollom.com</a>.', array(
-      '@product-url' => 'http://mollom.com/beta',
-      '@moderation-url' => 'http://my.mollom.com',
-    )),
-  );
-  $form['mollom_moderation_integration']['#description'] .= '<br /><strong>' . t('Only available after Mollom confirmed participation of this site in the beta program.') . '</strong>';
 
   $form['mollom_privacy_link'] = array(
     '#type' => 'checkbox',

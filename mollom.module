@@ -847,12 +847,19 @@ function mollom_form_info($form_id, $module) {
 
   // Ensure default properties.
   $form_info += array(
+    // Base properties.
     'form_id' => $form_id,
     'title' => $form_id,
     'module' => $module,
     'entity' => NULL,
+    // Configuration properties.
     'mode' => NULL,
-    'discard' => TRUE,
+    'checks' => array(),
+    'enabled_fields' => array(),
+    'strictness' => 'normal',
+    'discard' => 1,
+    'moderation' => 0,
+    // Meta information.
     'bypass access' => array(),
     'elements' => array(),
     'mapping' => array(),
@@ -869,26 +876,16 @@ function mollom_form_info($form_id, $module) {
  * Creates a bare Mollom form configuration.
  *
  * @param $form_id
- *   (optional) The form id to create the Mollom form configuration for.
+ *   The form ID to create the Mollom form configuration for.
  */
-function mollom_form_new($form_id = NULL) {
+function mollom_form_new($form_id) {
   $mollom_form = array();
-  if (isset($form_id)) {
-    $form_list = mollom_form_list();
-    if (isset($form_list[$form_id])) {
-      $mollom_form += $form_list[$form_id];
-    }
-    $mollom_form += mollom_form_info($form_id, $form_list[$form_id]['module']);
+  $form_list = mollom_form_list();
+  if (isset($form_list[$form_id])) {
+    $mollom_form += $form_list[$form_id];
   }
-  // Ensure default properties.
-  $mollom_form += array(
-    'form_id' => $form_id,
-    'title' => $form_id,
-    'mode' => NULL,
-    'checks' => array(),
-    'enabled_fields' => array(),
-    'strictness' => 'normal',
-  );
+  $mollom_form += mollom_form_info($form_id, $form_list[$form_id]['module']);
+
   // Enable all fields for textual analysis by default.
   if (!empty($mollom_form['elements'])) {
     $mollom_form['checks'] = array('spam');
@@ -2212,7 +2209,8 @@ function mollom_entity_delete($entity, $type) {
  * Implements hook_mollom_data_insert().
  */
 function mollom_mollom_data_insert($data) {
-  if (!variable_get('mollom_moderation_integration', 0)) {
+  $mollom_form = mollom_form_load($data->form_id);
+  if (empty($mollom_form['moderation'])) {
     return;
   }
   // Exclude data for form submissions not resulting in a locally stored entity.
@@ -2288,7 +2286,8 @@ function mollom_mollom_data_insert($data) {
  * Implements hook_mollom_data_delete().
  */
 function mollom_mollom_data_delete($data) {
-  if (!variable_get('mollom_moderation_integration', 0)) {
+  $mollom_form = mollom_form_load($data->form_id);
+  if (empty($mollom_form['moderation'])) {
     return;
   }
   // Exclude data for form submissions not resulting in a locally stored entity.
@@ -2339,7 +2338,8 @@ function mollom_moderate_access($data, $action) {
   }
   $access = TRUE;
   // Check global opt-in configuration setting.
-  if (!variable_get('mollom_moderation_integration', 0)) {
+  $mollom_form = mollom_form_load($data->form_id);
+  if (empty($mollom_form['moderation'])) {
     $access = FALSE;
   }
   // Check required request parameters.

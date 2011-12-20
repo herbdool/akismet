@@ -3917,12 +3917,10 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp(array('mollom_test'));
 
-    // Enable Mollom Moderation integration.
-    variable_set('mollom_moderation_integration', 1);
-
     $this->drupalLogin($this->admin_user);
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
       'mollom[discard]' => 0,
+      'mollom[moderation]' => 1,
     ));
     $this->drupalLogout();
   }
@@ -4037,13 +4035,21 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     $path = 'mollom/moderate/' . $data->contentId . '/spam';
 
     // Test no Mollom moderation access with disabled integration.
-    variable_set('mollom_moderation_integration', 0);
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
+      'mollom[moderation]' => FALSE,
+    ));
+
     $this->mollomRequest('POST', $path);
     $this->assertResponse(403);
     $this->assertMollomWatchdogMessages();
     $record = mollom_test_load($data->id);
     $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
-    variable_set('mollom_moderation_integration', 1);
+
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
+      'mollom[moderation]' => 1,
+    ));
+    $this->drupalLogout();
 
     $replay_attack_nonce = md5(microtime() . mt_rand());
     $tests = array(

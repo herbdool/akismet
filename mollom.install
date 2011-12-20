@@ -221,6 +221,13 @@ function mollom_schema() {
         'not null' => TRUE,
         'default' => 1,
       ),
+      'moderation' => array(
+        'description' => 'Whether to integrate with Mollom moderation.',
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
       'enabled_fields' => array(
         'description' => 'Form elements to analyze.',
         'type' => 'text',
@@ -966,5 +973,22 @@ function mollom_update_7201() {
     'not null' => TRUE,
     'default' => '',
   ));
+}
+
+/**
+ * Add {mollom_form}.moderation column.
+ */
+function mollom_update_7202() {
+  if (!db_field_exists('mollom_form', 'moderation')) {
+    variable_del('mollom_moderation_integration');
+
+    db_add_field('mollom_form', 'moderation', array(
+      'description' => 'Whether to integrate with Mollom moderation.',
+      'type' => 'int',
+      'size' => 'tiny',
+      'not null' => TRUE,
+      'default' => 0,
+    ));
+  }
 }
 
