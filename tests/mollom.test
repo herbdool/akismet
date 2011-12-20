@@ -135,6 +135,9 @@ class MollomWebTestCase extends DrupalWebTestCase {
         'administer users',
       );
       if (module_exists('comment')) {
+        $permissions[] = 'access comments';
+        $permissions[] = 'post comments';
+        $permissions[] = 'skip comment approval';
         $permissions[] = 'administer comments';
       }
       $this->admin_user = $this->drupalCreateUser($permissions);
@@ -997,9 +1000,6 @@ class MollomTestingModeTestCase extends MollomWebTestCase {
  * Tests module installation and global status handling.
  */
 class MollomInstallationTestCase extends MollomWebTestCase {
-  // @todo Use mollom_test instead of comment form instead.
-  protected $profile = 'standard';
-
   protected $createKeys = FALSE;
 
   public static function getInfo() {
@@ -1012,7 +1012,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
 
   function setUp() {
     $this->disableDefaultSetup = TRUE;
-    parent::setUp(array('comment'));
+    parent::setUp(array('mollom_test'));
 
     $this->admin_user = $this->drupalCreateUser(array(
       'access administration pages',
@@ -1020,7 +1020,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
       'administer modules',
       'administer permissions',
     ));
-    $this->web_user = $this->drupalCreateUser();
+    $this->web_user = $this->drupalCreateUser(array());
   }
 
   /**
@@ -1048,15 +1048,12 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     )), t('Post installation warning found.'));
 
     // Verify that forms can be submitted without valid Mollom module configuration.
-    $node = $this->drupalCreateNode(array('type' => 'article'));
     $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid);
     $edit = array(
-      'comment_body[und][0][value]' => 'spam',
+      'title' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'));
-    $this->drupalPost(NULL, array(), t('Save'));
-    $this->assertText(t('Your comment has been posted.'));
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $this->assertText('Successful form submission.');
 
     // Assign the 'administer mollom' permission and log in a user.
     $this->drupalLogin($this->admin_user);
@@ -1501,9 +1498,6 @@ class MollomResponseLocalTestCase extends MollomResponseTestCase {
 }
 
 class MollomAccessTestCase extends MollomWebTestCase {
-  // @todo Required by testBypassAccess().
-  protected $profile = 'standard';
-
   protected $createKeys = FALSE;
 
   public static function getInfo() {
@@ -1569,15 +1563,24 @@ class MollomAccessTestCase extends MollomWebTestCase {
     $this->drupalGet('admin/config/content/mollom');
     $this->assertResponse(403);
   }
+}
+
+class MollomBypassAccessTestCase extends MollomWebTestCase {
+  // Requires entity-level access permissions.
+  protected $profile = 'standard';
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Bypass access',
+      'description' => 'Tests that users having higher privileges can bypass Mollom protection.',
+      'group' => 'Mollom',
+    );
+  }
 
   /**
    * Tests 'bypass access' property of registered forms.
    */
   function testBypassAccess() {
-    // @todo This entire test case is trying to test too many different things.
-    variable_set('mollom_testing_create_keys', TRUE);
-    $this->assertValidKeys();
-
     $this->drupalLogin($this->admin_user);
     $this->setProtection('comment_node_article_form');
     $this->drupalLogout();
@@ -2013,9 +2016,6 @@ class MollomBlacklistTestCase extends MollomWebTestCase {
  * Tests Mollom form profanity filtering functionality.
  */
 class MollomProfanityTestCase extends MollomWebTestCase {
-  // @todo Required by testProfanitySpam().
-  protected $profile = 'standard';
-
   public static function getInfo() {
     return array(
       'name' => 'Profanity checking',
@@ -2026,8 +2026,6 @@ class MollomProfanityTestCase extends MollomWebTestCase {
 
   function setUp() {
     parent::setUp(array('mollom_test'));
-
-    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments', 'skip comment approval'));
   }
 
   /**
@@ -2078,67 +2076,63 @@ class MollomProfanityTestCase extends MollomWebTestCase {
    * Tests text analysis with both profanity and spam checking.
    */
   function testProfanitySpam() {
-    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
-    $node = $this->drupalCreateNode(array('type' => 'article'));
-    $langcode = LANGUAGE_NONE;
-
     // Enable spam and profanity checking for the article node comment form.
     $this->drupalLogin($this->admin_user);
     $edit_config = array(
       'mollom[checks][profanity]' => TRUE,
       'mollom[checks][spam]' => TRUE,
     );
-    $this->setProtection('comment_node_article_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit_config);
     $this->drupalLogout();
 
     // Sequence: Post profanity (ham), remove profanity (still ham), and expect
     // that to be accepted.
     $edit = array(
-      'subject' => $this->randomName(),
+      'title' => $this->randomName(),
     );
-    $this->drupalGet("node/{$node->nid}");
+    $this->drupalGet('mollom-test/form');
     $this->assertNoCaptchaField();
     $this->assertPrivacyLink();
 
-    $edit["comment_body[$langcode][0][value]"] = 'profanity ham';
-    $this->drupalPost(NULL, $edit, t('Save'));
+    $edit['body'] = 'profanity ham';
+    $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertText($this->profanity_message);
-    $this->assertNoText(t('Your comment has been posted.'));
+    $this->assertNoText('Successful form submission.');
     $contentId = $this->assertResponseIDInForm('contentId');
 
-    $edit["comment_body[$langcode][0][value]"] = 'not profane ham';
-    $this->drupalPost(NULL, $edit, t('Save'));
+    $edit['body'] = 'not profane ham';
+    $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertNoText($this->profanity_message);
-    $this->assertText(t('Your comment has been posted.'));
-    $this->assertRaw('<p>' . $edit["comment_body[$langcode][0][value]"] . '</p>', t('Comment previously containing profanity was found.'));
-    $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['subject']))->fetchField();
-    $this->assertMollomData('comment', $cid, 'contentId', $contentId);
+    $this->assertText('Successful form submission.');
+    $mid = $this->getFieldValueByName('mid');
+    $this->assertMollomData('mollom_test', $mid, 'contentId', $contentId);
 
     // Sequence: Post unsure spam (not profanity), post profanity along with
     // correct CAPTCHA, and expect that to be discarded.
     $this->resetResponseID();
-    $this->web_user = $this->drupalCreateUser();
+    $this->web_user = $this->drupalCreateUser(array());
     $this->drupalLogin($this->web_user);
+
     $edit = array(
-      'subject' => $this->randomName(),
+      'title' => $this->randomName(),
     );
-    $this->drupalGet("node/{$node->nid}");
+    $this->drupalGet('mollom-test/form');
     $this->assertNoCaptchaField();
     $this->assertPrivacyLink();
 
-    $edit["comment_body[$langcode][0][value]"] = 'unsure';
-    $this->drupalPost(NULL, $edit, t('Save'));
+    $edit['body'] = 'unsure';
+    $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertCaptchaField();
     $this->assertNoText($this->profanity_message);
-    $this->assertNoText(t('Your comment has been posted.'));
+    $this->assertNoText('Successful form submission.');
     $contentId = $this->assertResponseIDInForm('contentId');
     $captchaId = $this->assertResponseIDInForm('captchaId');
 
-    $edit["comment_body[$langcode][0][value]"] = 'unsure profanity';
-    $this->postCorrectCaptcha(NULL, $edit, t('Save'));
+    $edit['body'] = 'unsure profanity';
+    $this->postCorrectCaptcha(NULL, $edit, 'Submit');
     $this->assertNoCaptchaField();
     $this->assertText($this->profanity_message);
-    $this->assertNoText(t('Your comment has been posted.'));
+    $this->assertNoText('Successful form submission.');
   }
 }
 
@@ -2586,8 +2580,6 @@ class MollomProfileFormsTestCase extends MollomWebTestCase {
  * Tests Node module integration.
  */
 class MollomNodeFormTestCase extends MollomWebTestCase {
-  protected $profile = 'standard';
-
   private $node;
 
   public static function getInfo() {
@@ -2600,6 +2592,8 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
 
   function setUp() {
     parent::setUp();
+
+    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
 
     $this->web_user = $this->drupalCreateUser(array('create article content'));
   }
@@ -2659,13 +2653,9 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
 }
 
 class MollomCommentFormTestCase extends MollomWebTestCase {
-  protected $profile = 'standard';
-
-  private $node;
-
   public static function getInfo() {
     return array(
-      'name' => 'Comment form protection',
+      'name' => 'Comment integration',
       'description' => 'Check that the comment submission form can be protected.',
       'group' => 'Mollom',
     );
@@ -2674,7 +2664,9 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp(array('comment'));
 
-    $this->web_user = $this->drupalCreateUser(array('create article content'));
+    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+
+    $this->web_user = $this->drupalCreateUser(array('create article content', 'access comments', 'post comments', 'skip comment approval'));
     $this->node = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->web_user->uid));
     variable_set('comment_preview_article', DRUPAL_OPTIONAL);
   }
@@ -2685,7 +2677,7 @@ class MollomCommentFormTestCase extends MollomWebTestCase {
   function testUnprotectedCommentForm() {
     // Request the comment reply form. There should be no CAPTCHA.
     $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/'. $this->node->nid);
+    $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertNoCaptchaField();
     $this->assertNoPrivacyLink();
 
@@ -3028,9 +3020,6 @@ class MollomResellerTestCase extends MollomWebTestCase {
  * Tests form value processing.
  */
 class MollomDataTestCase extends MollomWebTestCase {
-  // @todo Required by testAnalysis().
-  protected $profile = 'standard';
-
   // Re-route Mollom communication to this testing site.
   protected $mollomClass = 'MollomDrupalTestLocal';
 
@@ -3172,14 +3161,24 @@ class MollomDataTestCase extends MollomWebTestCase {
    * Test submitted post and author information for textual analysis.
    */
   function testAnalysis() {
+    // Create Article node type.
+    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+
+    // Enable comments, make comment preview optional, and grant permissions.
+    module_enable(array('comment'));
+    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('access comments', 'post comments'));
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('access comments', 'post comments', 'skip comment approval'));
+    // Add 'administer comments' permission to $admin_user.
+    $rid = current(array_diff(array_keys($this->admin_user->roles), array(DRUPAL_AUTHENTICATED_RID)));
+    user_role_grant_permissions($rid, array('administer comments'));
+
+    // Rebuild menu router, permissions, etc.
+    // @todo Remove in D8.
+    $this->resetAll();
+
     $this->drupalLogin($this->admin_user);
     $this->setProtection('comment_node_article_form');
-
-    // Make comment preview optional.
-    $edit = array(
-      'comment_preview' => DRUPAL_OPTIONAL,
-    );
-    $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
 
     // Create a node we can comment on.
     $node = $this->drupalCreateNode(array('type' => 'article', 'promote' => 1));
@@ -3218,19 +3217,10 @@ class MollomDataTestCase extends MollomWebTestCase {
     $this->assertSame('authorId', $data['authorId'], $this->web_user->uid);
 
     // Allow anonymous users to post comments without approval.
-    $this->drupalLogin($this->admin_user);
-    $edit = array(
-      DRUPAL_ANONYMOUS_RID . '[access comments]' => TRUE,
-      DRUPAL_ANONYMOUS_RID . '[post comments]' => TRUE,
-      DRUPAL_ANONYMOUS_RID . '[skip comment approval]' => TRUE,
-    );
-    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
+    user_role_grant_permissions(DRUPAL_ANONYMOUS_RID, array('skip comment approval'));
 
     // Allow anonymous users to post contact information.
-    $edit = array(
-      'comment_anonymous' => COMMENT_ANONYMOUS_MAY_CONTACT,
-    );
-    $this->drupalPost('admin/structure/types/manage/article', $edit, t('Save content type'));
+    variable_set('comment_anonymous_article', COMMENT_ANONYMOUS_MAY_CONTACT);
 
     // Log out and post a comment as anonymous user.
     $this->resetServerRecords();
@@ -3763,8 +3753,6 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
  * Tests report to Mollom functionality.
  */
 class MollomReportTestCase extends MollomWebTestCase {
-  protected $profile = 'standard';
-
   public static function getInfo() {
     return array(
       'name' => 'Reporting functionality',
@@ -3776,7 +3764,10 @@ class MollomReportTestCase extends MollomWebTestCase {
   function setUp() {
     parent::setUp(array('comment'));
 
-    $this->web_user = $this->drupalCreateUser(array('create article content'));
+    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+
+    $this->web_user = $this->drupalCreateUser(array('create article content', 'access comments', 'post comments', 'skip comment approval'));
   }
 
   /**
@@ -3788,7 +3779,6 @@ class MollomReportTestCase extends MollomWebTestCase {
     $this->drupalLogout();
 
     $this->node = $this->drupalCreateNode(array('type' => 'article'));
-    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
 
     // Post a comment.
     $this->drupalLogin($this->web_user);
