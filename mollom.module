@@ -1406,6 +1406,9 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   // @see mollom_form_get_values()
   unset($form_state['mollom']['content_properties']);
 
+  // Add the JavaScript.
+  $element['#attached']['js'][] = drupal_get_path('module', 'mollom') . '/mollom.js';
+
   // Add the Mollom session elements.
   $element['contentId'] = array(
     '#type' => 'hidden',
