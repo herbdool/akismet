@@ -3614,16 +3614,16 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
       'administer mollom',
     ));
     $this->web_user = $this->drupalCreateUser(array());
+
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('mollom_test_form', MOLLOM_MODE_CAPTCHA);
+    $this->drupalLogout();
   }
 
   /**
    * Tests #required validation of CAPTCHA form element.
    */
   function testRequiredValidation() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtection('mollom_test_form', MOLLOM_MODE_CAPTCHA);
-    $this->drupalLogout();
-
     $this->drupalGet('mollom-test/form');
 
     // Verify that CAPTCHA cannot be left empty.
@@ -3656,10 +3656,6 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
    * Tests incorrect solution of CAPTCHA form element.
    */
   function testIncorrect() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtection('mollom_test_form', MOLLOM_MODE_CAPTCHA);
-    $this->drupalLogout();
-
     $this->drupalGet('mollom-test/form');
 
     // Verify that incorrect solution still leaves the field required.
@@ -3680,10 +3676,6 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
    * Tests correct solution of CAPTCHA form element.
    */
   function testCorrect() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtection('mollom_test_form', MOLLOM_MODE_CAPTCHA);
-    $this->drupalLogout();
-
     $this->drupalGet('mollom-test/form');
 
     // Verify that CAPTCHA can be solved in one shot.
@@ -3711,6 +3703,21 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
       $this->assertTrue($mid > 0, t('Test record id @id found.', array('@id' => $mid)));
     }
     return $mid;
+  }
+
+  /**
+   * Tests the CAPTCHA type switch callback.
+   */
+  function testSwitchCallback() {
+    // Verify that the CAPTCHA can be switched on a CAPTCHA-only protected form.
+    // (without having a contentId)
+    $this->drupalGet('mollom-test/form');
+    $form_build_id = $this->getFieldValueByName('form_build_id');
+    $out = $this->drupalGet('mollom/captcha/audio/' . $form_build_id);
+    $this->assertResponse(200);
+    $this->assertText('mollom-captcha-player.swf');
+    $response = drupal_json_decode($out);
+    $this->assertTrue($response['captchaId']);
   }
 }
 
