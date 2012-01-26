@@ -808,7 +808,7 @@ function mollom_admin_settings_validate_key($element, &$form_state) {
  */
 function mollom_reports_page($form, &$form_state) {
   $embed_attributes = array(
-    'src' => 'http://mollom.com/statistics.swf?key=' . check_plain(variable_get('mollom_public_key', '')),
+    'src' => '//mollom.com/statistics.swf?key=' . check_plain(variable_get('mollom_public_key', '')),
     'quality' => 'high',
     'width' => '100%',
     'height' => '430',
