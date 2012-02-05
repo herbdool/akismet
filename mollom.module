@@ -2353,6 +2353,9 @@ function mollom_moderate_validate_oauth() {
   $publicKey = variable_get('mollom_public_key', '');
   $privateKey = variable_get('mollom_private_key', '');
   if ($publicKey === '' || $privateKey === '') {
+    _mollom_watchdog(array(
+      'Missing module configuration' => array(),
+    ), WATCHDOG_WARNING);
     return FALSE;
   }
 
@@ -2361,6 +2364,11 @@ function mollom_moderate_validate_oauth() {
 
   // Validate protocol parameters.
   if (!isset($header['oauth_consumer_key'], $header['oauth_nonce'], $header['oauth_timestamp'], $header['oauth_signature_method'], $header['oauth_signature'])) {
+    _mollom_watchdog(array(
+      'Missing protocol parameters' => array(),
+      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
+      'Headers:<pre>@headers</pre>' => array('@headers' => $header),
+    ), WATCHDOG_WARNING);
     return FALSE;
   }
 
@@ -2398,6 +2406,11 @@ function mollom_moderate_validate_oauth() {
 
   // Validate nonce.
   if (empty($header['oauth_nonce'])) {
+    _mollom_watchdog(array(
+      'Missing authentication nonce' => array(),
+      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
+      'Headers:<pre>@headers</pre>' => array('@headers' => $header),
+    ), WATCHDOG_WARNING);
     return FALSE;
   }
   if ($cached = cache_get('mollom_moderation_nonces', 'cache')) {
@@ -2431,7 +2444,18 @@ function mollom_moderate_validate_oauth() {
   $key = Mollom::rawurlencode($privateKey) . '&' . '';
   $signature = rawurlencode(base64_encode(hash_hmac('sha1', $base_string, $key, TRUE)));
 
-  return $signature === $sent_signature;
+  $valid = ($signature === $sent_signature);
+  if (!$valid) {
+    _mollom_watchdog(array(
+      'Invalid authentication signature' => array(),
+      '<p>Request: @request</p>' => array('@request' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q']),
+      'Headers:<pre>@headers</pre>' => array('@headers' => $header + array('oauth_signature' => $sent_signature)),
+      'Base string:<pre>@base_string</pre>' => array('@base_string' => $base_string),
+      'Expected signature:<pre>@signature</pre>' => array('@signature' => $signature),
+      //'Expected key:<pre>@key</pre>' => array('@key' => $key),
+    ), WATCHDOG_WARNING);
+  }
+  return $valid;
 }
 
 /**
@@ -2449,6 +2473,7 @@ function mollom_moderate_validate_oauth() {
  */
 function mollom_moderate($data, $action) {
   $result = FALSE;
+  $messages = array();
 
   // Verify that action is supported or respond with a 404.
   if (!in_array($action, array('approve', 'spam', 'delete'))) {
@@ -2461,23 +2486,29 @@ function mollom_moderate($data, $action) {
   if ($form_info) {
     // Programmatically invoke publish action.
     if ($action == 'approve') {
+      $messages[] = "Attempt to load $form_info[entity] entity via entity_load().";
       // @todo Abstract this. Possibly requires Entity module as dependency.
       $entity = entity_load($data->entity, array($data->id));
       if (isset($entity[$data->id])) {
         $entity = $entity[$data->id];
         $entity->status = 1;
         $function = $data->entity . '_save';
+        $messages[] = "Attempt to save $form_info[entity] entity via {$data->entity}_save().";
         if (function_exists($function)) {
           $function($entity);
+          $messages[] = "Updated status of $form_info[entity] entity via {$data->entity}_save().";
           $result = TRUE;
         }
       }
     }
     // Invoke entity delete multiple callback.
     elseif (!empty($form_info['entity delete multiple callback'])) {
-      if (function_exists($form_info['entity delete multiple callback'])) {
-        $function = $form_info['entity delete multiple callback'];
-        $function(array($data->id));
+      $delete_callback = $form_info['entity delete multiple callback'];
+      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_callback().";
+      if (function_exists($delete_callback)) {
+        $delete_callback(array($data->id));
+        $messages[] = "Deleted $form_info[entity] entity via $delete_callback().";
+
         // Entity delete callbacks do not return success or failure, so we can
         // only assume success.
         $result = TRUE;
@@ -2485,6 +2516,7 @@ function mollom_moderate($data, $action) {
     }
     // Programmatically invoke delete confirmation form.
     elseif (isset($form_info['delete form'])) {
+      $messages[] = "Attempt to delete $form_info[entity] entity via {$form_info['delete form']} form.";
       if (isset($form_info['delete form file'])) {
         $file = $form_info['delete form file'] + array(
           'type' => 'inc',
@@ -2492,6 +2524,7 @@ function mollom_moderate($data, $action) {
           'name' => NULL,
         );
         module_load_include($file['type'], $file['module'], $file['name']);
+        $messages[] = "Loaded {$file['name']}.{$file['type']} in {$file['module']}.";
       }
       // Programmatic form submissions are not able to automatically use the
       // primary form submit button/action, so we need to resemble
@@ -2500,12 +2533,13 @@ function mollom_moderate($data, $action) {
       $form_state = form_state_defaults();
       // We assume that all delete confirmation forms take the fully loaded
       // entity as (only) argument.
+      $messages[] = "Attempt to load $form_info[entity] entity via entity_load().";
       $entities = entity_load($data->entity, array($data->id));
-      $form_state['build_info']['args'][] = reset($entities);
+      $form_state['build_info']['args'][] = $entities[$data->id];
       $form = drupal_retrieve_form($form_id, $form_state);
 
       $form_state['values'] = array();
-      $form_state['values']['mollom']['feedback'] = 0;
+      $form_state['values']['mollom']['feedback'] = '';
       // Take over the primary submit button of confirm_form().
       $form_state['values']['op'] = $form['actions']['submit']['#value'];
 
@@ -2525,6 +2559,8 @@ function mollom_moderate($data, $action) {
     }
   }
 
+  $messages = implode("\n", $messages);
+
   if ($result) {
     _mollom_watchdog(array(
       '%action moderation success for @entity @id' => array(
@@ -2532,26 +2568,28 @@ function mollom_moderate($data, $action) {
         '@entity' => $data->entity,
         '@id' => $data->id,
       ),
-      'Mollom data:<pre>@data</pre>' => array('@data' => (array) $data),
-      'Messages:<pre>@messages</pre>' => array('@messages' => drupal_get_messages()),
     ));
   }
   else {
+    // 400 is not really appropriate, but comes closest.
+    drupal_add_http_header('Status', '400 Unable to process moderation request');
+
     _mollom_watchdog(array(
       '%action moderation failure for @entity @id' => array(
         '%action' => $action,
         '@entity' => $data->entity,
         '@id' => $data->id,
       ),
+      'Form ID:<pre>@form_id</pre>' => array('@form_id' => $data->form_id),
+      'Actions:<pre>@actions</pre>' => array('@actions' => $messages),
       'Mollom data:<pre>@data</pre>' => array('@data' => (array) $data),
       'Mollom form:<pre>@form</pre>' => array('@form' => $form_info),
-      'Messages:<pre>@messages</pre>' => array('@messages' => drupal_get_messages()),
+      'System messages:<pre>@messages</pre>' => array('@messages' => drupal_get_messages()),
     ), WATCHDOG_ERROR);
   }
 
   // Report back result as success status.
   echo (int) $result;
-  drupal_exit();
 }
 
 /**

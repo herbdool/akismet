@@ -89,6 +89,12 @@ class MollomWebTestCase extends DrupalWebTestCase {
    */
   protected $createKeys = TRUE;
 
+  function __construct($test_id = NULL) {
+    parent::__construct($test_id);
+    // Hide this base class in assertions.
+    $this->skipClasses[__CLASS__] = TRUE;
+  }
+
   /**
    * Set up an administrative user account and testing keys.
    */
@@ -187,7 +193,6 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $this->messages = array();
     $query = db_select('watchdog', 'w')
       ->fields('w')
-      ->condition('w.type', 'mollom')
       ->orderBy('w.timestamp', 'ASC');
 
     // The comparison logic applied in this function is a bit confusing, since
@@ -209,11 +214,11 @@ class MollomWebTestCase extends DrupalWebTestCase {
           $this->error($output, 'User notice');
         }
         else {
-          $this->pass($output, t('Watchdog'));
+          $this->pass(check_plain($row->type) . ': ' . $output, t('Watchdog'));
         }
       }
       else {
-        $this->fail($output, t('Watchdog'));
+        $this->fail(check_plain($row->type) . ': ' . $output, t('Watchdog'));
       }
       // In case a severe message is expected, non-severe messages always pass,
       // since we would trigger a false positive test failure otherwise.
@@ -1544,7 +1549,7 @@ class MollomAccessTestCase extends MollomWebTestCase {
     // settings page.
     $this->web_user = $this->drupalCreateUser(array_diff(module_invoke_all('perm'), array('administer mollom')));
     $this->drupalLogin($this->web_user);
-    $this->drupalGet('admin/config/content/mollom');
+    $this->drupalGet('admin/config/content/mollom', array('watchdog' => WATCHDOG_WARNING));
     $this->assertResponse(403);
   }
 }
@@ -2522,7 +2527,10 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
 
     $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
 
-    $this->web_user = $this->drupalCreateUser(array('create article content'));
+    // @todo 'view own unpublished content' permission required to prevent a
+    //   bogus access denied watchdog caused by a bug in Drupal core.
+    // @see http://drupal.org/node/1429442
+    $this->web_user = $this->drupalCreateUser(array('create article content', 'view own unpublished content'));
   }
 
   /**
@@ -3485,8 +3493,10 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $this->drupalLogin($this->admin_user);
     // Verify that mollom_basic_test_form cannot be configured to put posts into
     // moderation queue.
+    $this->setProtection('mollom_basic_elements_test_form');
     $this->drupalGet('admin/config/content/mollom/manage/mollom_basic_elements_test_form');
     $this->assertNoFieldByName('mollom[discard]');
+
     // Configure mollom_test_form to accept bad posts.
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
       'mollom[checks][profanity]' => TRUE,
@@ -3942,12 +3952,41 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     $headers = array();
     $this->mollom->addAuthentication($method, $endpoint, $path, $data, $headers);
 
-    // Apply any OAuth header hacks.
-    foreach ($oauth_hacks as $name => $value) {
-      $headers['Authorization'] = preg_replace('@(' . $name . ')="[^"]*"@', '$1="' . $value . '"', $headers['Authorization']);
+    if (!empty($oauth_hacks)) {
+      // Extract OAuth header.
+      $input = $headers['Authorization'];
+      preg_match_all('@([^, =]+)="([^"]*)"@', $input, $header);
+      $oauth = array_combine($header[1], $header[2]);
+
+      // Apply any OAuth header hacks.
+      foreach ($oauth_hacks as $name => $value) {
+        $oauth[$name] = $value;
+      }
+      // PHPWTF: Can't access static methods on class in a property.
+      $class = $this->mollom;
+
+      // Regenerate signature based on hacked protocol parameters.
+      // Tests do not send additional GET/POST data at this point, so we do not
+      // account for that possibility.
+      // @see Mollom::addAuthentication()
+      if (!isset($oauth_hacks['oauth_signature'])) {
+        $oauth_query = $class::httpBuildQuery($oauth);
+        $base_string = implode('&', array(
+          $method,
+          $class::rawurlencode($endpoint . '/' . $path),
+          $class::rawurlencode($oauth_query),
+        ));
+        $key = $class::rawurlencode($this->mollom->privateKey) . '&' . '';
+        $oauth['oauth_signature'] = base64_encode(hash_hmac('sha1', $base_string, $key, TRUE));
+      }
+
+      foreach ($oauth as $key => $value) {
+        $oauth[$key] = $key . '="' . $class::rawurlencode($value) . '"';
+      }
+      $headers['Authorization'] = 'OAuth ' . implode(', ', $oauth);
     }
 
-    // curlexec() expects HTTP headers as "name: value" strings.
+    // curlExec() expects HTTP headers as "name: value" strings.
     $curl_headers = array();
     foreach ($headers as $name => $value) {
       $curl_headers[] = $name . ': ' . $value;
@@ -4013,8 +4052,8 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     ));
 
     $this->mollomRequest('POST', $path);
+    $this->assertMollomWatchdogMessages(WATCHDOG_WARNING);
     $this->assertResponse(403);
-    $this->assertMollomWatchdogMessages();
     $record = mollom_test_load($data->id);
     $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
 
@@ -4024,14 +4063,20 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     $this->drupalLogout();
 
     $replay_attack_nonce = md5(microtime() . mt_rand());
+
+    // Prime the nonce cache in order to test the replay attack.
+    $nonces = array();
+    $nonces[$replay_attack_nonce] = REQUEST_TIME;
+    cache_set('mollom_moderation_nonces', $nonces, 'cache');
+
     $tests = array(
       // Test entirely missing OAuth header throws no notices or exceptions.
       array('class' => array('oAuthStrategy' => '')),
       // Test OAuth query parameters are not supported.
       array('class' => array('oAuthStrategy' => 'query')),
       // Test missing or invalid public key.
-      array('class' => array('publicKey' => ''), 'watchdog' => WATCHDOG_WARNING),
-      array('class' => array('publicKey' => md5('foo')), 'watchdog' => WATCHDOG_WARNING),
+      array('class' => array('publicKey' => '')),
+      array('class' => array('publicKey' => md5('foo'))),
       // Test missing or invalid private key.
       // Only impacts the resulting oauth_signature and there is no Mollom log
       // message on a signature mismatch, just a regular 403 response.
@@ -4039,10 +4084,10 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       array('class' => array('privateKey' => md5('foo'))),
       // Test nonce replay attack, more than once.
       array('hacks' => array('oauth_nonce' => $replay_attack_nonce)),
-      array('hacks' => array('oauth_nonce' => $replay_attack_nonce), 'watchdog' => WATCHDOG_WARNING),
-      array('hacks' => array('oauth_nonce' => $replay_attack_nonce), 'watchdog' => WATCHDOG_WARNING),
-      // Test invalid/oudated timestamp.
-      array('hacks' => array('oauth_timestamp' => REQUEST_TIME - 1000), 'watchdog' => WATCHDOG_WARNING),
+      array('hacks' => array('oauth_nonce' => $replay_attack_nonce)),
+      // Test invalid/outdated timestamp.
+      array('hacks' => array('oauth_timestamp' => REQUEST_TIME - 1000)),
+      array('hacks' => array('oauth_timestamp' => REQUEST_TIME + 1000)),
       // Test invalid signature.
       array('hacks' => array('oauth_signature' => base64_encode(hash_hmac('sha1', 'foo', 'bar', TRUE)))),
       // Test unsupported signature hashing algo.
@@ -4054,9 +4099,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       $test += array(
         'class' => array(),
         'hacks' => array(),
-        // Watchdog log message assertion only accounts for Mollom messages,
-        // not for generic 403s.
-        'watchdog' => WATCHDOG_NOTICE,
+        'watchdog' => WATCHDOG_WARNING,
       );
       foreach ($test['class'] as $key => $value) {
         $this->mollomBackup->$key = $this->mollom->$key;
@@ -4064,8 +4107,8 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       }
       // Execute test.
       $this->mollomRequest('POST', $path, $test['hacks']);
-      $this->assertResponse(403);
       $this->assertMollomWatchdogMessages($test['watchdog']);
+      $this->assertResponse(403);
       $record = mollom_test_load($data->id);
       $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
 
@@ -4090,13 +4133,13 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       // Send a moderation request for the post.
       $path = 'mollom/moderate/' . $data->contentId . '/' . $action;
       $this->mollomRequest('POST', $path);
-      $this->assertMollomWatchdogMessages();
 
       $record = mollom_test_load($data->id);
       $new_data = mollom_data_load('mollom_test', $data->id);
 
       // Verify that the post was published.
       if ($action == 'approve') {
+        $this->assertMollomWatchdogMessages();
         $this->assertResponse(200);
         $this->assertSame('Publishing status', $record['status'], 1);
         $this->assertTrue($new_data, 'Mollom data for approved post still exists.');
@@ -4104,12 +4147,14 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       }
       // Verify that the post was deleted.
       elseif ($action == 'spam' || $action == 'delete') {
+        $this->assertMollomWatchdogMessages();
         $this->assertResponse(200);
         $this->assertFalse($record, 'Test post not found.');
         $this->assertFalse($new_data, 'Moderated/deleted record no longer exists.');
       }
       // Verify that post still exists after invalid/unsupported action.
       else {
+        $this->assertMollomWatchdogMessages(WATCHDOG_WARNING);
         $this->assertResponse(404);
         $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
         $this->assertTrue($new_data->moderate, 'Post is not flagged as moderated.');
