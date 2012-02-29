@@ -268,7 +268,7 @@ function mollom_install() {
  * Implements hook_uninstall().
  */
 function mollom_uninstall() {
-  db_delete('variable')->condition('name', 'mollom_%', 'LIKE')->execute();
+  db_delete('variable')->condition('name', db_like('mollom_') . '%', 'LIKE')->execute();
 }
 
 /**
