@@ -414,6 +414,30 @@ function mollom_data_load($entity, $id) {
 }
 
 /**
+ * Executes database queries with natural letter casing.
+ *
+ * Drupal core enforces lowercase column names in PDO statements for no
+ * particular reason.
+ *
+ * @see http://drupal.org/node/1171866
+ */
+function mollom_db_query($query, array $args = array(), array $options = array()) {
+  if (empty($options['target'])) {
+    $options['target'] = 'default';
+  }
+
+  $connection = Database::getConnection($options['target']);
+  // Backup PDO::ATTR_CASE to restore it afterwards, sticks on the connection.
+  $backup = $connection->getAttribute(PDO::ATTR_CASE);
+
+  $connection->setAttribute(PDO::ATTR_CASE, PDO::CASE_NATURAL);
+  $result = $connection->query($query, $args, $options);
+  $connection->setAttribute(PDO::ATTR_CASE, $backup);
+
+  return $result;
+}
+
+/**
  * Fetches a database record with natural letter casing.
  *
  * Drupal core enforces lowercase column names in PDO statements for no
@@ -429,6 +453,7 @@ function mollom_db_query_range($query, $from, $count, array $args = array(), arr
   $connection = Database::getConnection($options['target']);
   // Backup PDO::ATTR_CASE to restore it afterwards, sticks on the connection.
   $backup = $connection->getAttribute(PDO::ATTR_CASE);
+
   $connection->setAttribute(PDO::ATTR_CASE, PDO::CASE_NATURAL);
   $result = $connection->queryRange($query, $from, $count, $args, $options);
   $connection->setAttribute(PDO::ATTR_CASE, $backup);
@@ -2405,26 +2430,22 @@ function mollom_mollom_data_insert($data) {
   if ($data->entity == 'mollom_content' || $data->entity == 'mollom_captcha') {
     return;
   }
+  // Only content can be updated.
+  if (empty($data->contentId)) {
+    return;
+  }
 
   $params = array();
   // Start with content properties (which should be available).
+  // @todo It should not be required to re-send the content properties here.
   $form_state['mollom'] = $GLOBALS['mollom'];
   if (isset($form_state['mollom']['content_properties'])) {
     $params = $form_state['mollom']['content_properties'];
     unset($params['postId']);
   }
 
-  // If we already have a content ID, update that content.
-  if (!empty($data->contentId)) {
-    $params['id'] = $data->contentId;
-  }
-  // Otherwise, map a CAPTCHA ID to it.
-  // @todo Confirm this.
-  else {
-    $params['captchaId'] = $data->captchaId;
-  }
-
   // Mark the content as stored.
+  $params['id'] = $data->contentId;
   $params['stored'] = 1;
 
   // Add the URL of the posted content itself.
@@ -2450,15 +2471,6 @@ function mollom_mollom_data_insert($data) {
   }
 
   $result = mollom()->checkContent($params);
-
-  // If we did not have a contentId yet, inject it.
-  if (is_array($result) && !empty($result['id']) && empty($data->contentId)) {
-    $data->contentId = $result['id'];
-    db_update('mollom')
-      ->fields(array('contentId' => $data->contentId))
-      ->condition('captchaId', $data->captchaId)
-      ->execute();
-  }
 }
 
 /**
