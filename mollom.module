@@ -142,6 +142,12 @@ function mollom_init() {
       }
     }
   }
+  // Redirect local moderation pages to the hosted Mollom moderation system,
+  // if enabled.
+  // @see mollom_admin_settings()
+  if (variable_get('mollom_moderation_redirect', 0) && strpos($_GET['q'], 'admin/content/comment') === 0) {
+    drupal_goto('http://my.mollom.com');
+  }
 }
 
 /**
