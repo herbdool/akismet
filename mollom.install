@@ -23,17 +23,19 @@ function mollom_requirements($phase = 'runtime', $check = TRUE) {
   $requirements = array();
   if ($phase == 'runtime') {
     $status = _mollom_status($check);
+    $requirements['mollom'] = array(
+      'title' => t('Mollom API keys'),
+      'value' => t('Valid (public key: @publicKey)', array(
+        '@publicKey' => mollom()->loadConfiguration('publicKey'),
+      )),
+    );
     // Immediately return if everything is in order.
     if ($status === TRUE) {
       return $requirements;
     }
     // If not, something is wrong; prepare the requirements entry and set
     // defaults for any yet unknown edge-cases.
-    $requirements['mollom'] = array(
-      'title' => 'Mollom API keys',
-      'value' => '',
-      'severity' => REQUIREMENT_ERROR,
-    );
+    $requirements['mollom']['severity'] = REQUIREMENT_ERROR;
     // Append a link to the settings page to the error message on all pages,
     // except on the settings page itself. These error messages also need to be
     // shown on the settings page, since Mollom API keys can be entered later.
