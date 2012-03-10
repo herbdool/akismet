@@ -3851,19 +3851,89 @@ class MollomReportTestCase extends MollomWebTestCase {
       $this->assertNoMollomData('comment', $comment->cid);
     }
   }
+}
 
-  /**
-   * Tests reporting users.
-   */
-  function testReportUser() {
+/**
+ * Tests moderating users.
+ */
+class MollomModerateUserTestCase extends MollomWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Moderate users',
+      'description' => 'Tests moderating user accounts.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    parent::setUp();
+
     $this->drupalLogin($this->admin_user);
     $this->setProtection('user_register_form', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
 
+    // Allow visitors to register.
+    variable_set('user_register', USER_REGISTER_VISITORS);
     // Disable e-mail verification.
     variable_set('user_email_verification', 0);
+    // Set default user account cancellation method.
+    variable_set('user_cancel_method', 'user_cancel_delete');
+  }
 
-    // Register a user.
+  /**
+   * Tests moderating users.
+   */
+  function testModerateUser() {
+    $account = $this->registerUser();
+    $this->assertMollomData('user', $account->uid);
+
+    // Log in administrator and verify that we can report to Mollom.
+    $this->drupalLogin($this->admin_user);
+    $edit = array(
+      'user_cancel_method' => 'user_cancel_delete',
+      'mollom[feedback]' => 'spam',
+    );
+    $this->drupalPost('user/' . $account->uid . '/cancel', $edit, t('Cancel account'));
+    // @todo errrrr, "content"? ;)
+    $this->assertText(t('The content was successfully reported as inappropriate.'));
+
+    // Verify that Mollom session data has been deleted.
+    $this->assertNoMollomData('user', $account->uid);
+  }
+
+  /**
+   * Tests cancelling own user account.
+   */
+  function testCancelOwnAccount() {
+    // Allow users to cancel their own accounts.
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('cancel account'));
+
+    $account = $this->registerUser();
+    $this->assertMollomData('user', $account->uid);
+
+    // Verify that no feedback options appear on the account cancellation form.
+    $this->drupalGet('user/' . $account->uid . '/cancel');
+    $this->assertNoText(t('Report as inappropriate'));
+
+    // Cancel own account.
+    $this->drupalPost(NULL, array(), t('Cancel account'));
+    $this->assertText(t('A confirmation request to cancel your account has been sent to your e-mail address.'));
+    $this->assertNoText(t('The content was successfully reported as inappropriate.'));
+
+    // Confirm account cancellation request.
+    $this->drupalGet($this->getCancelUrl());
+
+    // Verify that Mollom session data has been deleted.
+    $this->assertNoMollomData('user', $account->uid);
+  }
+
+  /**
+   * Registers a new user through the UI.
+   *
+   * @return int
+   *   The user ID of the new user account.
+   */
+  function registerUser() {
     $password = $this->randomName();
     $edit = array(
       'name' => $this->randomName(),
@@ -3872,22 +3942,34 @@ class MollomReportTestCase extends MollomWebTestCase {
       'mail' => 'spam@example.com',
     );
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
+
     // Determine new uid.
     $uid = db_query('SELECT uid FROM {users} WHERE name = :name', array(':name' => $edit['name']))->fetchField();
-    $this->assertMollomData('user', $uid);
 
-    // Log in administrator and verify that we can report to Mollom.
-    $this->drupalLogin($this->admin_user);
-    $edit = array(
-      'user_cancel_method' => 'user_cancel_delete',
-      'mollom[feedback]' => 'spam',
+    $account = (object) array(
+      'uid' => $uid,
+      'name' => $edit['name'],
+      'pass_raw' => $password,
+      'mail' => $edit['mail'],
     );
-    $this->drupalPost("user/$uid/cancel", $edit, t('Cancel account'));
-    // @todo errrrr, "content"? ;)
-    $this->assertText(t('The content was successfully reported as inappropriate.'));
 
-    // Verify that Mollom session data has been deleted.
-    $this->assertNoMollomData('user', $uid);
+    // If the user is logged in directly after registering, update the logged in
+    // user on DrupalWebTestCase, so drupalLogin() continues to work.
+    if (variable_get('user_register', USER_REGISTER_VISITORS_ADMINISTRATIVE_APPROVAL) == USER_REGISTER_VISITORS) {
+      $this->loggedInUser = $account;
+    }
+
+    return $account;
+  }
+
+  /**
+   * Parses the user account cancellation URL out of the last sent mail.
+   */
+  function getCancelUrl() {
+    $mails = $this->drupalGetMails();
+    $mail = end($mails);
+    preg_match('@[^\s]+user/\d+/cancel/confirm/[^\s]+@', $mail['body'], $matches);
+    return $matches[0];
   }
 }
 

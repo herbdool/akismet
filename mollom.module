@@ -758,7 +758,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
     // originating modules.
     $mollom_form_id = $forms['delete'][$form_id];
     $module = $forms['protected'][$mollom_form_id];
-    $form_info = mollom_form_info($mollom_form_id, $module);
+    $form_info = mollom_form_load($mollom_form_id, $module);
     // Check access, if there is a 'report access' permission list.
     if (isset($form_info['report access'])) {
       $access = FALSE;
@@ -2971,6 +2971,7 @@ function user_mollom_form_list() {
     'title' => t('User registration form'),
     'entity' => 'user',
     'delete form' => 'user_cancel_confirm_form',
+    'report access' => array('administer users'),
     'entity delete multiple callback' => 'user_delete_multiple',
   );
   $forms['user_pass'] = array(
