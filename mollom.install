@@ -699,6 +699,9 @@ function mollom_update_7006() {
  * Add {mollom}.form_id column to look up the originating form_id for an entity.
  */
 function mollom_update_7007() {
+  // All Mollom data record modifications have been removed from this update,
+  // since mollom_update_7200() truncates the {mollom} table either way.
+
   if (!db_field_exists('mollom', 'form_id')) {
     db_add_field('mollom', 'form_id', array(
       'description' => 'The form_id of the form being protected.',
@@ -707,89 +710,6 @@ function mollom_update_7007() {
       'not null' => TRUE,
       'default' => '',
     ));
-    // Update simple cases first.
-    db_update('mollom')
-      ->fields(array('form_id' => 'user_register_form'))
-      ->condition('entity', 'user')
-      ->execute();
-    db_update('mollom')
-      ->fields(array('form_id' => 'contact_site_form'))
-      ->condition('entity', 'session')
-      ->execute();
-    // Also perform simple update on behalf of Webform, as that is a very common
-    // use-case.
-    db_update('mollom')
-      ->expression('form_id', "CONCAT('webform_client_form_', did)")
-      ->condition('entity', 'webform')
-      ->execute();
-
-    // Update node entity data records.
-    $query = db_select('mollom', 'm');
-    $query->join('node', 'n', 'n.nid = m.did');
-    $result = $query
-      ->fields('n', array('type'))
-      ->fields('m', array('did'))
-      ->condition('m.entity', 'node')
-      ->execute()
-      ->fetchAll();
-    $ids = array();
-    foreach ($result as $row) {
-      $ids[$row->type][] = $row->did;
-    }
-    foreach ($ids as $type => $nids) {
-      db_update('mollom')
-        ->fields(array('form_id' => "{$type}_node_form"))
-        ->condition('entity', 'node')
-        ->condition('did', $nids)
-        ->execute();
-    }
-
-    // Update comment entity data records.
-    $query = db_select('mollom', 'm');
-    $query->join('comment', 'c', 'c.cid = m.did');
-    $query->join('node', 'n', 'n.nid = c.nid');
-    $result = $query
-      ->fields('n', array('type'))
-      ->fields('m', array('did'))
-      ->condition('m.entity', 'comment')
-      ->execute()
-      ->fetchAll();
-    $ids = array();
-    foreach ($result as $row) {
-      $ids[$row->type][] = $row->did;
-    }
-    foreach ($ids as $type => $cids) {
-      db_update('mollom')
-        ->fields(array('form_id' => "comment_node_{$type}_form"))
-        ->condition('entity', 'comment')
-        ->condition('did', $cids)
-        ->execute();
-    }
-  }
-  // If {mollom}.form_id already exists, only update 'comment_form' form_ids.
-  // Also, in this case, {mollom}.did has been renamed to .id already.
-  else {
-    $query = db_select('mollom', 'm');
-    $query->join('comment', 'c', 'c.cid = m.id');
-    $query->join('node', 'n', 'n.nid = c.nid');
-    $result = $query
-      ->fields('n', array('type'))
-      ->fields('m', array('id'))
-      ->condition('m.entity', 'comment')
-      ->condition('m.form_id', 'comment_form')
-      ->execute()
-      ->fetchAll();
-    $ids = array();
-    foreach ($result as $row) {
-      $ids[$row->type][] = $row->id;
-    }
-    foreach ($ids as $type => $cids) {
-      db_update('mollom')
-        ->fields(array('form_id' => "comment_node_{$type}_form"))
-        ->condition('entity', 'comment')
-        ->condition('id', $cids)
-        ->execute();
-    }
   }
 }
 
