@@ -123,7 +123,7 @@ function mollom_test_form($form, &$form_state, $mid = NULL) {
   // be incomplete. Therefore, the default values always have to be overloaded.
   $form_state += array('storage' => array());
   if (isset($mid) && ($record = mollom_test_load($mid))) {
-    $form_state['storage'] = $record;
+    $form_state['storage'] = (array) $record;
   }
   $form_state['storage'] += array(
     'mid' => $mid,
@@ -257,31 +257,20 @@ function mollom_test_mollom_form_moderation(&$form, &$form_state) {
 }
 
 /**
- * Implements hook_mollom_test_presave() on behalf of mollom.module.
- */
-function mollom_mollom_test_presave($record) {
-  // If an existing record is published and we have session data stored for it,
-  // mark the data as moderated.
-  if (!empty($record->mid) && $record->status) {
-    mollom_data_moderate('mollom_test', $record->mid);
-  }
-}
-
-/**
  * Loads a {mollom_test} data record by id.
  */
 function mollom_test_load($mid) {
-  return db_query('SELECT * FROM {mollom_test} WHERE mid = :mid', array(':mid' => $mid))->fetchAssoc();
+  return db_query('SELECT * FROM {mollom_test} WHERE mid = :mid', array(':mid' => $mid))->fetch();
 }
 
 /**
  * Saves a {mollom_test} data record.
  */
 function mollom_test_save($record) {
-  // Allow modules to alter the record before saving. This is done for code
-  // consistency only.
-  // @see mollom_mollom_test_presave()
-  module_invoke_all('mollom_test_presave', $record);
+  // Load the stored entity, if any.
+  if (!empty($record->mid) && !isset($record->original)) {
+    $record->original = entity_load_unchanged('mollom_test', $record->mid);
+  }
 
   $update = !empty($record->mid) ? array('mid') : array();
   $status = drupal_write_record('mollom_test', $record, $update);
@@ -305,8 +294,7 @@ function mollom_test_save($record) {
  */
 function mollom_test_delete_multiple(array $mids) {
   foreach ($mids as $mid) {
-    // @todo The core entity system expects objects.
-    $record = (object) mollom_test_load($mid);
+    $record = mollom_test_load($mid);
     if ($record) {
       module_invoke_all('entity_delete', $record, 'mollom_test');
     }
@@ -321,11 +309,6 @@ function mollom_test_delete_multiple(array $mids) {
  * Form constructor for deleting a Mollom test item.
  */
 function mollom_test_delete_form($form, &$form_state, $record) {
-  // @todo Mollom Test module inconsistently uses an array for $record, but
-  //   entity_load() always returns an object.
-  if (!is_object($record)) {
-    $record = (object) $record;
-  }
   $form['mid'] = array('#type' => 'value', '#value' => $record->mid);
   return confirm_form($form,
     t('Are you sure you want to delete the %title?', array('%title' => $record->title)),

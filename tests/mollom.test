@@ -3522,7 +3522,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $mid = $this->assertTestSubmitData();
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
-    $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
+    $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
     $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
@@ -3538,7 +3538,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
-    $this->assertEqual($record['status'], 0, t('Unpublished test post found.'));
+    $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
     $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
@@ -3553,7 +3553,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertMollomData('mollom_test', $mid);
     $record = mollom_test_load($mid);
-    $this->assertEqual($record['status'], 1, t('Published test post found.'));
+    $this->assertEqual($record->status, 1, t('Published test post found.'));
     $this->assertSame('spamScore', $data->spamScore, 1.0);
     $this->assertSame('spamClassification', $data->spamClassification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
@@ -3579,7 +3579,7 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
       $mid = $this->assertTestSubmitData();
       $data = $this->assertMollomData('mollom_test', $mid);
       $record = mollom_test_load($mid);
-      $this->assertEqual($record['status'], 1, t('Published test post %body found.', array('%body' => $body)));
+      $this->assertEqual($record->status, 1, t('Published test post %body found.', array('%body' => $body)));
       $this->assertSame('spamScore', $data->spamScore, $expected['spamScore']);
       $this->assertSame('spamClassification', $data->spamClassification, $expected['spamClassification']);
       $this->assertSame('profanityScore', $data->profanityScore, $expected['profanityScore']);
@@ -4015,7 +4015,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     $this->assertText('Successful form submission');
     $mid = $this->getFieldValueByName('mid');
     $record = mollom_test_load($mid);
-    $this->assertSame('Publishing status', $record['status'], 0);
+    $this->assertSame('Publishing status', $record->status, 0);
     $data = mollom_data_load('mollom_test', $mid);
     $this->assertTrue($data, 'Mollom data for post exists.');
     return $data;
@@ -4144,7 +4144,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
     $this->assertMollomWatchdogMessages(WATCHDOG_WARNING);
     $this->assertResponse(403);
     $record = mollom_test_load($data->id);
-    $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+    $this->assertTrue(!empty($record) && $record->status == 0, 'Test post still exists.');
 
     $this->setProtection('mollom_test_form', MOLLOM_MODE_ANALYSIS, NULL, array(
       'mollom[moderation]' => 1,
@@ -4199,7 +4199,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       $this->assertMollomWatchdogMessages($test['watchdog']);
       $this->assertResponse(403);
       $record = mollom_test_load($data->id);
-      $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+      $this->assertTrue(!empty($record) && $record->status == 0, 'Test post still exists.');
 
       // Restore original properties on Mollom client.
       foreach ($test['class'] as $key => $value) {
@@ -4230,7 +4230,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       if ($action == 'approve') {
         $this->assertMollomWatchdogMessages();
         $this->assertResponse(200);
-        $this->assertSame('Publishing status', $record['status'], 1);
+        $this->assertSame('Publishing status', $record->status, 1);
         $this->assertTrue($new_data, 'Mollom data for approved post still exists.');
         $this->assertFalse($new_data->moderate, 'Post is flagged as moderated.');
       }
@@ -4245,7 +4245,7 @@ class MollomModerationIntegrationTestCase extends MollomWebTestCase {
       else {
         $this->assertMollomWatchdogMessages(WATCHDOG_WARNING);
         $this->assertResponse(404);
-        $this->assertTrue(!empty($record) && $record['status'] == 0, 'Test post still exists.');
+        $this->assertTrue(!empty($record) && $record->status == 0, 'Test post still exists.');
         $this->assertTrue($new_data->moderate, 'Post is not flagged as moderated.');
       }
     }

@@ -2391,7 +2391,20 @@ function mollom_mail_add_report_link(array &$message, array $mollom) {
 function mollom_entity_update($entity, $type) {
   // If an existing entity is published and we have session data stored for it,
   // mark the data as moderated.
-  if (!empty($entity->status)) {
+  $update = FALSE;
+  // If the entity update function provides the original entity, only mark the
+  // data as moderated when the entity's status transitioned to published.
+  if (isset($entity->original->status)) {
+    if (empty($entity->original->status) && !empty($entity->status)) {
+      $update = TRUE;
+    }
+  }
+  // If there is no original entity to compare against, check for the current
+  // status only.
+  elseif (!empty($entity->status)) {
+    $update = TRUE;
+  }
+  if ($update) {
     list($id) = entity_extract_ids($type, $entity);
     mollom_data_moderate($type, $id);
   }
