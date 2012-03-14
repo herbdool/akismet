@@ -2807,7 +2807,11 @@ function node_mollom_form_list() {
       'entity' => 'node',
       'bundle' => $type->type,
       'delete form' => 'node_delete_confirm',
+      'delete form file' => array(
+        'name' => 'node.pages',
+      ),
       'entity delete multiple callback' => 'node_delete_multiple',
+      'report access' => array('bypass node access', 'administer nodes'),
     );
   }
   return $forms;
@@ -2907,6 +2911,7 @@ function comment_mollom_form_list() {
       'delete form file' => array(
         'name' => 'comment.admin',
       ),
+      'report access' => array('administer comments'),
       'entity delete multiple callback' => 'comment_delete_multiple',
     );
   }
