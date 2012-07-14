@@ -208,6 +208,23 @@ function mollom_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      // Optional entity type and bundle columns are required for protected
+      // entity forms, in order to determine whether report options should
+      // appear on a delete confirmation form. Column lengths are copied from
+      // {field_config_instance}.
+      // @see field_schema()
+      'entity' => array(
+        'description' => 'Optional: Entity type of the form.',
+        'type' => 'varchar',
+        'length' => 32,
+        'not null' => FALSE,
+      ),
+      'bundle' => array(
+        'description' => 'Optional: Entity bundle of the form.',
+        'type' => 'varchar',
+        'length' => 128,
+        'not null' => FALSE,
+      ),
       'mode' => array(
         'description' => 'Protection mode for the form.',
         'type' => 'int',
@@ -960,3 +977,51 @@ function mollom_update_7204() {
   }
 }
 
+/**
+ * Add {mollom_form}.entity and .bundle fields.
+ */
+function mollom_update_7205() {
+  if (!db_field_exists('mollom_form', 'entity')) {
+    db_add_field('mollom_form', 'entity', array(
+      'description' => 'Optional: Entity type of the form.',
+      'type' => 'varchar',
+      'length' => 32,
+      'not null' => FALSE,
+    ));
+  }
+  if (!db_field_exists('mollom_form', 'bundle')) {
+    db_add_field('mollom_form', 'bundle', array(
+      'description' => 'Optional: Entity bundle of the form.',
+      'type' => 'varchar',
+      'length' => 128,
+      'not null' => FALSE,
+    ));
+  }
+  // Populate entity type and bundle values for core entity types.
+  // Any other values for contributed entities need to be updated manually,
+  // which is possible by simply updating the form protection through the
+  // administration interface.
+  $result = db_query('SELECT form_id, module FROM {mollom_form}');
+  foreach ($result as $mollom_form) {
+    if ($mollom_form->module == 'node') {
+      $bundle = substr($mollom_form->form_id, 0, -strlen('_node_form'));
+      db_update('mollom_form')
+        ->condition('form_id', $mollom_form->form_id)
+        ->fields(array('entity' => 'node', 'bundle' => $bundle))
+        ->execute();
+    }
+    elseif ($mollom_form->module == 'comment') {
+      $bundle = substr($mollom_form->form_id, 0, -strlen('_form'));
+      db_update('mollom_form')
+        ->condition('form_id', $mollom_form->form_id)
+        ->fields(array('entity' => 'comment', 'bundle' => $bundle))
+        ->execute();
+    }
+    elseif ($mollom_form->module == 'user') {
+      db_update('mollom_form')
+        ->condition('form_id', $mollom_form->form_id)
+        ->fields(array('entity' => 'user', 'bundle' => 'user'))
+        ->execute();
+    }
+  }
+}
