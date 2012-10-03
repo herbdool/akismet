@@ -283,6 +283,13 @@ function mollom_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  $items['mollom/pong'] = array(
+    'page callback' => 'mollom_admin_verify_ip',
+    'access callback' => TRUE,
+    'file' => 'mollom.admin.inc',
+    'type' => MENU_CALLBACK,
+  );
+
   return $items;
 }
 
