@@ -392,13 +392,7 @@ abstract class Mollom {
       // Add OAuth request parameters.
       $query = $this->addAuthentication($method, $server, $path, $data, $headers);
 
-      debug($method);
-      debug($server);
-      debug($path);
-      debug($query);
-      debug($headers);
       $response = $this->request($method, $server, $path, $query, $headers);
-      debug($response);
 
       // Determine basic error condition based on HTTP status code.
       $response->isError = ($response->code < 200 || $response->code >= 300);
@@ -899,7 +893,7 @@ abstract class Mollom {
     if (!isset($publicKey)) {
       $publicKey = $this->publicKey;
     }
-    $result = $this->query('POST', 'site/' . $publicKey, $data, array('site', 'publicKey'));
+    $result = $this->query('POST', 'site/' . $this->publicKey, $data, array('site', 'publicKey'));
     return isset($result['site']) ? $result['site'] : $result;
   }
 
@@ -920,38 +914,6 @@ abstract class Mollom {
     $result = $this->updateSite($data);
     // lastResponseCode will either be TRUE, AUTH_ERROR, or NETWORK_ERROR.
     return $this->lastResponseCode === TRUE ? TRUE : $this->lastResponseCode;
-  }
-
-  /**
-   * Verifies the IP address detection mechanism of this client.
-   *
-   * Determining the IP address of a post author vs. the client's own IP address
-   * can be problematic if there is a reverse-proxy or possibly even an entire
-   * network of reverse-proxies in front of the client. This method allows a
-   * client to verify it determines the correct *inbound* IP address of visitors.
-   * The flow is this:
-   *
-   * - Client issues a request to
-   *   mollom://site/{publicKey}/ping?url=http://example.com/mollom/pong
-   * - Mollom server pings back to the given URL and provides its own IP; e.g.,
-   *   http://example.com/mollom/pong?ip=123.123.123.123
-   * - Client determines the IP as it normally would, and compares its own
-   *   result with the 'ip' parameter provided by the server. If that is
-   *   different, then it is sending wrong IP addresses.
-   *
-   * This ping-pong facility requires authentication. The client needs to
-   * implement a route to handle the inbound request, including the 'ip' query
-   * parameter.
-   *
-   * @param string $url
-   *   The URL to issue an HTTP request to. This endpoint gets the additional
-   *   query parameter 'ip', which holds the IP address of the Mollom server.
-   */
-  public function verifyIP($url) {
-    $data['url'] = (string) $url;
-    $suffix = '?url=' . rawurlencode($url);
-    $result = $this->query('POST', 'site/' . $this->publicKey . '/ping' . $suffix, $data);
-    return $result;
   }
 
   /**

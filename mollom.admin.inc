@@ -10,8 +10,6 @@
  */
 function mollom_admin_form_list() {
   _mollom_testing_mode_warning();
-  $result = mollom()->verifyIP(url('mollom/pong', array('absolute' => TRUE)));
-  debug($result);
 
   // Reset the cached list of protected forms.
   mollom_form_cache(TRUE);
@@ -840,7 +838,3 @@ function mollom_reports_page($form, &$form_state) {
   return $form;
 }
 
-function mollom_admin_verify_ip() {
-  debug($_GET);
-  debug(ip_address());
-}
