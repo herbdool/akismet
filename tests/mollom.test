@@ -683,6 +683,8 @@ class MollomWebTestCase extends DrupalWebTestCase {
    *   - entity: The entity type contained in the report link URL.
    *   - id: The entity ID contained in the report link URL.
    *   - mail: The full mail message array, as recorded by TestingMailSystem.
+   *   - external: TRUE.
+   *   The array can be passed directly as $options to drupalGet().
    */
   protected function assertMailMollomReportLink($entity_type = 'mollom_content') {
     // Grab the last sent mail.
@@ -692,12 +694,33 @@ class MollomWebTestCase extends DrupalWebTestCase {
     variable_set('drupal_test_email_collector', $captured_emails);
 
     $found = FALSE;
-    if (preg_match('@http.+?mollom/report/([^/]+)/([^\s]+)@', $message['body'], $matches)) {
+    // Determine the report URI pattern for the passed entity type.
+    $path = FALSE;
+    foreach (mollom_form_list() as $form_id => $info) {
+      if (isset($info['entity']) && $info['entity'] == $entity_type && isset($info['report path'])) {
+        $path = $info['report path'];
+        break;
+      }
+    }
+    if ($path) {
+      $path = strtr($path, array('%id' => '([^\s]+)'));
+      if (preg_match('@http.+?' . $path . '@', $message['body'], $matches)) {
+        $found = array(
+          'url' => $matches[0],
+          'entity' => $entity_type,
+          'id' => $matches[1],
+          'mail' => $message,
+          'external' => TRUE,
+        );
+      }
+    }
+    elseif (preg_match('@http.+?mollom/report/([^/]+)/([^\s]+)@', $message['body'], $matches)) {
       $found = array(
         'url' => $matches[0],
         'entity' => $matches[1],
         'id' => $matches[2],
         'mail' => $message,
+        'external' => TRUE,
       );
     }
     $this->assertTrue($found, t('Report to Mollom link found in e-mail: %url', array('%url' => $found['url'])));
@@ -2118,16 +2141,6 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     $this->drupalPost(NULL, $edit, t('Next'));
     $this->assertText('Mollom test form');
 
-    // Verify that text analysis cannot be enabled without enabling fields.
-    $edit = array(
-      'mollom[mode]' => MOLLOM_MODE_ANALYSIS,
-    );
-    foreach ($form_info['elements'] as $key => $label) {
-      $edit['mollom[enabled_fields][' . rawurlencode($key) . ']'] = FALSE;
-    }
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->assertText(t('At least one field is required for text analysis.'));
-
     $edit = array(
       'mollom[mode]' => MOLLOM_MODE_ANALYSIS,
       'mollom[checks][spam]' => TRUE,
@@ -2390,9 +2403,11 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
   /**
    * Make sure that the request password form is protected correctly.
    */
-  function testProtectRequestPassword() {
-    // We first enable Mollom for the request password form.
+  function testUserPasswordCaptcha() {
     $this->drupalLogin($this->admin_user);
+    // Verify that the protection mode defaults to CAPTCHA.
+    $this->drupalGet('admin/config/content/mollom/add/user_pass');
+    $this->assertFieldByName('mollom[mode]', MOLLOM_MODE_CAPTCHA);
     $this->setProtection('user_pass', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
 
@@ -2416,9 +2431,11 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
   /**
    * Make sure that the user registration form is protected correctly.
    */
-  function testProtectRegisterUser() {
-    // We first enable Mollom for the user registration form.
+  function testUserRegisterCaptcha() {
     $this->drupalLogin($this->admin_user);
+    // Verify that the protection mode defaults to CAPTCHA.
+    $this->drupalGet('admin/config/content/mollom/add/user_register_form');
+    $this->assertFieldByName('mollom[mode]', MOLLOM_MODE_CAPTCHA);
     $this->setProtection('user_register_form', MOLLOM_MODE_CAPTCHA);
     $this->drupalLogout();
 
@@ -2447,12 +2464,145 @@ class MollomUserFormsTestCase extends MollomWebTestCase {
     // to successfully register.
     $this->postCorrectCaptcha('user/register', $edit, t('Create new account'));
     $this->assertText(t('Your account is currently pending approval by the site administrator.'));
-    $this->assertTrue(user_load_by_name($name), t('The user who attempted to register appears in the database when the CAPTCHA is valid.'));
+    $account = user_load_by_name($edit['name']);
+    $this->assertTrue($account, 'New user found after solving CAPTCHA.');
+    $this->assertEqual($account->status, 0, 'New user account is pending approval.');
+    $data = $this->assertMollomData('user', $account->uid);
+    $this->assertSame('$data->moderate', $data->moderate, 0);
 
     // First mail sent is the site administrator approval.
-    $this->assertMailMollomReportLink('mollom_captcha');
+    $link = $this->assertMailMollomReportLink('user');
     // Second mail goes to the user who registered.
     $this->assertNoMailMollomReportLink();
+
+    // Verify that the user account is deleted after reporting it as spam.
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet($link['url'], $link);
+    $edit = array(
+      'user_cancel_method' => 'user_cancel_delete',
+      'mollom[feedback]' => 'spam',
+    );
+    $this->drupalPost(NULL, $edit, t('Cancel account'));
+    $account = user_load($account->uid, TRUE);
+    $this->assertFalse($account, 'Reported user account not found.');
+  }
+
+  /**
+   * Tests text analysis protection with CAPTCHA for user registration form.
+   */
+  function testUserRegisterAnalysisCaptcha() {
+    // Allow registration by site visitors without administrator approval.
+    variable_set('user_register', USER_REGISTER_VISITORS);
+
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('user_register_form', MOLLOM_MODE_ANALYSIS);
+    $this->drupalLogout();
+
+    // Retrieve initial count of registered users.
+    $count_initial = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+
+    // Verify that a spam user registration is blocked.
+    /*
+    $this->drupalGet('user/register');
+    $this->assertNoCaptchaField();
+    $edit = array(
+      'name' => 'spam',
+      'mail' => 'spam@example.com',
+    );
+    $this->drupalPost(NULL, $edit, t('Create new account'));
+    $this->assertNoCaptchaField();
+    $this->assertText($this->spam_message);
+    $count_new = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+    $this->assertEqual($count_initial, $count_new, 'Existing user count found.');
+    $this->assertFalse(user_load_by_name($edit['name']), 'New user not found.');
+    */
+
+    // Verify that a unsure registration triggers a CAPTCHA.
+    $this->drupalGet('user/register');
+    $this->assertNoCaptchaField();
+    $edit = array(
+      'name' => 'unsure',
+      'mail' => 'unsure@example.com',
+    );
+    $this->drupalPost(NULL, $edit, t('Create new account'));
+    $this->assertCaptchaField();
+
+    // Verify that user count is still the same.
+    $count_new = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+    $this->assertEqual($count_initial, $count_new, 'Existing user count found.');
+
+    // Verify that solving the CAPTCHA registers the user.
+    $this->postCorrectCaptcha(NULL, array(), t('Create new account'));
+    $account = user_load_by_name($edit['name']);
+    $this->assertTrue($account, 'New user found after solving CAPTCHA.');
+    $this->assertEqual($account->status, 1, 'New user account is active.');
+    $data = $this->assertMollomData('user', $account->uid);
+    $this->assertSame('$data->moderate', $data->moderate, 0);
+  }
+
+  /**
+   * Tests text analysis protection without CAPTCHA for user registration form.
+   */
+  function testUserRegisterAnalysisModerate() {
+    // Allow registration by site visitors without administrator approval.
+    variable_set('user_register', USER_REGISTER_VISITORS);
+
+    $this->drupalLogin($this->admin_user);
+    $this->setProtection('user_register_form', MOLLOM_MODE_ANALYSIS, array(), array(
+      'mollom[unsure]' => 'moderate',
+    ));
+    $this->drupalLogout();
+
+    // Retrieve initial count of registered users.
+    $count_initial = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+
+    // Verify that a spam user registration is blocked.
+    /*
+    $this->drupalGet('user/register');
+    $this->assertNoCaptchaField();
+    $edit = array(
+      'name' => 'spam',
+      'mail' => 'spam@example.com',
+    );
+    $this->drupalPost(NULL, $edit, t('Create new account'));
+    $this->assertNoCaptchaField();
+    $this->assertText($this->spam_message);
+    $count_new = db_query("SELECT COUNT(uid) FROM {users}")->fetchField();
+    $this->assertEqual($count_initial, $count_new, 'Existing user count found.');
+    $this->assertFalse(user_load_by_name($edit['name']), 'New user not found.');
+    */
+
+    // Verify that a unsure registration triggers no CAPTCHA and requires approval.
+    $this->drupalGet('user/register');
+    $this->assertNoCaptchaField();
+    $edit = array(
+      'name' => 'unsure',
+      'mail' => 'unsure@example.com',
+    );
+    $this->drupalPost(NULL, $edit, t('Create new account'));
+    $this->assertNoCaptchaField();
+    $this->assertText(t('Your account is currently pending approval by the site administrator.'));
+    $account = user_load_by_name($edit['name']);
+    $this->assertTrue($account, 'New user found after solving CAPTCHA.');
+    $this->assertEqual($account->status, 0, 'New user account is pending approval.');
+    $data = $this->assertMollomData('user', $account->uid);
+    $this->assertSame('$data->moderate', $data->moderate, 1);
+
+    // First mail sent is the site administrator approval.
+    $link = $this->assertMailMollomReportLink('user');
+    // Second mail goes to the user who registered.
+    $this->assertNoMailMollomReportLink();
+
+    // Verify that the user account is deleted after reporting it as spam.
+    $this->drupalLogin($this->admin_user);
+    $this->drupalGet($link['url'], $link);
+    $edit = array(
+      'user_cancel_method' => 'user_cancel_delete',
+      'mollom[feedback]' => 'spam',
+    );
+    $this->drupalPost(NULL, $edit, t('Cancel account'));
+    $account = user_load($account->uid, TRUE);
+    $this->assertFalse($account, 'Reported user account not found.');
   }
 }
 
