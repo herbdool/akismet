@@ -63,8 +63,7 @@ function mollom_help($path, $arg) {
     $output .= t('All listed forms below are protected by Mollom, unless users are able to <a href="@permissions-url">bypass Mollom\'s protection</a>.', array(
       '@permissions-url' => url('admin/people/permissions', array('fragment' => 'module-mollom')),
     ));
-    $output .= '</p>';
-    $output .= '<p>';
+    $output .= ' ';
     $output .= t('You can <a href="@add-form-url">add a form</a> to protect, configure already protected forms, or remove the protection.', array(
       '@add-form-url' => url('admin/config/content/mollom/add'),
     ));
@@ -284,6 +283,28 @@ function mollom_menu() {
   );
 
   return $items;
+}
+
+/**
+ * Implements hook_menu_local_tasks_alter().
+ */
+function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($router_item['tab_root'] === 'admin/config/content/mollom' && user_access('access mollom statistics')) {
+    // Inject link to 'Statistics' before the last 'Settings' tab.
+    // The render array supports the regular #weight, but D7 core does not
+    // assign a #weight property for local tasks derived from the menu router.
+    // This causes element_children() to re-sort the existing local tasks
+    // (without weights) and they appear in an arbitrary order.
+    // @see http://drupal.org/node/1864066
+    array_splice($data['tabs'][0]['output'], -1, 0, array(array(
+      '#theme' => 'menu_local_task',
+      '#link' => array(
+        'title' => t('Statistics'),
+        'href' => 'admin/reports/mollom',
+        'localized_options' => array('html' => FALSE),
+      ),
+    )));
+  }
 }
 
 /**
