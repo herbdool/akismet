@@ -1733,6 +1733,9 @@ function mollom_validate_analysis(&$form, &$form_state) {
   }
   $data['checks'] = $form_state['mollom']['checks'];
   $data['strictness'] = $form_state['mollom']['strictness'];
+  if (isset($form_state['mollom']['type'])) {
+    $data['type'] = $form_state['mollom']['type'];
+  }
   if (in_array('spam', $data['checks']) && $form_state['mollom']['unsure'] == 'binary') {
     $data['unsure'] = 0;
   }
@@ -3187,6 +3190,7 @@ function user_mollom_form_list() {
   $forms['user_register_form'] = array(
     'mode' => MOLLOM_MODE_CAPTCHA,
     'title' => t('User registration form'),
+    'type' => 'user',
     'entity' => 'user',
     'bundle' => 'user',
     'delete form' => 'user_cancel_confirm_form',
