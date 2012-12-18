@@ -245,10 +245,10 @@ function mollom_menu() {
     'type' => MENU_LOCAL_TASK,
     'file' => 'mollom.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist/delete/%'] = array(
-    'title' => 'Delete',
+  $items['admin/config/content/mollom/blacklist/delete'] = array(
+    'title' => 'Delete blacklist entry',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_delete', 6),
+    'page arguments' => array('mollom_admin_blacklist_delete'),
     'access arguments' => array('administer mollom'),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',

@@ -467,6 +467,7 @@ function mollom_admin_unprotect_form_submit($form, &$form_state) {
  */
 function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
   $form['#tree'] = TRUE;
+  $form['#attached']['css'][] = drupal_get_path('module', 'mollom') . '/mollom.admin.css';
 
   // Translate internal reason values for rendering and select list in form.
   $contexts = array(
@@ -490,28 +491,27 @@ function mollom_admin_blacklist_form($form, &$form_state, $type = 'spam') {
       if ($entry['reason'] != $type) {
         continue;
       }
+      $row = array();
       // #class property is internally used by
       // theme_mollom_admin_blacklist_form().
-      $row = array(
-        'context' => array(
-          '#markup' => check_plain($contexts[$entry['context']]),
-          '#class' => 'mollom-blacklist-context value-' . check_plain($entry['context']),
-        ),
-        'match' => array(
-          '#markup' => check_plain($matches[$entry['match']]),
-          '#class' => 'mollom-blacklist-match value-' . check_plain($entry['match']),
-        ),
-        'value' => array(
-          '#markup' => check_plain($entry['value']),
-          '#class' => 'mollom-blacklist-value',
-        ),
+      $row['context'] = array(
+        '#markup' => check_plain($contexts[$entry['context']]),
+        '#class' => 'mollom-blacklist-context value-' . check_plain($entry['context']),
+      );
+      $row['match'] = array(
+        '#markup' => check_plain($matches[$entry['match']]),
+        '#class' => 'mollom-blacklist-match value-' . check_plain($entry['match']),
+      );
+      $row['value'] = array(
+        '#markup' => check_plain($entry['value']),
+        '#class' => 'mollom-blacklist-value',
       );
       $row['actions']['delete'] = array(
         '#type' => 'link',
         '#title' => t('delete'),
-        '#href' => 'admin/config/content/mollom/blacklist/delete/' . $entry['id'],
+        '#href' => 'admin/config/content/mollom/blacklist/delete',
         '#options' => array(
-          'query' => drupal_get_destination(),
+          'query' => array('id' => $entry['id']) + drupal_get_destination(),
         ),
       );
       $form['blacklist'][$entry['id']] = $row;
@@ -646,18 +646,15 @@ function theme_mollom_admin_blacklist_form($variables) {
 /**
  * Form builder; Builds the confirmation form for deleting a blacklist item.
  *
- * @param $key
- *   The blacklist entry text to remove, base64-encoded.
- * @param $context
- *   The context of the blacklist entry.
- * @param $reason
- *   The reason of the blacklist entry.
- *
  * @ingroup forms
  * @see mollom_admin_blacklist_delete_submit()
  */
-function mollom_admin_blacklist_delete($form, &$form_state, $entryId) {
-  $entry = mollom()->getBlacklistEntry($entryId);
+function mollom_admin_blacklist_delete($form, &$form_state) {
+  $id = $_GET['id'];
+  if (empty($id) || !($entry = mollom()->getBlacklistEntry($id))) {
+    drupal_not_found();
+    return;
+  }
   $form['entry'] = array(
     '#type' => 'value',
     '#value' => $entry,
