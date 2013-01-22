@@ -761,7 +761,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
         $form['mollom']['privacy'] = array(
           '#prefix' => '<div class="description mollom-privacy">',
           '#suffix' => '</div>',
-          '#markup' => t('By submitting this form, you accept the <a href="@privacy-policy-url" class="mollom-target">Mollom privacy policy</a>.', array(
+          '#markup' => t('By submitting this form, you accept the <a href="@privacy-policy-url" class="mollom-target" rel="nofollow">Mollom privacy policy</a>.', array(
             '@privacy-policy-url' => '//mollom.com/web-service-privacy-policy',
           )),
           '#weight' => 10,
