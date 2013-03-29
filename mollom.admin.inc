@@ -187,6 +187,9 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         '#options' => $modes,
         '#default_value' => isset($mollom_form['mode']) ? $mollom_form['mode'] : key($modes),
       );
+      $form['mollom']['mode'][MOLLOM_MODE_CAPTCHA] = array(
+        '#description' => t('Only choose CAPTCHA if text analysis is not suitable. Page caching is disabled on all pages containing CAPTCHA-only protected forms.'),
+      );
 
       $all_permissions = array();
       foreach (module_implements('permission') as $module) {
