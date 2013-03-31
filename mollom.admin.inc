@@ -315,9 +315,6 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
       );
       // Only possible for forms supporting moderation of unpublished posts.
       $form['mollom']['unsure']['moderate']['#access'] = !empty($mollom_form['moderation callback']);
-      // Until more options are supported, the entire field/widget only makes
-      // sense for forms that support moderation of unpublished posts.
-      $form['mollom']['unsure']['#access'] = !empty($mollom_form['moderation callback']);
 
       $form['mollom']['discard'] = array(
         '#type' => 'radios',
