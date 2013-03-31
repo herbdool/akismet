@@ -937,17 +937,7 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
   }
 
   // Any information in hook_mollom_form_info() overrides the list info.
-  $mollom_form_info = module_invoke($module, 'mollom_form_info', $form_id);
-  if (is_array($mollom_form_info)) {
-    $form_info = array_merge($form_info, $mollom_form_info);
-  }
-  else {
-    $t_args = array('%form_id' => $form_id, '%module' => $module);
-    if (user_access('administer mollom')) {
-      drupal_set_message(t('Unable to retrieve %form_id form definition from %module module.', $t_args), 'error');
-    }
-    watchdog('mollom', 'Unable to retrieve %form_id form definition from %module module.', $t_args, WATCHDOG_ERROR);
-  }
+  $form_info = array_merge($form_info, module_invoke($module, 'mollom_form_info', $form_id));
 
   // Ensure default properties.
   $form_info += array(
