@@ -281,11 +281,11 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
 
       $form['mollom']['strictness'] = array(
         '#type' => 'radios',
-        '#title' => t('Text analysis accuracy'),
+        '#title' => t('Text analysis strictness'),
         '#options' => array(
-          'strict' => t('Strict'),
+          'strict' => t('Strict: Posts are more likely classified as spam'),
           'normal' => t('Normal'),
-          'relaxed' => t('Relaxed'),
+          'relaxed' => t('Relaxed: Posts are more likely classified as ham'),
         ),
         '#default_value' => $mollom_form['strictness'],
         '#states' => array(
