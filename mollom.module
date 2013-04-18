@@ -2290,60 +2290,61 @@ function _mollom_format_log(array $log) {
       // Only prettify non-scalar values plus Booleans.
       // I.e., NULL, TRUE, FALSE, array, and object.
       if (is_scalar($array) && !is_bool($array)) {
-        continue;
+        $value = $array;
       }
-      $flat_value = NULL;
-      // Convert arrays and objects.
-      // @todo Objects?
-      if (isset($array) && !is_scalar($array)) {
-        $ref = &$array;
-        $key = key($ref);
-        $parents = array();
-        $flat_value = '';
-        while ($key !== NULL) {
-          if (is_scalar($ref[$key]) || is_bool($ref[$key]) || is_null($ref[$key])) {
-            $value = var_export($ref[$key], TRUE);
-            // Indent all values to have a visual separation from the last.
-            $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} = {$value}\n";
-          }
+      else {
+        $flat_value = NULL;
+        // Convert arrays and objects.
+        // @todo Objects?
+        if (isset($array) && !is_scalar($array)) {
+          $ref = &$array;
+          $key = key($ref);
+          $parents = array();
+          $flat_value = '';
+          while ($key !== NULL) {
+            if (is_scalar($ref[$key]) || is_bool($ref[$key]) || is_null($ref[$key])) {
+              $value = var_export($ref[$key], TRUE);
+              // Indent all values to have a visual separation from the last.
+              $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} = {$value}\n";
+            }
 
-          // Recurse into nested keys, if the current key is not scalar.
-          if (is_array($ref[$key])) {
-            $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} =\n";
-            $parents[] = &$ref;
-            $ref = &$ref[$key];
-            $key = key($ref);
-          }
-          else {
-            // Move to next key if there is one.
-            next($ref);
-            if (key($ref) !== NULL) {
+            // Recurse into nested keys, if the current key is not scalar.
+            if (is_array($ref[$key])) {
+              $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} =\n";
+              $parents[] = &$ref;
+              $ref = &$ref[$key];
               $key = key($ref);
             }
-            // Move back to parent key, if there is one.
-            elseif ($parent = array_pop($parents)) {
-              $ref = &$parent;
-              next($ref);
-              $key = key($ref);
-            }
-            // Otherwise, reached the end of array and recursion.
             else {
-              $key = NULL;
+              // Move to next key if there is one.
+              next($ref);
+              if (key($ref) !== NULL) {
+                $key = key($ref);
+              }
+              // Move back to parent key, if there is one.
+              elseif ($parent = array_pop($parents)) {
+                $ref = &$parent;
+                next($ref);
+                $key = key($ref);
+              }
+              // Otherwise, reached the end of array and recursion.
+              else {
+                $key = NULL;
+              }
             }
           }
         }
-      }
-
-      $value = NULL;
-      // Use prettified string representation.
-      if ($flat_value !== NULL) {
-        $value = $flat_value;
-      }
-      // Use var_export() for Booleans.
-      // Do not output NULL values on the top-level to allow for labels without
-      // following value.
-      elseif ($array !== NULL) {
-        $value = var_export($array, TRUE);
+        $value = NULL;
+        // Use prettified string representation.
+        if ($flat_value !== NULL) {
+          $value = $flat_value;
+        }
+        // Use var_export() for Booleans.
+        // Do not output NULL values on the top-level to allow for labels without
+        // following value.
+        elseif ($array !== NULL) {
+          $value = var_export($array, TRUE);
+        }
       }
 
       // Inject all other key/value pairs as @headingN (and optional
@@ -2730,16 +2731,14 @@ function mollom_entity_delete($entity, $type) {
 /**
  * @name mollom_moderation Mollom Moderation integration.
  * @{
- *
- * @todo Implement hook_mollom_data_delete() and update 'stored' = 0.
  */
 
 /**
  * Implements hook_mollom_data_insert().
  */
 function mollom_mollom_data_insert($data) {
-  $mollom_form = mollom_form_load($data->form_id);
-  if (empty($mollom_form['moderation'])) {
+  // Only content can be updated.
+  if (empty($data->contentId)) {
     return;
   }
   // Exclude data for form submissions not resulting in a locally stored entity.
@@ -2748,8 +2747,9 @@ function mollom_mollom_data_insert($data) {
   if ($data->entity == 'mollom_content' || $data->entity == 'mollom_captcha') {
     return;
   }
-  // Only content can be updated.
-  if (empty($data->contentId)) {
+  // Skip forms for which Mollom moderation integration is not enabled.
+  $mollom_form = mollom_form_load($data->form_id);
+  if (empty($mollom_form['moderation'])) {
     return;
   }
 
@@ -2786,8 +2786,8 @@ function mollom_mollom_data_insert($data) {
  * Implements hook_mollom_data_delete().
  */
 function mollom_mollom_data_delete($data) {
-  $mollom_form = mollom_form_load($data->form_id);
-  if (empty($mollom_form['moderation'])) {
+  // Only content can be deleted.
+  if (empty($data->contentId)) {
     return;
   }
   // Exclude data for form submissions not resulting in a locally stored entity.
@@ -2796,8 +2796,9 @@ function mollom_mollom_data_delete($data) {
   if ($data->entity == 'mollom_content' || $data->entity == 'mollom_captcha') {
     return;
   }
-  // Only content can be deleted.
-  if (empty($data->contentId)) {
+  // Skip forms for which Mollom moderation integration is not enabled.
+  $mollom_form = mollom_form_load($data->form_id);
+  if (empty($mollom_form['moderation'])) {
     return;
   }
 
@@ -2988,6 +2989,22 @@ function mollom_moderate($data, $action) {
   $form_info = mollom_form_load($data->form_id);
 
   if ($form_info) {
+    if (isset($form_info['entity delete callback'])) {
+      $delete_callback = $form_info['entity delete callback'];
+      $messages[] = "May delete $form_info[entity] entity via {$delete_callback}().";
+    }
+    elseif (isset($form_info['entity delete multiple callback'])) {
+      $delete_multiple_callback = $form_info['entity delete multiple callback'];
+      $messages[] = "May delete $form_info[entity] entity via {$delete_multiple_callback}().";
+    }
+    elseif (function_exists($data->entity . '_delete')) {
+      $delete_callback = $data->entity . '_delete';
+      $messages[] = "May delete $form_info[entity] entity via {$delete_callback}().";
+    }
+    elseif (isset($form_info['delete form'])) {
+      $messages[] = "May delete $form_info[entity] entity via {$form_info['delete form']} form.";
+    }
+
     // Programmatically invoke publish action.
     if ($action == 'approve') {
       $messages[] = "Attempt to load $form_info[entity] entity via entity_load().";
@@ -3005,13 +3022,25 @@ function mollom_moderate($data, $action) {
         }
       }
     }
-    // Invoke entity delete multiple callback.
-    elseif (!empty($form_info['entity delete multiple callback'])) {
-      $delete_callback = $form_info['entity delete multiple callback'];
-      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_callback().";
+    // Invoke entity delete callback.
+    elseif (isset($delete_callback)) {
+      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_callback({$data->id}).";
       if (function_exists($delete_callback)) {
-        $delete_callback(array($data->id));
-        $messages[] = "Deleted $form_info[entity] entity via $delete_callback().";
+        $delete_callback($data->id);
+        $messages[] = "Deleted $form_info[entity] entity via $delete_callback({$data->id}).";
+
+        // Entity delete callbacks do not return success or failure, so we can
+        // only assume success.
+        $result = TRUE;
+      }
+    }
+    // Invoke entity delete multiple callback.
+    // @todo Remove 'entity delete multiple' callback support later.
+    elseif (isset($delete_multiple_callback)) {
+      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_multiple_callback(array({$data->id})).";
+      if (function_exists($delete_multiple_callback)) {
+        $delete_multiple_callback(array($data->id));
+        $messages[] = "Deleted $form_info[entity] entity via $delete_multiple_callback(array({$data->id})).";
 
         // Entity delete callbacks do not return success or failure, so we can
         // only assume success.
@@ -3020,7 +3049,7 @@ function mollom_moderate($data, $action) {
     }
     // Programmatically invoke delete confirmation form.
     elseif (isset($form_info['delete form'])) {
-      $messages[] = "Attempt to delete $form_info[entity] entity via {$form_info['delete form']} form.";
+      $messages[] = "Attempt to delete $form_info[entity] entity {$data->id} via {$form_info['delete form']} form.";
       if (isset($form_info['delete form file'])) {
         $file = $form_info['delete form file'] + array(
           'type' => 'inc',
@@ -3028,7 +3057,7 @@ function mollom_moderate($data, $action) {
           'name' => NULL,
         );
         module_load_include($file['type'], $file['module'], $file['name']);
-        $messages[] = "Loaded {$file['name']}.{$file['type']} in {$file['module']}.";
+        $messages[] = "Loaded {$file['name']}.{$file['type']} in {$file['module']} module.";
       }
       // Programmatic form submissions are not able to automatically use the
       // primary form submit button/action, so we need to resemble
@@ -3065,7 +3094,11 @@ function mollom_moderate($data, $action) {
 
   $messages = implode("\n", $messages);
 
-  if ($result) {
+  // Double-check for error messages, since entity delete callbacks typically do
+  // not return any status.
+  $drupal_messages = drupal_get_messages();
+
+  if ($result && !isset($drupal_messages['error'])) {
     mollom_log(array(
       'message' => '%action moderation success for @entity @id',
       'arguments' => array(
@@ -3073,11 +3106,17 @@ function mollom_moderate($data, $action) {
         '@entity' => $data->entity,
         '@id' => $data->id,
       ),
+//      'Actions:' => $messages,
     ));
   }
   else {
     // 400 is not really appropriate, but comes closest.
     drupal_add_http_header('Status', '400 Unable to process moderation request');
+
+    $errors = array();
+    if (isset($drupal_messages['error'])) {
+      $errors['Error messages:'] = implode("\n", $drupal_messages['error']);
+    }
 
     mollom_log(array(
       'message' => '%action moderation failure for @entity @id',
@@ -3086,11 +3125,10 @@ function mollom_moderate($data, $action) {
         '@entity' => $data->entity,
         '@id' => $data->id,
       ),
-      'Form ID:' => $data->form_id,
       'Actions:' => $messages,
+    ) + $errors + array(
       'Mollom data:' => (array) $data,
       'Mollom form:' => $form_info,
-      'System messages:' => drupal_get_messages(),
     ), WATCHDOG_ERROR);
   }
 
@@ -3122,7 +3160,6 @@ function node_mollom_form_list() {
       'delete form file' => array(
         'name' => 'node.pages',
       ),
-      'entity delete multiple callback' => 'node_delete_multiple',
       'report access' => array('bypass node access', 'administer nodes'),
     );
   }
@@ -3300,7 +3337,6 @@ function user_mollom_form_list() {
     'delete form' => 'user_cancel_confirm_form',
     'report path' => 'user/%id/cancel',
     'report access' => array('administer users'),
-    'entity delete multiple callback' => 'user_delete_multiple',
   );
   $forms['user_profile_form'] = $forms['user_register_form'];
   $forms['user_profile_form']['title'] = t('User profile form');
