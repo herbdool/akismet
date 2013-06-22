@@ -336,13 +336,18 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         ),
       );
 
+      // CMP integration requires Clean URLs to be enabled, in order for the
+      // local moderation callback endpoints to work.
+      $has_clean_urls = variable_get('clean_url', FALSE);
+
       $form['mollom']['moderation'] = array(
         '#type' => 'checkbox',
         '#title' => t('Allow content to be moderated from the <a href="@moderation-url">@moderation-product</a>', array(
           '@moderation-url' => '//mollom.com/moderation',
           '@moderation-product' => 'Mollom Content Moderation Platform',
         )),
-        '#default_value' => $mollom_form['moderation'],
+        '#default_value' => (string) (int) ($mollom_form['moderation'] && $has_clean_urls),
+        '#disabled' => !$has_clean_urls,
         // Only possible for forms which result in a locally stored entity.
         '#access' => !empty($mollom_form['entity']),
         // Only possible for forms protected via text analysis.
@@ -353,9 +358,16 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         ),
         '#description' => t('Provides a unified moderation interface supporting multiple sites, moderation teams, and detailed analytics.'),
       );
-      $form['mollom']['moderation']['#description'] .= '<br />' . t('Note: All content that was created while this option was disabled cannot be moderated from the @moderation-product; only new content will appear.', array(
-        '@moderation-product' => 'Mollom Content Moderation Platform',
-      ));
+      if (!$has_clean_urls) {
+        $form['mollom']['moderation']['#description'] .= '<br />' . t('Requires <a href="@clean-urls">Clean URLs</a> to be enabled.', array(
+          '@clean-urls' => url('admin/config/search/clean-urls'),
+        ));
+      }
+      else {
+        $form['mollom']['moderation']['#description'] .= '<br />' . t('Note: All content that was created while this option was disabled cannot be moderated from the @moderation-product; only new content will appear.', array(
+          '@moderation-product' => 'Mollom Content Moderation Platform',
+        ));
+      }
 
       $form['actions']['submit'] = array(
         '#type' => 'submit',
