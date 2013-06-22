@@ -2702,6 +2702,11 @@ function mollom_entity_insert($entity, $type) {
  * Implements hook_entity_update().
  */
 function mollom_entity_update($entity, $type) {
+  // A user account's status transitions from 0 to 1 upon first login; do not
+  // mark the account as moderated in that case.
+  if ($type == 'user' && $entity->uid == $GLOBALS['user']->uid) {
+    return;
+  }
   // If an existing entity is published and we have session data stored for it,
   // mark the data as moderated.
   $update = FALSE;
