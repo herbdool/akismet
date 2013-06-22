@@ -2785,6 +2785,10 @@ function mollom_mollom_data_insert($data) {
       $params['contextUrl'] = url($options['path'], $options);
       $params['contextTitle'] = entity_label('node', $node);
     }
+    // Associate the new user ID for newly registered user accounts.
+    elseif ($data->entity == 'user') {
+      $params['authorId'] = $data->id;
+    }
   }
 
   $result = mollom()->checkContent($params);
