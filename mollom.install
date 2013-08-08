@@ -1055,3 +1055,10 @@ function mollom_update_7206() {
   }
 }
 
+/**
+ * Remove 'mollom_status' variable (replaced by cache).
+ */
+function mollom_update_7207() {
+  variable_del('mollom_status');
+}
+

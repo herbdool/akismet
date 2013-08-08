@@ -327,10 +327,7 @@ function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
  *   FALSE otherwise.
  */
 function _mollom_access($permission = FALSE) {
-  $mollom = mollom();
-  $public_key = $mollom->loadConfiguration('publicKey');
-  $private_key = $mollom->loadConfiguration('privateKey');
-  return !empty($public_key) && !empty($private_key) && (!$permission || user_access($permission));
+  return _mollom_status() === TRUE && (!$permission || user_access($permission));
 }
 
 /**
@@ -852,9 +849,9 @@ function mollom_form_cache($reset = FALSE) {
   $forms = &drupal_static(__FUNCTION__);
 
   if ($reset) {
-    // This catches both 'mollom_form_cache' as well as mollom_form_load()'s
+    // This catches both 'mollom:form_cache' as well as mollom_form_load()'s
     // 'mollom:form:*' entries.
-    cache_clear_all('mollom', 'cache', TRUE);
+    cache_clear_all('mollom:form', 'cache', TRUE);
     unset($forms);
     return;
   }
@@ -863,7 +860,7 @@ function mollom_form_cache($reset = FALSE) {
     return $forms;
   }
 
-  if ($cache = cache_get('mollom_form_cache')) {
+  if ($cache = cache_get('mollom:form_cache')) {
     $forms = $cache->data;
     return $forms;
   }
@@ -889,7 +886,7 @@ function mollom_form_cache($reset = FALSE) {
       }
     }
   }
-  cache_set('mollom_form_cache', $forms);
+  cache_set('mollom:form_cache', $forms);
 
   return $forms;
 }
