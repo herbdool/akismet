@@ -2938,13 +2938,13 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
     // for the node author.
     $this->drupalGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
-    $this->assertNoText(t('Report as inappropriate'));
+    $this->assertNoText(t('Report as…'));
 
     // Verify that feedback options appear for the admin user.
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
-    $this->assertText(t('Report as inappropriate'));
+    $this->assertText(t('Report as…'));
 
     // Login and submit an unprotected node.
     $this->drupalLogin($this->web_user);
@@ -2962,13 +2962,13 @@ class MollomNodeFormTestCase extends MollomWebTestCase {
     // for the node author.
     $this->drupalGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
-    $this->assertNoText(t('Report as inappropriate'));
+    $this->assertNoText(t('Report as…'));
 
     // Verify that no feedback options appear for the admin user.
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
-    $this->assertNoText(t('Report as inappropriate'));
+    $this->assertNoText(t('Report as…'));
   }
 }
 
@@ -4893,7 +4893,7 @@ class MollomModerateUserTestCase extends MollomWebTestCase {
 
     // Verify that no feedback options appear on the account cancellation form.
     $this->drupalGet('user/' . $account->uid . '/cancel');
-    $this->assertNoText(t('Report as inappropriate'));
+    $this->assertNoText(t('Report as…'));
 
     // Cancel own account.
     $this->drupalPost(NULL, array(), t('Cancel account'));
