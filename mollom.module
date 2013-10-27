@@ -925,27 +925,11 @@ function mollom_form_list() {
  *   The module name $form_id belongs to.
  * @param array $form_list
  *   (optional) The return value of hook_mollom_form_list() of $module, if
- *   already kown. Primarily used by mollom_form_list().
+ *   already kown. Primarily used by mollom_form_load().
  */
 function mollom_form_info($form_id, $module, $form_list = NULL) {
-  $form_info = array();
-
-  // Fetch the basic form information from hook_mollom_form_list() first.
-  // This makes the integrating module (needlessly) rebuild all of its available
-  // forms, but the base properties are absolutely required here, so we can
-  // apply the default properties below.
-  if (!isset($form_list)) {
-    $form_list = module_invoke($module, 'mollom_form_list');
-  }
-  if (isset($form_list[$form_id])) {
-    $form_info += $form_list[$form_id];
-  }
-
-  // Any information in hook_mollom_form_info() overrides the list info.
-  $form_info = array_merge($form_info, module_invoke($module, 'mollom_form_info', $form_id));
-
-  // Ensure default properties.
-  $form_info += array(
+  // Default properties.
+  $form_info = array(
     // Base properties.
     'form_id' => $form_id,
     'title' => $form_id,
@@ -965,7 +949,30 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
     'elements' => array(),
     'mapping' => array(),
     'mail ids' => array(),
+    'orphan' => TRUE,
   );
+
+  // Fetch the basic form information from hook_mollom_form_list() first.
+  // This makes the integrating module (needlessly) rebuild all of its available
+  // forms, but the base properties are absolutely required here, so we can
+  // apply the default properties below.
+  if (!isset($form_list)) {
+    $form_list = module_invoke($module, 'mollom_form_list');
+  }
+  // If it is not listed, then the form has vanished.
+  if (!isset($form_list[$form_id])) {
+    return $form_info;
+  }
+  $module_form_info = module_invoke($module, 'mollom_form_info', $form_id);
+  // If no form info exists, then the form has vanished.
+  if (!isset($module_form_info)) {
+    return $form_info;
+  }
+  unset($form_info['orphan']);
+
+  // Any information in hook_mollom_form_info() overrides the list info.
+  $form_info = array_merge($form_info, $form_list[$form_id]);
+  $form_info = array_merge($form_info, $module_form_info);
 
   // Allow modules to alter the default form information.
   drupal_alter('mollom_form_info', $form_info, $form_id);
@@ -995,7 +1002,9 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
  *   @endcode
  */
 function mollom_form_info_add_fields(&$form_info, $entity_type, $bundle) {
-  $entity_info = entity_get_info($entity_type);
+  if (!$entity_info = entity_get_info($entity_type)) {
+    return;
+  }
   $form_info['mapping']['post_id'] = $entity_info['entity keys']['id'];
 
   if (!empty($entity_info['fieldable'])) {
@@ -3196,7 +3205,9 @@ function node_mollom_form_info($form_id) {
   // Retrieve internal type from $form_id.
   $nodetype = drupal_substr($form_id, 0, -10);
 
-  $type = node_type_get_type($nodetype);
+  if (!$type = node_type_get_type($nodetype)) {
+    return;
+  }
   $form_info = array(
     // @todo This is incompatible with node access.
     'bypass access' => array('bypass node access'),

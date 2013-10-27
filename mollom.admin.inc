@@ -46,29 +46,46 @@ function mollom_admin_form_list() {
 
   $rows = array();
   foreach ($forms as $form_id => $mollom_form) {
+    $row_attributes = array();
     $row = array();
     $row[] = $mollom_form['title'];
-    if ($mollom_form['mode'] == MOLLOM_MODE_ANALYSIS) {
-      // @todo Output unsure mode in summary listing.
-      $row[] = t('!protection-mode (@discard)', array(
-        '!protection-mode' => $modes[$mollom_form['mode']],
-        '@discard' => $mollom_form['discard'] ? t('discard') : t('retain'),
+    if (isset($modes[$mollom_form['mode']])) {
+      if ($mollom_form['mode'] == MOLLOM_MODE_ANALYSIS) {
+        // @todo Output unsure mode in summary listing.
+        $row[] = t('!protection-mode (@discard)', array(
+          '!protection-mode' => $modes[$mollom_form['mode']],
+          '@discard' => $mollom_form['discard'] ? t('discard') : t('retain'),
+        ));
+      }
+      else {
+        $row[] = $modes[$mollom_form['mode']];
+      }
+    }
+    else {
+      $row[] = t('- orphan -');
+    }
+    if (empty($mollom_form['orphan'])) {
+      $row[] = array('data' => array(
+        '#type' => 'link',
+        '#title' => t('Configure'),
+        '#href' => 'admin/config/content/mollom/manage/' . $form_id,
       ));
     }
     else {
-      $row[] = $modes[$mollom_form['mode']];
+      $row[] = '';
+      $row_attributes['class'] = array('error');
+      drupal_set_message(t("%module module's %form_id form no longer exists.", array(
+        '%form_id' => $form_id,
+        '%module' => isset($module_info[$mollom_form['module']]['name']) ? t($module_info[$mollom_form['module']]['name']) : $mollom_form['module'],
+      )), 'warning');
     }
-    $row[] = array('data' => array(
-      '#type' => 'link',
-      '#title' => t('Configure'),
-      '#href' => 'admin/config/content/mollom/manage/' . $form_id,
-    ));
     $row[] = array('data' => array(
       '#type' => 'link',
       '#title' => t('Unprotect'),
       '#href' => 'admin/config/content/mollom/unprotect/' . $form_id,
     ));
-    $rows[] = $row;
+
+    $rows[] = $row_attributes + array('data' => $row);
   }
 
   $build['forms'] = array(
