@@ -1028,8 +1028,7 @@ function mollom_form_info_add_fields(&$form_info, $entity_type, $bundle) {
     $fields = field_info_fields();
     foreach (field_info_instances($entity_type, $bundle) as $field_name => $field) {
       if (in_array($fields[$field_name]['type'], array('text', 'text_long', 'text_with_summary'))) {
-        // @todo Language code must not be contained here.
-        $form_info['elements'][$field_name . '][' . LANGUAGE_NONE . '][0][value'] = check_plain(t($field['label']));
+        $form_info['elements'][$field_name] = check_plain(t($field['label']));
       }
     }
   }
@@ -1228,10 +1227,7 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
       }
     }
   }
-  // XML-RPC parser of Mollom backend removes linefeeds, so use a combination of
-  // space and linefeed to ensure proper separation of concatenated fields on
-  // the backend but also have linefeeds in our logs.
-  $post_body = implode(" \n", $post_body);
+  $post_body = implode("\n", $post_body);
 
   // Try to assign any further form values by processing the remaining mappings,
   // which have been turned into $exclude_fields above. All fields that were
@@ -1377,10 +1373,21 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
 function _mollom_flatten_form_values($values) {
   $flat_values = array();
   foreach ($values as $value) {
-    if (is_array($value) && !empty($value)) {
-      $flat_values = array_merge($flat_values, _mollom_flatten_form_values($value));
+    if (is_array($value)) {
+      // Only text fields are supported at this point; their values are in the
+      // 'summary' (optional) and 'value' keys.
+      if (isset($value['value'])) {
+        if (isset($value['summary']) && $value['summary'] !== '') {
+          $flat_values[] = $value['summary'];
+        }
+        if ($value['value'] !== '') {
+          $flat_values[] = $value['value'];
+        }
+      }
+      elseif (!empty($value)) {
+        $flat_values = array_merge($flat_values, _mollom_flatten_form_values($value));
+      }
     }
-    // UTF-8 validation happens elsewhere later.
     elseif (is_string($value) && strlen($value)) {
       $flat_values[] = $value;
     }
