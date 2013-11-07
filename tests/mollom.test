@@ -128,6 +128,9 @@ class MollomWebTestCase extends DrupalWebTestCase {
     // Disable testing mode warnings.
     variable_set('mollom_testing_mode_omit_warning', TRUE);
 
+    // Log all messages.
+    variable_set('mollom_log_minimum_severity', WATCHDOG_DEBUG);
+
     // D7's new default theme Bartik is bogus in various locations, which leads
     // to failing tests.
     // @todo Remove this override.
