@@ -729,6 +729,12 @@ function mollom_update_7006() {
       unset($form_ids[$row->form_id]);
     }
   }
+  // 'comment' (body) field is now a 'comment_body' Field API field.
+  $enabled_fields = unserialize($mollom_form['enabled_fields']);
+  if (is_array($enabled_fields) && ($i = array_search('comment', $enabled_fields))) {
+    $enabled_fields[$i] = 'comment_body';
+    $mollom_form['enabled_fields'] = serialize($enabled_fields);
+  }
   // Duplicate comment_form row into comment_node_TYPE_form rows by
   // inserting settings for any remaining node types.
   foreach ($form_ids as $form_id => $type) {
