@@ -261,8 +261,8 @@ function mollom_test_server_rest_site($publicKey = NULL, $delete = FALSE) {
       $data += array(
         'url' => '',
         'email' => '',
-        'languages' => array(),
-        'subscriptionType' => 0, // Mollom Free.
+        'expectedLanguages' => array(),
+        'subscriptionType' => '',
         // Client version info is not defined by default.
       );
       $sites[$publicKey] = $data;

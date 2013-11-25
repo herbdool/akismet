@@ -146,26 +146,6 @@ function mollom_help($path, $arg) {
 }
 
 /**
- * Implements hook_init().
- */
-function mollom_init() {
-  // On all Mollom administration pages, check the module configuration and
-  // display the corresponding requirements error, if invalid.
-  if (empty($_POST) && strpos($_GET['q'], 'admin/config/content/mollom') === 0 && user_access('administer mollom')) {
-    // Re-check the status on the settings form only.
-    $status = _mollom_status($_GET['q'] == 'admin/config/content/mollom/settings');
-    if ($status !== TRUE) {
-      // Fetch and display requirements error message, without re-checking.
-      module_load_install('mollom');
-      $requirements = mollom_requirements('runtime', FALSE);
-      if (isset($requirements['mollom']['description'])) {
-        drupal_set_message($requirements['mollom']['description'], 'error');
-      }
-    }
-  }
-}
-
-/**
  * Implements hook_exit().
  */
 function mollom_exit() {
@@ -233,6 +213,7 @@ function mollom_menu() {
     'description' => 'Configure blacklists.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_admin_blacklist_form'),
+    'access callback' => '_mollom_access',
     'access arguments' => array('administer mollom'),
     'type' => MENU_LOCAL_TASK,
     'file' => 'mollom.admin.inc',
@@ -248,6 +229,7 @@ function mollom_menu() {
     'description' => 'Configure profanity blacklist entries.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_admin_blacklist_form', 5),
+    'access callback' => '_mollom_access',
     'access arguments' => array('administer mollom'),
     'type' => MENU_LOCAL_TASK,
     'file' => 'mollom.admin.inc',
@@ -257,6 +239,7 @@ function mollom_menu() {
     'description' => 'Configure unwanted blacklist entries.',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_admin_blacklist_form', 5),
+    'access callback' => '_mollom_access',
     'access arguments' => array('administer mollom'),
     'type' => MENU_LOCAL_TASK,
     'file' => 'mollom.admin.inc',
@@ -265,6 +248,7 @@ function mollom_menu() {
     'title' => 'Delete blacklist entry',
     'page callback' => 'drupal_get_form',
     'page arguments' => array('mollom_admin_blacklist_delete'),
+    'access callback' => '_mollom_access',
     'access arguments' => array('administer mollom'),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.admin.inc',
@@ -324,10 +308,7 @@ function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
 }
 
 /**
- * Access callback; check if the module is configured.
- *
- * This function does not actually check whether Mollom keys are valid for the
- * site, but just if the keys have been entered.
+ * Menu access callback; Checks if the module is operational.
  *
  * @param $permission
  *   An optional permission string to check with user_access().
@@ -337,7 +318,8 @@ function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
  *   FALSE otherwise.
  */
 function _mollom_access($permission = FALSE) {
-  return _mollom_status() === TRUE && (!$permission || user_access($permission));
+  $status = _mollom_status();
+  return $status['isVerified'] && (!$permission || user_access($permission));
 }
 
 /**
@@ -738,7 +720,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
       // regardless of whether API keys could be verified; otherwise, the
       // fallback mode would not be triggered.
       $status = _mollom_status();
-      if ($status !== TRUE && !$status['keys']) {
+      if (!$status['isConfigured']) {
         return;
       }
 
@@ -1416,18 +1398,22 @@ function _mollom_get_openid($account) {
  * @param bool $force
  *   (optional) Boolean whether to ignore the cached state and re-check.
  *   Defaults to FALSE.
+ * @param bool $update
+ *   (optional) Whether to update Mollom with locally stored configuration.
+ *   Defaults to FALSE.
  *
- * @return bool|array
- *   TRUE if the module is considered operable, or an associative array
- *   describing the current status of the module:
- *   - keys: Boolean whether Mollom API keys have been configured.
+ * @return array
+ *   An associative array describing the current status of the module:
+ *   - isConfigured: Boolean whether Mollom API keys have been configured.
+ *   - isVerified: Boolean whether Mollom API keys have been verified.
  *   - response: The response error code of the API verification request.
+ *   - ...: The full site resource, as returned by the Mollom API.
  *
  * @see mollom_init()
  * @see mollom_admin_settings()
  * @see mollom_requirements()
  */
-function _mollom_status($force = FALSE) {
+function _mollom_status($force = FALSE, $update = FALSE) {
   $static_cache = &drupal_static(__FUNCTION__, array());
   $testing_mode = (int) variable_get('mollom_testing_mode', 0);
   $status = &$static_cache[$testing_mode];
@@ -1450,33 +1436,61 @@ function _mollom_status($force = FALSE) {
   // Re-check configuration status.
   $mollom = mollom();
   $status = array(
-    'keys' => FALSE,
+    'isConfigured' => FALSE,
+    'isVerified' => FALSE,
+    'isTesting' => (bool) $testing_mode,
     'response' => NULL,
+    'publicKey' => $mollom->loadConfiguration('publicKey'),
+    'privateKey' => $mollom->loadConfiguration('privateKey'),
+    'expectedLanguages' => $mollom->loadConfiguration('expectedLanguages'),
   );
-  $public_key = $mollom->loadConfiguration('publicKey');
-  $private_key = $mollom->loadConfiguration('privateKey');
-  $status['keys'] = (!empty($public_key) && !empty($private_key));
+  $status['isConfigured'] = (!empty($status['publicKey']) && !empty($status['privateKey']));
+  $status['expectedLanguages'] = is_array($status['expectedLanguages']) ? array_values($status['expectedLanguages']) : array();
 
-  if ($testing_mode || $status['keys']) {
-    $status['response'] = $mollom->verifyKeys();
+  if ($testing_mode || $status['isConfigured']) {
+    $old_status = $status;
+    $data = array();
+    if ($update) {
+      // Ensure to use the most current API keys (might have been changed).
+      $mollom->publicKey = $status['publicKey'];
+      $mollom->privateKey = $status['privateKey'];
 
-    if ($status['response'] === TRUE) {
-      $status = TRUE;
+      $data += array(
+        'expectedLanguages' => $status['expectedLanguages'],
+      );
+    }
+    $data += $mollom->getClientInformation();
+    $response = $mollom->updateSite($data);
+
+    if (is_array($response) && $mollom->lastResponseCode === TRUE) {
+      $status = array_merge($status,$response);
+      $status['isVerified'] = TRUE;
       mollom_log(array(
         'message' => 'API keys are valid.',
       ), WATCHDOG_INFO);
+
+      // Unless we just updated, update local configuration with remote.
+      if (!$update) {
+        $languages_expected = is_array($status['expectedLanguages']) ? array_values($status['expectedLanguages']) : array();
+        if ($old_status['expectedLanguages'] != $status['expectedLanguages']) {
+          $mollom->saveConfiguration('expectedLanguages', $status['expectedLanguages']);
+        }
+      }
     }
-    elseif ($status['response'] === Mollom::AUTH_ERROR) {
+    elseif ($response === Mollom::AUTH_ERROR) {
+      $status['response'] = $response;
       mollom_log(array(
         'message' => 'Invalid API keys.',
       ), WATCHDOG_ERROR);
     }
-    elseif ($status['response'] === Mollom::REQUEST_ERROR) {
+    elseif ($response === Mollom::REQUEST_ERROR) {
+      $status['response'] = $response;
       mollom_log(array(
         'message' => 'Invalid client configuration.',
       ), WATCHDOG_ERROR);
     }
     else {
+      $status['response'] = $response;
       // A NETWORK_ERROR and other possible responses may be caused by the
       // client-side environment, but also by Mollom service downtimes. Try to
       // recover as soon as possible.
@@ -2305,6 +2319,9 @@ function mollom_log_write() {
  *   @todo A list of message parts. Each item is an associative array whose keys are
  *   log message strings and whose corresponding values are t()-style
  *   replacement token arguments. At least one part is required.
+ *
+ * In essence, this is a poor man's YAML implementation (give or take some
+ * details, but note especially the indentation for array sub-elements).
  */
 function _mollom_format_log(array $log) {
   $message = isset($log['message']) ? $log['message'] : '';
@@ -2358,10 +2375,12 @@ function _mollom_format_log(array $log) {
               // Indent all values to have a visual separation from the last.
               $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} = {$value}\n";
             }
-
-            // Recurse into nested keys, if the current key is not scalar.
             if (is_array($ref[$key])) {
               $flat_value .= str_repeat('  ', count($parents) + 1) . "{$key} =\n";
+            }
+
+            // Recurse into nested keys, if the current key is not scalar.
+            if (is_array($ref[$key]) && !empty($ref[$key])) {
               $parents[] = &$ref;
               $ref = &$ref[$key];
               $key = key($ref);
@@ -2522,7 +2541,8 @@ function mollom_get_statistics($refresh = FALSE) {
 
   // Only fetch if $refresh is TRUE, the cache is empty, or the cache is expired.
   if ($refresh || !$cache || REQUEST_TIME >= $cache->expire) {
-    if (_mollom_status() === TRUE) {
+    $status = _mollom_status();
+    if ($status['isVerified']) {
       $statistics = drupal_map_assoc(array(
         'total_days',
         'total_accepted',

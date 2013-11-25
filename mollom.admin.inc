@@ -6,9 +6,83 @@
  */
 
 /**
+ * Helper function to prepare a list of available languages.
+ */
+function _mollom_supported_languages() {
+  // D7-: _locale_prepare_predefined_list() removes installed languages, which
+  // is the exact opposite of what we want.
+  include_once DRUPAL_ROOT . '/includes/iso.inc';
+  $predefined = _locale_get_predefined_list();
+  $supported = array_flip(MOLLOM::$LANGUAGES_SUPPORTED);
+  $supported = array_combine(array_keys($supported), array_keys($supported));
+  
+  // Define those mappings that differ between Drupal codes and Mollom codes.
+  $mapped = array(
+    'nb' => 'no',
+    'zh-hans' => 'zh-cn',
+    'zh-hant' => 'zh-tw',
+  );
+  foreach($mapped as $drupal_key => $mollom_key) {
+    if (isset($supported[$mollom_key])) {
+      $supported[$drupal_key] = $mollom_key;
+      unset($supported[$mollom_key]);
+    }
+  }
+
+  $options = array();
+  $languages_enabled = language_list();
+  $installed_languages = array();
+
+  // This does assume that all Mollom supported languages are in the predefined
+  // Drupal list.
+  foreach ($predefined as $langcode => $language) {
+    $found = FALSE;
+    $simplified_code = strtok($langcode, '-');
+    if (isset($supported[$simplified_code]) && !isset($options[$simplified_code])) {
+      $options[$supported[$simplified_code]] = t($language[0]);
+      $found = TRUE;
+    }
+    else if (isset($supported[$langcode]) && !isset($options[$langcode])) {
+      $options[$supported[$langcode]] = t($language[0]);
+      $found = TRUE;
+    }
+    if ($found) {
+      // Update the list of installed languages that are supported.
+      if (isset($languages_enabled[$langcode])) {
+        $installed_languages[$supported[$simplified_code]] = $simplified_code;
+      }
+    }
+  }
+  // Sort by translated option labels.
+  asort($options);
+  // UX: Sort installed languages first.
+  return array_intersect_key($options, $installed_languages) + $options;
+}
+
+/**
+ * Checks the configuration status on Mollom administration pages.
+ *
+ * On all Mollom administration pages, check the module configuration and
+ * display the corresponding requirements error, if invalid.
+ */
+function mollom_admin_site_status($force = FALSE, $update = FALSE) {
+  $status = _mollom_status($force, $update);
+  if (empty($_POST) && !$status['isVerified']) {
+    // Fetch and display requirements error message, without re-checking.
+    module_load_install('mollom');
+    $requirements = mollom_requirements('runtime', FALSE);
+    if (isset($requirements['mollom']['description'])) {
+      drupal_set_message($requirements['mollom']['description'], 'error');
+    }
+  }
+  return $status;
+}
+
+/**
  * Menu callback; Displays a list of forms configured for Mollom.
  */
 function mollom_admin_form_list() {
+  mollom_admin_site_status();
   _mollom_testing_mode_warning();
 
   // Reset the cached list of protected forms.
@@ -690,7 +764,7 @@ function theme_mollom_admin_blacklist_form($variables) {
   $output  = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => array('id' => 'mollom-blacklist')));
   $output .= drupal_render_children($form);
 
-  drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.admin.js');
+  drupal_add_js(drupal_get_path('module', 'mollom') . '/mollom.admin.blacklist.js');
 
   return $output;
 }
@@ -763,16 +837,11 @@ function mollom_admin_blacklist_delete_submit($form, &$form_state) {
  *   the fallback mode.
  */
 function mollom_admin_settings($form, &$form_state) {
-  // Output a positive status message, since users keep on asking whether
-  // Mollom should work or not. Re-check on every regular visit of this form to
-  // verify the module's configuration.
-  if (empty($form_state['input'])) {
-    $status = _mollom_status();
-    // If there is any configuration error, then mollom_init() will have output
-    // it already.
-    if ($status === TRUE && !variable_get('mollom_testing_mode', 0)) {
-      drupal_set_message(t('Mollom servers verified your keys. The services are operating correctly.'));
-    }
+  $mollom = mollom();
+  $check = empty($_POST);
+  $status = mollom_admin_site_status($check);
+  if ($check && $status['isVerified'] && !variable_get('mollom_testing_mode', 0)) {
+    drupal_set_message(t('Mollom servers verified your keys. The services are operating correctly.'));
   }
 
   $form['access-keys'] = array(
@@ -784,7 +853,7 @@ function mollom_admin_settings($form, &$form_state) {
     )),
     '#collapsible' => TRUE,
     // Only show key configuration fields if they are not configured or invalid.
-    '#collapsed' => !isset($status) ? FALSE : $status === TRUE,
+    '#collapsed' => !$status['isVerified'],
   );
   // Keys are not #required to allow to install this module and configure it
   // later.
@@ -818,6 +887,41 @@ function mollom_admin_settings($form, &$form_state) {
     )),
   );
 
+  $options = _mollom_supported_languages();
+  $default_languages = array();
+  if (isset($status['expectedLanguages'])) {
+    $default_languages = $status['expectedLanguages'];
+  }
+  else {
+    $default_languages = $mollom->loadConfiguration('expectedLanguages');
+  }
+  $path = drupal_get_path('module', 'mollom');
+  $form[$mollom->configuration_map['expectedLanguages']] = array(
+    '#type' => 'select',
+    '#title' => t('Expected languages'),
+    '#options' => $options,
+    '#multiple' => TRUE,
+    '#size' => 6,
+    '#default_value' => $default_languages,
+    '#description' => t('Restricts all posts to selected languages. Used by text analysis only. Leave empty if users may post in other languages.'),
+    // Ensure that selected languages are apparent for site administrators and
+    // not potentially hidden in a large select widget.
+    '#attributes' => array(
+      // @see form_process_select()
+      'data-placeholder' => t('- Empty -'),
+      'id' => $mollom->configuration_map['expectedLanguages'],
+    ),
+    '#attached' => array(
+      'css' => array(
+        $path . '/assets/chosen/chosen.min.css',
+      ),
+      'js' => array(
+        $path . '/assets/chosen/chosen.jquery.min.js',
+        $path . '/mollom.admin.js',
+      ),
+    ),
+  );
+
   $form['mollom_privacy_link'] = array(
     '#type' => 'checkbox',
     '#title' => t("Link to Mollom's privacy policy on forms protected by textual analysis"),
@@ -845,9 +949,11 @@ function mollom_admin_settings($form, &$form_state) {
     '#default_value' => $min_severity <= WATCHDOG_WARNING ? WATCHDOG_WARNING : 0,
     '#description' => t('Disable to see all Mollom interactions in log messages.'),
   );
-  $form['#submit'][] = 'mollom_admin_settings_submit';
 
-  return system_settings_form($form);
+  $form['#submit'][] = 'mollom_admin_settings_prepare_submit';
+  $form = system_settings_form($form);
+  $form['#submit'][] = 'mollom_admin_settings_submit';
+  return $form;
 }
 
 /**
@@ -870,12 +976,20 @@ function mollom_admin_settings_validate_key($element, &$form_state) {
 /**
  * Form submission handler for global settings form.
  */
-function mollom_admin_settings_submit($form, &$form_state) {
+function mollom_admin_settings_prepare_submit($form, &$form_state) {
   // If the minimum log severity checkbox was disabled (no input), convert
   // 0 into WATCHDOG_DEBUG.
   if (!isset($form_state['input']['mollom_log_minimum_severity'])) {
     $form_state['values']['mollom_log_minimum_severity'] = WATCHDOG_DEBUG;
   }
+}
+
+/**
+ * Form submission handler for global settings form.
+ */
+function mollom_admin_settings_submit($form, &$form_state) {
+  // Update Mollom site record with local configuration.
+  _mollom_status(TRUE, TRUE);
 }
 
 /**
