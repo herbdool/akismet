@@ -1599,18 +1599,15 @@ class MollomResponseTestCase extends MollomWebTestCase {
   function testCheckContentLanguage() {
     // Note that Mollom supports more languages than those tested.
     $tests = array(
-      'Some text in lang-en.' => array(
-        'en' => 1.0,
+      'With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.' => array(
+        'en',
       ),
-      'Etwas lang-de and some lang-en, too.' => array(
-        'en' => 0.5,
-        'de' => 0.5,
+      'With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.  Chicago ist seit der Mitte des 19. Jahrhunderts eine wichtige Handelsstadt in den Vereinigten Staaten.' => array(
+        'en',
+        'de',
       ),
-      'Unknown language' => array(
-        'zxx' => 1.0,
-      ),
-      'lang-en lang-de lang-es lang-ru lang-it' => array(
-        LANGUAGE_NONE => 1.0,
+      '!!!!!!!!!!!!!!!!!!!!!!!!!!!' => array(
+        'zxx',
       ),
     );
 
@@ -1621,11 +1618,9 @@ class MollomResponseTestCase extends MollomWebTestCase {
         'postBody' => $string,
       ));
       // Parse result values.
-      $actual = array();
-      foreach ($result['languages'] as $language) {
-        $actual[$language['languageCode']] = $language['languageScore'];
+      foreach ($result['languages'] as $item => $language) {
+        $this->assertTrue(in_array($language['languageCode'], $expected), 'Found returned language code ' . $language['languageCode'] . ' in expected languages.');
       }
-      $this->assertSame($string, $actual, $expected);
     }
   }
 
