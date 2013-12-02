@@ -566,30 +566,26 @@ function mollom_test_server_check_content($data) {
   // Language detection.
   if (isset($data['checks']) && in_array('language', $data['checks'])) {
     $languages = array();
-    preg_match_all('@\blang-(..)\b@', $post, $matches);
-    if (empty($matches[1])) {
+    if (stripos($post, 'ist seit der Mitte')) {
+      $languages[] = array(
+        'languageCode' => 'de',
+      );
+    }
+    if (stripos($post, 'it is the most populous city')) {
+      $languages[] = array(
+        'languageCode' => 'en',
+      );
+    }
+    if (count($languages) == 0) {
       $languages[] = array(
         'languageCode' => 'zxx',
-        'languageScore' => 1.0,
       );
     }
-    elseif (count($matches[1]) > 3) {
-      $languages[] = array(
-        'languageCode' => LANGUAGE_NONE,
-        'languageScore' => 1.0,
-      );
-    }
-    else {
-      $languageScore = 1 / count($matches[1]);
-      foreach ($matches[1] as $language) {
-        $languages[] = array(
-          'languageCode' => $language,
-          'languageScore' => $languageScore,
-        );
-      }
+    $score = 1/count($languages);
+    foreach($languages as $id => $langObj) {
+      $languages[$id]['languageScore'] = $score;
     }
     $response['languages'] = $languages;
-    $response['langDebug'] = $matches;
   }
 
   $storage = variable_get('mollom_test_server_content', array());
