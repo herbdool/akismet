@@ -1601,11 +1601,12 @@ class MollomResponseTestCase extends MollomWebTestCase {
    */
   function testCheckContentLanguage() {
     // Note that Mollom supports more languages than those tested.
+    // Development server checks for the "lang-{language_code}" in content.
     $tests = array(
-      'With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.' => array(
+      'lang-en With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.' => array(
         'en',
       ),
-      'With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.  Chicago ist seit der Mitte des 19. Jahrhunderts eine wichtige Handelsstadt in den Vereinigten Staaten.' => array(
+      'lang-en lang-de With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.  Chicago ist seit der Mitte des 19. Jahrhunderts eine wichtige Handelsstadt in den Vereinigten Staaten.' => array(
         'en',
         'de',
       ),
