@@ -65,11 +65,6 @@ abstract class Mollom {
   /**
    * List of ISO 639-1 language codes supported by Mollom.
    *
-   * Note: The Mollom service does not support dialects; the most popular or
-   * simplified language code is assumed; i.e., there is only 'zh' instead of
-   * 'zh-hans' (Chinese, simplified), and 'zh-hant' (Chinese, traditional) is
-   * not supported.
-   *
    * If your application has a predefined list of ISO 639-1 languages already,
    * intersect your list with this via strtok($langcode, '-').
    *
@@ -969,7 +964,9 @@ abstract class Mollom {
     }
     if (isset($input)) {
       preg_match_all('@([^, =]+)="([^"]*)"@', $input, $header);
-      $header = array_combine($header[1], $header[2]);
+      if (!empty($header[1]) && !empty($header[2])) {
+        $header = array_combine($header[1], $header[2]);
+      }
     }
     return $header;
   }
@@ -1000,8 +997,6 @@ abstract class Mollom {
    *   - privateKey: The private Mollom API key of the site.
    *   - url: The URL of the site.
    *   - email: The e-mail address of the primary contact of the site.
-   *   - languages: (optional) An array with a single value for the primary
-   *     language for site content.
    *   - platformName: (optional) The name of the platform running the site
    *     (e.g., "Drupal").
    *   - platformVersion: (optional) The version of the platform running the
@@ -1011,7 +1006,7 @@ abstract class Mollom {
    *   - clientVersion: (optional) The version of the Mollom client plugin used
    *     (e.g., "6.15").
    *   - expectedLanguages: (optional) An array of language ISO codes, content
-   *     is expected to submitted in on the site.
+   *     is expected to be submitted in on the site.
    *   On failure, the error response code returned by the server.
    */
   public function getSite($publicKey = NULL) {
@@ -1287,6 +1282,10 @@ abstract class Mollom {
    *     - profanity: The content contains obscene, violent, profane language.
    *     - quality: The content is of low quality.
    *     - unwanted: The content is unwanted, taunting, off-topic.
+   *   - type (optional): A string denoting the type of feedback submitted.
+   *     - moderate: Feedback from the admin moderation process (default).
+   *     - flag: feedback from end users flagging content as inappropriate
+   *   - source (optional): A string denoting the user-interface source of the feedback.
    *   and at least one of:
    *   - contentId: A Mollom content ID associated with the content.
    *   - captchaId: A Mollom CAPTCHA ID associated with the content.
@@ -1562,4 +1561,3 @@ class MollomResponseException extends MollomException {
    */
   protected $severity = 'debug';
 }
-

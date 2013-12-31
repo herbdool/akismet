@@ -170,6 +170,11 @@ class MollomDrupalTest extends MollomDrupal {
   public $server = 'dev.mollom.com';
 
   /**
+   * Overrides Mollom:$requestTimeout.
+   */
+  public $requestTimeout = 10.0;
+
+  /**
    * Flag indicating whether to verify and automatically create testing API keys upon class instantiation.
    *
    * @var bool
@@ -316,6 +321,12 @@ class MollomDrupalTest extends MollomDrupal {
  * Drupal Mollom client implementation using local dummy/fake REST server.
  */
 class MollomDrupalTestLocal extends MollomDrupalTest {
+
+  /**
+   * Overrides Mollom:$requestTimeout.
+   */
+  public $requestTimeout = 10.0;
+
   /**
    * Overrides MollomDrupalTest::__construct().
    */
@@ -382,6 +393,11 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
  * Drupal Mollom client implementation using an invalid server.
  */
 class MollomDrupalTestInvalid extends MollomDrupalTest {
+
+  /**
+   * Overrides Mollom:$requestTimeout.
+   */
+  public $requestTimeout = 10.0;
 
   /**
    * Overrides MollomDrupalTest::$createKeys.
