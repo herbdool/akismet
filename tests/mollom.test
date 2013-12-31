@@ -986,6 +986,27 @@ class MollomWebTestCase extends DrupalWebTestCase {
     return $mid;
   }
 
+  /**
+   * Get the URL for a link by link text.
+   * Will return the first link found with this link text by default, or a later
+   * one if an index is given. Match is case sensitive with normalized space.
+   * The label is translated label.
+   *
+   * @param $label
+   *   Text between the anchor tags.
+   * @param $index
+   *   Link position counting from zero.
+   * @return
+   *   Url on success, or FALSE if not found.
+   */
+  protected function getLink($label, $index = 0) {
+    $urls = $this->xpath('//a[normalize-space(text())=:label]', array(':label' => $label));
+
+    if (isset($urls[$index])) {
+      return $this->getAbsoluteUrl($urls[$index]['href']);
+    }
+    return FALSE;
+  }
 }
 
 /**
@@ -5618,72 +5639,135 @@ class MollomModerationEntityTestCase extends MollomModerationBaseTestCase {
 }
 
 /**
- * Tests expected language configuration synchronization with remote server.
+ * Tests flag as inappropriate feature.
  */
-class MollomExpectedLanguageTestCase extends MollomWebTestCase {
-  protected $mollomClass = 'MollomDrupalTestLocal';
+class MollomFlagAsInappropriateTestCase extends MollomWebTestCase {
 
   public static function getInfo() {
     return array(
-      'name' => 'Expected languages',
-      'description' => 'Tests remote synchronization of expected languages.',
+      'name' => 'Flag as Inappropriate',
+      'description' => 'Tests flag as inappropriate feature.',
       'group' => 'Mollom',
     );
   }
 
   function setUp() {
-    parent::setUp(array('mollom','mollom_test'));
+    parent::setUp(array('comment', 'mollom'));
+    $this->setKeys();
+    $this->assertValidKeys();
 
     $this->admin_user = $this->drupalCreateUser(array(
-      'access administration pages',
       'administer mollom',
+      'administer comments',
+      'access comments',
     ));
+
+    $this->web_user = $this->drupalCreateUser(array(
+      'access comments',
+      'post comments',
+      'skip comment approval',
+    ));
+
+    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+
+    $this->drupalLogin($this->admin_user);
+    $this->setProtectionUI('comment_node_article_form');
+    $this->node = $this->drupalCreateNode(array('type' => 'article'));
+
   }
 
   /**
-   * Tests synchronization of expected languages.
+   * Test access to flag as inappropriate link based on permissions.
    */
-  function testExpectedLanguages() {
-    // update expected languages to value "a".
-    // test that value "a" is saved locally and remotely.
-    // remotely update languages to value "b".
-    // load configuration page and test that value "b" is shown.
-    // submit page and verify that "b" is still maintained.
-    // submit page with value "c" and verify tha tit is saved locally and remotely.
-    $this->getClient();
-    $languages = array('en', 'de');
+  function testFlagAsInappropriate() {
+    user_role_revoke_permissions(DRUPAL_AUTHENTICATED_RID, array('report to mollom'));
 
-    $edit = array();
+    // Create a comment.
+    $this->drupalLogin($this->web_user);
+    $this->drupalGet('comment/reply/' . $this->node->nid);
+    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'ham'), t('Save'));
 
-    // Update the expected languages.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/mollom/settings');
-    $edit['mollom_languages_expected[]'] = $languages;
-    $this->drupalPost(NULL, $edit, t('Save configuration'));
-    // Make sure the local changes were saved and displayed
-    foreach($languages as $lang) {
-      $this->assertOptionSelected('mollom_languages_expected', $lang);
+    // Verify that the comment display has no report link.
+    $this->assertNoLink(t('Report'));
+    // Add permissions for flag as inappropriate and verify that report link shows.
+    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array('report to mollom'));
+
+    // Verify that the report link is now available.
+    $this->drupalGet('node/' . $this->node->nid);
+    $this->assertLink(t('report'));
+    $report_link = $this->getLink(t('report'));
+    if ($report_link) {
+      $parsed = drupal_parse_url($report_link);
+      $parts = explode('/', $parsed['path']);
+      $source = array_pop($parts);
+      $id = array_pop($parts);
+      $entity = array_pop($parts);
     }
-    // Make sure the local changes were synchronized remotely.
-    $site = $this->mollom->getSite();
-    $remoteLanguages = $site['expectedLanguages'];
-    sort($languages);
-    sort($remoteLanguages);
-    $this->assertEqual($languages, $remoteLanguages, 'Local language changes updated remotely.');
 
-    // Update the remote languages.
-    $languages = array('en', 'es');
-    $this->mollom->updateSite(array('expectedLanguages' => $languages));
-    $site = $this->mollom->getSite();
-    $remoteLanguages = $site['expectedLanguages'];
-    sort($languages);
-    sort($remoteLanguages);
-    $this->assertEqual($languages, $remoteLanguages, 'Remote languages updated.');
-
-    // Verify that the new remote languages overwrite the local languages shown.
-    $this->drupalGet('admin/config/content/mollom/settings');
-    foreach($languages as $lang) {
-      $this->assertOptionSelected('mollom_languages_expected', $lang);
+    // Follow the link to report the content.
+    $reasons_shown = array('spam', 'profanity', 'unwanted');
+    $this->clickLink(t('report'));
+    $this->assertText(t('Why are you reporting this content?'));
+    foreach($reasons_shown as $reason) {
+      $this->assertField('reason', $reason);
     }
+    $this->assertNoField('feedback_type');
+    $reason = $reasons_shown[array_rand($reasons_shown)];
+
+    // Verify that the flag count was updated locally.
+    $original = $this->getFlagCount($entity, $id, $reason);
+    $this->drupalPost(NULL, array('reason' => $reason), t('Submit report'));
+    $this->assertText(t('Thank you for your feedback.'));
+    $this->assertFlagCount($entity, $id, $reason, $original+1);
+  }
+
+  /**
+   * Return the number of flags for a given entity of a specific type.
+   *
+   * @param $entity
+   *   The type of entity to check.
+   * @param $id
+   *   The id of the entity to check.
+   * @param $reason
+   *   The type of reason to retrieve, spam, profanity, unwanted, quality.
+   */
+  private function getFlagCount($entity, $id, $reason) {
+    $data = $this->assertMollomData($entity, $id);
+    $prop = "flags_$reason";
+    if (isset($data->$prop)) {
+      return $data->$prop;
+    } else {
+      return -1;
+    }
+  }
+
+  /**
+   * Test that the number of flags of a particular reason on an entity match
+   * an expected value.
+   *
+   * @param $entity
+   *   The type of entity to check.
+   * @param $id
+   *   The id of the entity to check.
+   * @param $reason
+   *   The type of reason to retrieve, spam, profanity, unwanted, quality.
+   * @param $expected
+   *   An integer with the expected number of flags.
+   * @param $message
+   *   An optional string with the message to be used in the assertion.
+   */
+  protected function assertFlagCount($entity, $id, $reason, $expected, $message = '') {
+    $actual = $this->getFlagCount($entity, $id, $reason);
+    if (!$message) {
+      $message = t('Entity @entity @id has @actual flags for @reason, expected @expected.', array(
+        '@entity' => $entity,
+        '@id' => $id,
+        '@actual' => $actual,
+        '@reason' => $reason,
+        '@expected' => $expected,
+      ));
+    }
+    $this->assertEqual($actual, $expected, $message);
   }
 }
