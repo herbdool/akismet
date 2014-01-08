@@ -286,7 +286,7 @@ function mollom_menu() {
   $items['mollom/flag/%/%/%/%'] = array(
     'page callback' => 'mollom_flag',
     'page arguments' => array(2, 3, 4),
-    'access callback' => 'mollom_flag_access',
+    'access callback' => '_mollom_flag_access',
     'access arguments' => array(3, 4),
     'type' => MENU_CALLBACK,
     'file' => 'mollom.flag.inc',
@@ -1729,7 +1729,7 @@ function mollom_library() {
  * @return boolean
  *   True if reporting is available and false if not available.
  */
-function mollom_flag_access($type, $entity) {
+function _mollom_flag_access($type, $entity) {
   // make sure that Mollom is active and user is able to report.
   if (!_mollom_access('report to mollom')) {
     return FALSE;

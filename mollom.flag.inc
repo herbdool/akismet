@@ -57,7 +57,7 @@ function _mollom_flag_entity_count($entity, $id) {
  * Called from hook_entity_view().
  */
 function mollom_flag_entity_view($entity, $type, $view_mode, $langcode) {
-  if (!mollom_flag_access($type, $entity)) {
+  if (!_mollom_flag_access($type, $entity)) {
     return;
   }
 
