@@ -1679,11 +1679,18 @@ function mollom_theme() {
  *   An array of entity bundles to check.
  */
 function mollom_flag_entity_type_access($type, $bundles = array()) {
-    // First check to see if there are protected forms for this content type.
+  // Check to see if flag as inappropriate is enabled for this entity type.
+  $allowed = variable_get('mollom_fai_entity_types', array('comment' => 1));
+  if (empty($allowed[$type])) {
+    return;
+  }
+
+  // Check to see if there are protected forms for this content type.
   $protected = _mollom_get_entity_forms_protected($type, $bundles);
   if (empty($protected)) {
     return FALSE;
   }
+
   // Make sure that flag as inappropriate is active for this type.
   // If any form for this entity type is reportable, then show data.
   $forms = mollom_form_list();
@@ -3512,9 +3519,6 @@ function mollom_form_node_multiple_delete_confirm_submit($form, &$form_state) {
  *   Optional entity object to check access to a specific entity.
  */
 function node_mollom_entity_report_access($entity = NULL) {
-  // Remove the folloing line to enable flag as inappropriate for nodes.
-  return FALSE;
-
   // All nodes can be reported as long as the user has access to view.
   if (!empty($entity) && isset($entity->nid)) {
     return node_access('view', $entity->nid);

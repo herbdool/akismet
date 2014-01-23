@@ -597,11 +597,16 @@ function mollom_flag_details($type, $entity, $id) {
 }
 
 /**
- * Checks for a loaded module to handle dialogs.  A dialog implementation may
- * provide one or more of the callbacks in order to affect the dialog output.
- * The hooks needed will vary by dialog implementation.  If a callback is not
- * found for a particular step in the process, the default Mollom functionality
- * will be used.  The following callback information can be set:
+ * Defines the integrated dialog modules.
+ *
+ * A dialog implementation may provide one or more of the callbacks in order to
+ * affect the dialog output.  The hooks needed will vary by dialog
+ * implementation.  If a callback is not found for a particular step in the
+ * process, the default Mollom functionality will be used.
+ *
+ * The following information can be set:
+ * - title: (required) the title of the dialog solution that is displayed
+ *   to site administrator within the advanced configuration settings area.
  * - link prepare callback: callback function to prepare links to use the dialog
  *   solution from hook_entity_view.  This callback returns an array of
  *   classes for any links that should be opened in the dialog solution.
@@ -609,17 +614,40 @@ function mollom_flag_details($type, $entity, $id) {
  *   This callback receives the form to display and the title for the dialog.
  * - close callback: callback to close the dialog window
  *
- * This is not set as a hook because there really can be only one dialog system
- * used by Mollom.  It may be best to move into a configuration to allow users
- * to choose from supported systems (or to use Mollom's default look).
+ * The site administrator can select to use one of the following in the
+ * Mollom advanced settings if the module is installed and enabled for their
+ * site.
+ *
+ * @todo: Move this into a hook implementation to allow others to extend.
  */
-function mollom_flag_dialog_check() {
- if (module_exists('ctools')) {
-    return array(
+function mollom_flag_dialog_info() {
+  $modules = array(
+    'ctools' => array(
+      'title' => 'CTools (used by CTools Automodal and Modal Forms)',
       'link prepare callback' => 'mollom_ctools_link_prepare',
       'display form callback' => 'mollom_ctools_display_form',
       'close callback' => 'mollom_ctools_close',
-    );
+    )
+  );
+  return $modules;
+}
+
+/**
+ * Checks to see what dialog option to use based on the user's configuration.
+ *
+ * @return mixed
+ *   Returns an array of dialog information for the selected dialog or FALSE
+ *   if the Mollom custom dialog should be used.
+ *
+ * @see mollom_flag_dialog_info()
+ */
+function mollom_flag_dialog_check() {
+  // Return dialog information for dialog selected in settings if it is
+  // still enabled.
+  $modules = mollom_flag_dialog_info();
+  $configured_dialog = variable_get('mollom_fai_dialog', '');
+  if (isset($modules[$configured_dialog]) && module_exists($configured_dialog)) {
+    return $modules[$configured_dialog];
   }
   return FALSE;
 }
