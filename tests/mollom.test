@@ -553,7 +553,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     ));
     $this->assert(!empty($inputs[0]) && !empty($labels[0]), 'Required CAPTCHA field found.');
 
-    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t('Type the characters you see in this picture.')));
+    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t("Type the characters you see in this picture.")));
     $this->assert(!empty($image), 'CAPTCHA image found.');
   }
 
@@ -564,7 +564,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
     $this->assertNoText($this->unsure_message);
     $this->assertNoText($this->incorrect_message);
     $this->assertNoFieldByXPath('//input[@type="text"][@name="mollom[captcha]"]', '', 'CAPTCHA field not found.');
-    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t('Type the characters you see in this picture.')));
+    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t("Type the characters you see in this picture.")));
     $this->assert(empty($image), 'CAPTCHA image not found.');
   }
 
@@ -4858,6 +4858,20 @@ class MollomCaptchaTestCase extends MollomWebTestCase {
     $this->assertText('mollom-captcha-player.swf');
     $response = drupal_json_decode($out);
     $this->assertTrue($response['captchaId']);
+  }
+
+  /**
+   * Tests the CAPTCHA audio enable/disable functionality.
+   */
+  function subTestCAPTCHAAudioEnable() {
+    // Default should be enabled audio.
+    $this->drupalGet('mollom-test/form');
+    $this->assertLink(t('Switch to audio verification'));
+
+    // Verify that CAPTCHA cannot be switched when audio is disabled.
+    variable_set('mollom_audio_captcha_enabled', 0);
+    $this->drupalGet('mollom-test/form');
+    $this->assertNoLink(t('Switch to audio verification'));
   }
 }
 
