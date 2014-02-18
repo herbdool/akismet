@@ -970,11 +970,11 @@ function mollom_admin_settings($form, &$form_state) {
   );
   $form['mollom_advanced']['mollom_fba_enabled'] = array(
     '#type' => 'checkbox',
-    '#title' => t('Enable form behavior analysis.'),
+    '#title' => t('Enable form behavior analysis (beta).'),
     '#description' => t('This will place a small tracking image from Mollom on each form protected by textural analysis to help Mollom determine if the form is filled out by a bot.  <a href="!fba-url">Learn more</a>.', array(
       '!fba-url' => 'https://mollom.com/faq/form-behavior-analysis',
     )),
-    '#default_value' => variable_get('mollom_fba_enabled', 1),
+    '#default_value' => variable_get('mollom_fba_enabled', 0),
   );
   // Available entity types are those entities that have a report access
   // callback defined.  This is limited by type even though multiple forms
@@ -994,7 +994,7 @@ function mollom_admin_settings($form, &$form_state) {
       '!fai-url' => 'https://mollom.com/faq/flag-as-inappropriate',
     )),
     '#options' => drupal_map_assoc($options),
-    '#default_value' => variable_get('mollom_fai_entity_types', array()),
+    '#default_value' => variable_get('mollom_fai_entity_types', array('comment' => 'comment')),
   );
   // Only display dialog options if the user has at least one integrated
   // module installed and enabled.
