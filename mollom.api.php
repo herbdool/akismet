@@ -265,10 +265,10 @@
  *     entity id as an argument.
  *   - entity report access callback: (optional) A function name to invoke to
  *     determine if a user has access to report the entity that the form is for.
- *     In order for a user to have the option to flag content as inapprpriate,
+ *     In order for a user to have the option to flag content as inappropriate,
  *     the user must have the "report to mollom" permission as well as access to
  *     report the specific entity.
- *     Note: This function is required if the flag is inapprorpriate feature is
+ *     Note: This function is required if the flag is inappropriate feature is
  *     desired on the form.
  *
  * @see hook_mollom_form_info()
