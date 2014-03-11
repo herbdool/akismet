@@ -2937,7 +2937,7 @@ function _mollom_attach_captcha_script(&$element = NULL) {
     );
 
     // Try to load via libraries module if enabled.
-    if (module_exists('libraries')) {
+    if (module_exists('libraries') && function_exists('libraries_detect ')) {
       if (($library = libraries_detect('swfoject')) && !empty($library['installed'])) {
         $lib = array(
           'found' => TRUE,
