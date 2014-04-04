@@ -3126,45 +3126,44 @@ function mollom_mollom_data_insert($data) {
   if (empty($data->contentId)) {
     return;
   }
-  // Exclude data for form submissions not resulting in a locally stored entity.
-  // These usually map to mails and similar things, but not in content that can
-  // be moderated.
-  if ($data->entity == 'mollom_content' || $data->entity == 'mollom_captcha') {
-    return;
-  }
-  // Skip forms for which Mollom moderation integration is not enabled.
-  $mollom_form = mollom_form_load($data->form_id);
-  if (empty($mollom_form['moderation'])) {
-    return;
-  }
 
-  // Mark the content as stored.
+  // Indicate that this content session is complete.
   $params['id'] = $data->contentId;
-  $params['stored'] = 1;
+  $params['finalized'] = 1;
 
-  // Add the URL of the posted content itself.
-  $entity_info = entity_get_info();
-  if (isset($entity_info[$data->entity])) {
-    $entity = entity_load($data->entity, array($data->id));
-    $entity = (isset($entity[$data->id]) ? $entity[$data->id] : FALSE);
+  // Mark the content as stored for moderation-enabled content.
+  $mollom_form = mollom_form_load($data->form_id);
+  if (!empty($mollom_form['moderation'])) {
+    $params['stored'] = 1;
   }
-  if (!empty($entity)) {
-    $options = entity_uri($data->entity, $entity);
-    $options['absolute'] = TRUE;
-    $params['url'] = url($options['path'], $options);
 
-    // Add the title and URL of the parent content/context of the post, if any.
-    // @todo Figure out how to do this in a generic way.
-    if ($data->entity == 'comment') {
-      $node = node_load($entity->nid);
-      $options = entity_uri('node', $node);
-      $options['absolute'] = TRUE;
-      $params['contextUrl'] = url($options['path'], $options);
-      $params['contextTitle'] = entity_label('node', $node);
+  // Get additional information for submissions that result in a locally stored
+  // entity.
+  if ($data->entity != 'mollom_content' && $data->entity != 'mollom_captcha') {
+    // Add the URL of the posted content itself.
+    $entity_info = entity_get_info();
+    if (isset($entity_info[$data->entity])) {
+      $entity = entity_load($data->entity, array($data->id));
+      $entity = (isset($entity[$data->id]) ? $entity[$data->id] : FALSE);
     }
-    // Associate the new user ID for newly registered user accounts.
-    elseif ($data->entity == 'user') {
-      $params['authorId'] = $data->id;
+    if (!empty($entity)) {
+      $options = entity_uri($data->entity, $entity);
+      $options['absolute'] = TRUE;
+      $params['url'] = url($options['path'], $options);
+
+      // Add the title and URL of the parent content/context of the post, if any.
+      // @todo Figure out how to do this in a generic way.
+      if ($data->entity == 'comment') {
+        $node = node_load($entity->nid);
+        $options = entity_uri('node', $node);
+        $options['absolute'] = TRUE;
+        $params['contextUrl'] = url($options['path'], $options);
+        $params['contextTitle'] = entity_label('node', $node);
+      }
+      // Associate the new user ID for newly registered user accounts.
+      elseif ($data->entity == 'user') {
+        $params['authorId'] = $data->id;
+      }
     }
   }
 
