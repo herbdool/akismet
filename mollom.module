@@ -282,6 +282,12 @@ function mollom_menu() {
     'type' => MENU_CALLBACK,
   );
 
+  $items['mollom/fba'] = array(
+    'page callback' => 'mollom_fba_js',
+    'access callback' => '_mollom_access',
+    'type' => MENU_CALLBACK,
+  );
+
   // Report as inappropriate.
   $items['mollom/flag/%/%/%/%'] = array(
     'page callback' => '_mollom_flag',
@@ -1704,7 +1710,6 @@ function mollom_element_info() {
         'mollom_process_mollom',
       ),
       '#pre_render' => array('mollom_pre_render_mollom'),
-      '#after_build' => array('mollom_after_build_mollom'),
     ),
   );
 }
@@ -1837,6 +1842,30 @@ function mollom_form_comment_form_alter(&$form, &$form_state, $form_id) {
   mollom_flag_comment_form_alter($form, $form_state, $form_id);
 }
 
+/**
+ * Ajax callback for retrieving a form behavior analysis image.
+ *
+ * Outputs the JSON encoded tracking information received from Mollom.  This
+ * will include keys of:
+ *   - tracking_url: the URL to the tracking image
+ *   - tracking_id: an ID to track for the image
+ */
+function mollom_fba_js() {
+  // Deny GET requests to make automated security audit tools not complain
+  // about a JSON Hijacking possibility.
+  // @see http://capec.mitre.org/data/definitions/111.html
+  // @see http://haacked.com/archive/2009/06/24/json-hijacking.aspx
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    header($_SERVER['SERVER_PROTOCOL'] . ' 405 Method Not Allowed');
+    // A HTTP 405 response MUST specify allowed methods.
+    header('Allow: POST');
+    drupal_exit();
+  }
+
+  $mollom = mollom();
+  $tracking = $mollom->getTrackingImage();
+  drupal_json_output($tracking);
+}
 
 /**
  * #process callback for #type 'mollom'.
@@ -2024,40 +2053,6 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
 
   return $element;
 }
-
-/**
- * Adds form behavior analysis tracking image.
- *
- * This is an after_build callback handler for the mollom field type.
- * If form behavior analysis is enabled, a special tracking image is requested
- * from the Mollom servers using a generated tracking ID.
- * The image should be displayed and the tracking ID saved to pass to
- * mollom.checkContent.
- * The tracking image should only be shown the first time a textual analysis
- * form is displayed and not on subsequent CAPTCHA displays or previews.
- */
-function mollom_after_build_mollom(&$element, &$form_state) {
-  // Add the form behavior analysis web tracking beacon field holder if enabled.
-  if (isset($element['fba']) && empty($element['fba']['#value'])) {
-    // Generate the tracking image id for form behavior analysis.
-    $mollom = mollom();
-    $tracking = $mollom->getTrackingImage();
-
-    $element['fba']['#value'] = $tracking['tracking_id'];
-    $element['fba']['#prefix'] = theme('image', array(
-      'path' => $tracking['tracking_url'],
-      'width' => 1,
-      'height' => 1,
-      'alt' => '',
-      'attributes' => array(
-        'class' => array('mollom-fba'),
-      ),
-    ));
-  }
-
-  return $element;
-}
-
 
 /**
  * Adds a Mollom CAPTCHA to a Mollom-protected form.

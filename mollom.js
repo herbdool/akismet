@@ -16,6 +16,32 @@ Drupal.behaviors.mollomTarget = {
 };
 
 /**
+ * Retrieve and attach the form behavior analysis tracking image if it has not
+ * yet been added for the form.
+ */
+Drupal.behaviors.mollomFBA = {
+  attach: function (context, settings) {
+    $(':input[name="mollom[fba]"][value=""]', context).once().each(function() {
+      $input = $(this);
+      $.ajax({
+        url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'mollom/fba',
+        type: 'POST',
+        dataType: 'json',
+        success: function(data) {
+          if (!data.tracking_id || !data.tracking_url) {
+            return;
+          }
+          // Save the tracking id in the hidden field.
+          $input.val(data.tracking_id);
+          // Attach the tracking image.
+          $('<img src="' + data.tracking_url + '" width="1" height="1" alt="" />').appendTo('body');
+        }
+      })
+    });
+  }
+};
+
+ /**
  * Attach click event handlers for CAPTCHA links.
  */
 Drupal.behaviors.mollomCaptcha = {
