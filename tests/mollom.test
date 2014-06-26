@@ -442,8 +442,15 @@ class MollomWebTestCase extends DrupalWebTestCase {
   protected function setProtectionUI($form_id, $mode = MOLLOM_MODE_ANALYSIS, $fields = NULL, $edit = array()) {
     // Always start from overview page, also to make debugging easier.
     $this->drupalGet('admin/config/content/mollom');
-    // Determine whether the form is already protected.
-    $exists = db_query_range('SELECT 1 FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchField();
+
+    // Load all forms, stored in db and/or code
+    $forms =  mollom_form_load_all(TRUE);
+
+    // Does the form exist already somewhere?
+    $exists = isset($forms[$form_id]);
+    // Does it exist in the database?
+    $in_database = db_query_range('SELECT 1 FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchField();
+
     // Add a new form.
     if (!$exists) {
       $this->clickLink(t('Add form'));
@@ -482,7 +489,11 @@ class MollomWebTestCase extends DrupalWebTestCase {
       }
     }
     $this->drupalPost(NULL, $edit, t('Save'));
-    if (!$exists) {
+
+    if (!$exists && !$in_database) {
+      $this->assertText(t('The form protection has been added.'));
+    }
+    elseif ($exists && !$in_database) {
       $this->assertText(t('The form protection has been added.'));
     }
     else {
@@ -1006,6 +1017,86 @@ class MollomWebTestCase extends DrupalWebTestCase {
       return $this->getAbsoluteUrl($urls[$index]['href']);
     }
     return FALSE;
+  }
+}
+
+/**
+ * Tests exporting form configuration functionality.
+ */
+class MollomTestingExportingFormConfiguration extends MollomWebTestCase {
+  public static function getInfo() {
+    return array(
+      'name' => 'Exporting form configuration',
+      'description' => 'Tests exporting of form configuration with CTools.',
+      'group' => 'Mollom',
+      'dependencies' => array('ctools'),
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('ctools', 'mollom_test'));
+  }
+
+  function testExportingFormConfiguration() {
+    $this->drupalLogin($this->admin_user);
+
+    // Create a new form configuration
+    $this->setProtectionUI('mollom_basic_test_form', MOLLOM_MODE_ANALYSIS);
+
+    // Check if we can export it
+    $this->assertLinkByHref('admin/config/content/mollom/export/mollom_basic_test_form');
+    $this->assertText('In database');
+    $links = $this->xpath('//td[contains(., :text)]/a', array(':text' => 'In database'));
+
+    // Is there a valid export link?
+    $export_url = (string) $links[0]['href'];
+    $this->assertLinkByHref($export_url);
+    $export_url = $GLOBALS['base_root'] . $export_url;
+    $this->drupalGet($export_url);
+
+    // Does the export contains valid PHP code?
+    $this->assertRaw('$mollom_form = new stdClass();');
+
+    // Check if the exported form configuration is loaded in the overview
+    $this->drupalGet('admin/config/content/mollom');
+    $this->assertText('Mollom exported basic test form');
+
+    // Check if not overridden at this time
+    $this->assertText('In code');
+    $this->assertText('Disable');
+
+    $links = $this->xpath('//td[contains(., :text)]/following-sibling::td/a', array(':text' => 'Mollom exported basic test form'));
+
+    // Check if we can disable/enable the form configuration
+    $disable_url = (string) $links[1]['href'];
+    $this->assertLinkByHref($disable_url);
+    $this->drupalPost($disable_url, array(), t('Confirm'));
+    $this->assertText('Enable');
+    $this->assertText('Disabled');
+
+    $links = $this->xpath('//td[contains(., :text)]/following-sibling::td/a', array(':text' => 'Mollom exported basic test form'));
+
+    $enable_url = (string) $links[1]['href'];
+    $this->assertLinkByHref($enable_url);
+    $this->drupalPost($enable_url, array(), t('Confirm'));
+    $this->assertText('Disable');
+
+    // Check if we can override the form configuration
+    $edit = array(
+      'mollom[strictness]' => 'relaxed',
+    );
+    $this->setProtectionUI('mollom_exported_basic_test_form', MOLLOM_MODE_ANALYSIS, NULL, $edit);
+    $this->assertText('Database overriding code');
+
+    // Check if we can update an already overridden form configuration
+    $this->setProtectionUI('mollom_exported_basic_test_form', MOLLOM_MODE_CAPTCHA);
+
+    // Check if we can revert the form configuration to default
+    $links = $this->xpath('//td[contains(., :text)]/following-sibling::td/a', array(':text' => 'Mollom exported basic test form'));
+    $revert_url = (string) $links[2]['href'];
+    $this->assertLinkByHref($revert_url);
+    $this->drupalPost($revert_url, array(), t('Confirm'));
+    $this->assertText('In code');
   }
 }
 

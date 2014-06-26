@@ -15,7 +15,7 @@ function _mollom_supported_languages() {
   $predefined = _locale_get_predefined_list();
   $supported = array_flip(MOLLOM::$LANGUAGES_SUPPORTED);
   $supported = array_combine(array_keys($supported), array_keys($supported));
-  
+
   // Define those mappings that differ between Drupal codes and Mollom codes.
   $mapped = array(
     'nb' => 'no',
@@ -82,6 +82,8 @@ function mollom_admin_site_status($force = FALSE, $update = FALSE) {
  * Menu callback; Displays a list of forms configured for Mollom.
  */
 function mollom_admin_form_list() {
+  $exportable = module_exists('ctools');
+
   mollom_admin_site_status();
   _mollom_testing_mode_warning();
 
@@ -98,11 +100,12 @@ function mollom_admin_form_list() {
     t('Protection mode'),
     array('data' => t('Operations'), 'colspan' => 2),
   );
-  $result = db_query('SELECT form_id FROM {mollom_form}')->fetchCol();
+  if ($exportable) {
+    $header[] = t('Storage');
+  }
   $forms = array();
-  $module_info = system_get_info('module');
-  foreach ($result as $form_id) {
-    $forms[$form_id] = mollom_form_load($form_id);
+  foreach (mollom_form_load_all(TRUE) as $form_id => $mollom_form) {
+    $forms[$form_id] = $mollom_form;
     // system_get_info() only supports enabled modules. Default to the module's
     // machine name in case it is disabled.
     $module = $forms[$form_id]['module'];
@@ -153,11 +156,52 @@ function mollom_admin_form_list() {
         '%module' => isset($module_info[$mollom_form['module']]['name']) ? t($module_info[$mollom_form['module']]['name']) : $mollom_form['module'],
       )), 'warning');
     }
-    $row[] = array('data' => array(
-      '#type' => 'link',
-      '#title' => t('Unprotect'),
-      '#href' => 'admin/config/content/mollom/unprotect/' . $form_id,
-    ));
+     if ($exportable) {
+       // Remove protection.
+       if ($mollom_form['export_type'] === EXPORT_IN_DATABASE) {
+	 $row[] = array('data' => array(
+	   '#type' => 'link',
+	   '#title' => t('Unprotect'),
+	   '#href' => 'admin/config/content/mollom/unprotect/' . $form_id,
+	 ));
+       }
+       elseif (empty($mollom_form['disabled'])) {
+	 $row[] = array('data' => array(
+	   '#type' => 'link',
+	   '#title' => t('Disable'),
+	   '#href' => 'admin/config/content/mollom/disable/' . $form_id,
+	 ));
+       }
+       else {
+	 $row[] = array('data' => array(
+	   '#type' => 'link',
+	   '#title' => t('Enable'),
+	   '#href' => 'admin/config/content/mollom/enable/' . $form_id,
+	 ));
+       }
+       // Storage operations
+       if (!empty($mollom_form['disabled'])) {
+	 $row[] = t('Disabled');
+       }
+       else {
+	 if ($mollom_form['export_type'] & EXPORT_IN_DATABASE && $mollom_form['export_type'] & EXPORT_IN_CODE) {
+	   $row[] = t('Database overriding code (!revert | !export)', array('!revert' => l(t('revert'), 'admin/config/content/mollom/revert/' . $form_id), '!export' => l(t('export'), 'admin/config/content/mollom/export/' . $form_id)));
+	 }
+	 elseif ($mollom_form['export_type'] & EXPORT_IN_DATABASE) {
+	   $row[] = t('In database (!export)', array('!export' => l(t('export'), 'admin/config/content/mollom/export/' . $form_id)));
+	 }
+	 elseif ($mollom_form['export_type'] & EXPORT_IN_CODE) {
+	   $row[] = t('In code (!export)', array('!export' => l(t('export'), 'admin/config/content/mollom/export/' . $form_id)));
+	 }
+       }
+     }
+     else {
+       $row[] = array('data' => array(
+	 '#type' => 'link',
+	 '#title' => t('Unprotect'),
+	 '#href' => 'admin/config/content/mollom/unprotect/' . $form_id,
+       ));
+     }
 
     $rows[] = $row_attributes + array('data' => $row);
   }
@@ -180,8 +224,7 @@ function mollom_admin_form_options() {
   $form_list = mollom_form_list();
 
   // Remove already configured form ids.
-  $result = db_query('SELECT form_id FROM {mollom_form}')->fetchCol();
-  foreach ($result as $form_id) {
+  foreach (mollom_form_load_all(TRUE) as $form_id => $mollom_form) {
     unset($form_list[$form_id]);
   }
   // If all registered forms are configured already, output a message, and
@@ -1092,3 +1135,70 @@ function mollom_reports_page($form, &$form_state) {
   return $form;
 }
 
+/**
+ * Form builder; Confirmation form for CTools operations.
+ */
+function mollom_admin_ctools_form($form, &$form_state, $action = 'revert', $mollom_form) {
+  $form = array();
+  $form['#tree'] = TRUE;
+  $form['mollom']['form_id'] = array(
+    '#type' => 'value',
+    '#value' => $mollom_form['form_id'],
+  );
+  $form['mollom']['action'] = array(
+    '#type' => 'value',
+    '#value' => $action,
+  );
+  switch ($action) {
+    case 'revert':
+      $question = t('Are you sure you want to revert this form?');
+      $description = t('The configuration for this form will be reverted to its default.');
+      break;
+
+    case 'disable':
+      $question = t('Are you sure you want to disable this form?');
+      $description = t('Mollom will no longer protect this form from spam while this configuration is disabled.');
+      break;
+
+    case 'enable':
+      $question = t('Are you sure you want to enable this form?');
+      $description = t('Mollom will begin protecting this form from spam.');
+      break;
+  }
+  return confirm_form($form, $question, 'admin/settings/mollom', $description);
+}
+
+/**
+ * Form submit handler for mollom_admin_revert_form().
+ */
+function mollom_admin_ctools_form_submit($form, &$form_state) {
+  switch ($form_state['values']['mollom']['action']) {
+    case 'revert':
+      mollom_admin_unprotect_form_submit($form, $form_state);
+      break;
+
+    case 'enable':
+      ctools_include('export');
+      ctools_export_set_status('mollom_form', $form_state['values']['mollom']['form_id'], FALSE);
+      break;
+
+    case 'disable':
+      ctools_include('export');
+      ctools_export_set_status('mollom_form', $form_state['values']['mollom']['form_id'], TRUE);
+      break;
+  }
+  $form_state['redirect'] = 'admin/config/content/mollom';
+}
+
+/**
+ * Form builder; Export a Mollom form configuration.
+ */
+function mollom_admin_export_form($form, $form_state, $form_id) {
+  ctools_include('export');
+  $objects = ctools_export_load_object('mollom_form', 'names', array($form_id));
+  if (!empty($objects[$form_id])) {
+    $export = ctools_export_object('mollom_form', $objects[$form_id]);
+    $form = ctools_export_form($form, $form_state, $export, t('Export Mollom form configuration'));
+  }
+  return $form;
+}

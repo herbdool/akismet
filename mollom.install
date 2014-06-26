@@ -280,6 +280,7 @@ function mollom_schema() {
         'size' => 'tiny',
         'not null' => TRUE,
         'default' => 0,
+	'export callback' => 'mollom_ctools_var_export',
       ),
       'checks' => array(
         'description' => 'Text analyis checks to perform.',
@@ -330,6 +331,16 @@ function mollom_schema() {
       ),
     ),
     'primary key' => array('form_id'),
+    'export' => array(
+      'key' => 'form_id',
+      'bulk export' => TRUE,
+      'api' => array(
+	'owner' => 'mollom',
+	'api' => 'mollom',
+	'minimum_version' => 1,
+	'current_version' => 1,
+      ),
+    ),
   );
 
   return $schema;

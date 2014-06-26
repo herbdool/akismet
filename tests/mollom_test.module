@@ -6,6 +6,15 @@
  */
 
 /**
+ * Implements hook_ctools_plugin_api().
+ */
+function mollom_test_ctools_plugin_api($module = NULL, $api = NULL) {
+  if ($module == "mollom" && $api == "mollom") {
+    return array("version" => "1");
+  }
+}
+
+/**
  * Implements hook_entity_info().
  */
 function mollom_test_entity_info() {
@@ -61,6 +70,10 @@ function mollom_forms() {
   $forms['mollom_basic_test_form'] = array(
     'callback' => 'mollom_test_form',
   );
+
+  $forms['mollom_exported_basic_test_form'] = array(
+    'callback' => 'mollom_test_form',
+  );
   return $forms;
 }
 
@@ -79,6 +92,10 @@ function mollom_test_mollom_form_list() {
   // integrate with Mollom.
   $forms['mollom_basic_test_form'] = array(
     'title' => 'Mollom basic test form',
+  );
+  // Same as above, but with exported form configuration.
+  $forms['mollom_exported_basic_test_form'] = array(
+    'title' => 'Mollom exported basic test form',
   );
   // Same as above, but supports elements for text analysis.
   $forms['mollom_basic_elements_test_form'] = array(
