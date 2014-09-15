@@ -15,7 +15,7 @@ Drupal.behaviors.mollomMultiSelect = {
 
     // Adjust the recommended display for discarding spam based on moderation
     // settings.
-    $(content).find('#mollom-admin-configure-form').once(function() {
+    $(context).find('#mollom-admin-configure-form').once(function() {
       function updateRecommendedDiscard($form) {
         $form.find('label[for="edit-mollom-discard-1"] .mollom-recommended').toggle(!$form.find('input[name="mollom[moderation]"]').is(':checked'));
         $form.find('label[for="edit-mollom-discard-0"] .mollom-recommended').toggle($form.find('input[name="mollom[moderation]"]').is(':checked'));
