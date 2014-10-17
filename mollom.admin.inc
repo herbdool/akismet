@@ -923,15 +923,19 @@ function mollom_admin_settings($form, &$form_state) {
       'id' => $mollom->configuration_map['expectedLanguages'],
     ),
     '#attached' => array(
-      'css' => array(
-        $path . '/assets/chosen/chosen.min.css',
-      ),
       'js' => array(
-        $path . '/assets/chosen/chosen.jquery.min.js',
         $path . '/mollom.admin.js',
       ),
     ),
   );
+
+  // Add the chosen library if available through the libraries module.
+  if (module_exists('libraries')) {
+    if ($path = libraries_get_path('chosen')) {
+      $form[$mollom->configuration_map['expectedLanguages']]['#attached']['js'][] = $path . '/chosen.jquery.min.js';
+      $form[$mollom->configuration_map['expectedLanguages']]['#attached']['css'][] = $path . '/chosen.min.css';
+    }
+  }
 
   $form['mollom_privacy_link'] = array(
     '#type' => 'checkbox',
