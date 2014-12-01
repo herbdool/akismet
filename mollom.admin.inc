@@ -866,7 +866,7 @@ function mollom_admin_settings($form, &$form_state) {
     )),
     '#collapsible' => TRUE,
     // Only show key configuration fields if they are not configured or invalid.
-    '#collapsed' => !$status['isVerified'],
+    '#collapsed' => $status['isVerified'],
   );
   // Keys are not #required to allow to install this module and configure it
   // later.
