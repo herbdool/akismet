@@ -328,12 +328,15 @@ class MollomWebTestCase extends DrupalWebTestCase {
 
   /**
    * Instantiate a Mollom client and make it available on $this->mollom;
+   *
+   * @param $force
+   *   (Optional) If true, then a new class is always instantiated.
    */
-  protected function getClient() {
-    if (!isset($this->mollom)) {
+  protected function getClient($force = FALSE) {
+    if ($force || !isset($this->mollom)) {
       // mollom.module may not be enabled in the parent site executing the test.
       drupal_load('module', 'mollom');
-      $this->mollom = mollom($this->mollomClass);
+      $this->mollom = mollom($this->mollomClass, $force);
     }
     return $this->mollom;
   }
@@ -1276,7 +1279,6 @@ class MollomInstallationTestCase extends MollomWebTestCase {
     $this->assertNoText($message_missing);
     $this->assertNoText($message_invalid);
 
-
     // Verify that deleting keys throws the correct error message again.
     $this->drupalGet('admin/config/content/mollom/settings');
     $this->assertText($message_valid);
@@ -1284,7 +1286,7 @@ class MollomInstallationTestCase extends MollomWebTestCase {
       'mollom_public_key' => '',
       'mollom_private_key' => '',
     );
-    $this->drupalPost(NULL, $edit, t('Save configuration'));
+    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_saved);
     $this->assertNoText($message_valid);
     $this->assertText($message_missing);
@@ -1724,6 +1726,48 @@ class MollomResponseLocalTestCase extends MollomResponseTestCase {
     );
   }
 }
+
+/**
+ * Tests low-level communication with configured server.
+ */
+class MollomResponseConfiguredTestCase extends MollomWebTestCase {
+
+  public static function getInfo() {
+    return array(
+      'name' => 'Server responses (configured)',
+      'description' => 'Tests that a configured endpoint behaves the same as specified endpoints.',
+      'group' => 'Mollom',
+    );
+  }
+
+  function setUp() {
+    parent::setUp(array('mollom_test_server', 'mollom_test', 'mollom'));
+  }
+
+  function testConfiguredUrl() {
+    // Set the configured URL to be the same as the test server endpoing.
+    $test_url = $this->getAbsoluteURL('mollom-test/rest');
+    $stripped = preg_replace('/^[a-z]+:\\/\\//i', '', $test_url);
+    variable_set('mollom_api_endpoint', $stripped);
+
+    // Clear out Mollom local variable so that it can be instantiated with the
+    // correct endpoint.
+    $this->getClient(TRUE);
+
+    // The DrupalTest class should now use the local test server.
+    $this->setKeys();
+    $this->assertValidKeys();
+
+    // Check the watchdog from the key assertion is using the correct server.
+    // If the keys passed assertion, then they were created on the right server
+    // too.
+    foreach ($this->messages as $row) {
+      $output = theme_dblog_message(array('event' => $row, 'link' => FALSE));
+      $this->assertTrue(strpos($output, 'Request: POST ' . $test_url . '/v1/site/') !== FALSE, 'Keys verified from configured endpoint.');
+    }
+  }
+}
+
 
 class MollomAccessTestCase extends MollomWebTestCase {
   protected $mollomClass = 'MollomDrupalTestLocal';

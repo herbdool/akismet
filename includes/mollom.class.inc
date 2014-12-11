@@ -506,8 +506,14 @@ abstract class Mollom {
         $response->data = json_decode($response->body, TRUE);
       }
       elseif (strstr($response->headers['content-type'], 'application/xml')) {
-        $response->elements = new SimpleXmlIterator($response->body);
-        $response->data = $this->parseXML($response->elements);
+        try {
+          $response->elements = new SimpleXmlIterator($response->body);
+          $response->data = $this->parseXML($response->elements);
+        }
+        catch (Exception $e) {
+          // Invalid XML so just set the data back to blank.
+          $response->data = array();
+        }
       }
     }
 
