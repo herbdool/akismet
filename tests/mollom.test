@@ -134,7 +134,7 @@ class MollomWebTestCase extends DrupalWebTestCase {
 
     // Set the API server endpoints.
     if ($mollom_api_endpoint) {
-      variable_set('mollom_api_endpoing', $mollom_api_endpoint);
+      variable_set('mollom_api_endpoint', $mollom_api_endpoint);
     }
     if ($mollom_test_api_endpoint) {
       variable_set('mollom_test_api_endpoint', $mollom_test_api_endpoint);
