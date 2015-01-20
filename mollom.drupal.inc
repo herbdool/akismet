@@ -455,11 +455,11 @@ class MollomDrupalTestInvalid extends MollomDrupalTest {
    * Overrides MollomDrupalTest::__construct().
    */
   function __construct() {
+    parent::__construct();
     $this->originalServer = $this->server;
     $this->configuration_map['server'] = 'mollom_test_invalid_api_endpoint';
-    parent::__construct();
-
     $this->saveConfiguration('server', 'fake-host');
+    $this->server = 'fake-host';
   }
 
   /**
