@@ -16,8 +16,8 @@ class MollomDrupal extends Mollom {
    * @see Mollom::__construct().
    */
   public function __construct() {
-    parent::__construct();
     // Set any configured endpoint that may be different from the default.
+    parent::__construct();
     $configured_server = $this->loadConfiguration('server');
     if (!empty($configured_server)) {
       $this->server = $configured_server;
@@ -380,6 +380,9 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
     // Replace server/endpoint with our local fake server.
     list(, $server) = explode('://', $GLOBALS['base_url'], 2);
     $this->server = $server . '/mollom-test/rest';
+
+    // Do not destroy production server variables when testing mode is enabled.
+    $this->configuration_map['server'] = 'mollom_test_local_api_endpoint';
 
     parent::__construct();
   }
