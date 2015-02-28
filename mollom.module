@@ -1768,14 +1768,14 @@ function mollom_theme() {
         'captcha_url' => NULL,
         'flash_fallback_player' => $base_path . '/mollom-captcha-player.swf',
       ),
-      'template' => 'mollom.captcha.audio',
+      'template' => 'mollom-captcha-audio',
     ),
     'mollom_captcha_image' => array(
       'variables' => array(
         'captcha_url' => NULL,
         'audio_enabled' => TRUE,
       ),
-      'template' => 'mollom.captcha.image',
+      'template' => 'mollom-captcha-image',
     ),
   );
 }
