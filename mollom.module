@@ -1530,7 +1530,7 @@ function _mollom_get_openid($account) {
  *   The type of entity to check.
  * @param $bundle
  *   An array of bundle names to check.
- * 
+ *
  * @return array
  *   An array of protected bundles for this entity type.
  */
@@ -2066,6 +2066,9 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   //   causing false-positive spam classifications.
   $element['homepage'] = array(
     '#type' => 'textfield',
+    // Include the title field for accessibility scanners but it will not be
+    // shown due to the prefix.
+    '#title' => t('Home page'),
     // Wrap the entire honeypot form element markup into a hidden container, so
     // robots cannot simply check for a style attribute, but instead have to
     // implement advanced DOM processing to figure out whether they are dealing
