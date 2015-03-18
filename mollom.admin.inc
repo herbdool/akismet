@@ -887,16 +887,18 @@ function mollom_admin_settings($form, &$form_state) {
   $form['access-keys']['ping_holder'] = array(
     '#type' => 'fieldset',
     '#title' => t('Test connection'),
-    '#title_display' => 'invisible',
     '#states' => array(
       'visible' => array(
         ':input[name="mollom_public_key"]' => array('!value' => ''),
         ':input[name="mollom_private_key"]' => array('!value' => ''),
       ),
     ),
+    'intro' => array(
+      '#markup' => '<p>' . t('Test if your site can reach Mollom and if the Mollom service can reach your site.') . '</p>',
+    ),
     'ping_action' => array(
       '#type' => 'button',
-      '#value' => t('Ping Mollom'),
+      '#value' => t('Begin test'),
       '#submit' => array('mollom_admin_ping_submit'),
       '#ajax' => array(
         'callback' => 'mollom_admin_ping_ajax_callback',
@@ -1129,13 +1131,42 @@ function mollom_admin_ping_ajax_callback($form, &$form_state) {
   $response = $mollom->pingAPI($form_state['values']['mollom_public_key'], $form_state['values']['mollom_private_key']);
   $code = isset($response['code']) ? $response['code'] : $response;
   if (drupal_strlen($code)) {
-    $log_message = t('Mollom API response status: @response.  Please check your <a href="!log_url">Recent log messages</a> for details.', array(
-      '@response' => $code,
-      '!log_url' => url('admin/reports/dblog'),
-    ));
+    if ($code == '200') {
+      $log_message = t('<strong>Mollom connection test succeeded.</strong> Please check your <a href="!log_url">Recent log messages</a> for the Mollom response.', array(
+        '!log_url' => url('admin/reports/dblog'),
+      ));
+    }
+    else {
+      $log_message = t('<strong>Test connection failure.</strong> Mollom API response: Status @response.  Please check your <a href="!log_url">Recent log messages</a> for more details about the Mollom service response.', array(
+        '@response' => $code,
+        '!log_url' => url('admin/reports/dblog'),
+      ));
+      $causes = array();
+      switch ($code) {
+        case '404':
+        case '500':
+          $causes[] = t('The Mollom endpoint is incorrectly configured.');
+          break;
+        case '403':
+          $causes[] = t('The time on your server is invalid.');
+          $causes[] = t('The Mollom keys are incorrect.');
+          break;
+        case '900':
+          $causes[] = t('Your site is not publically accessible possibly due to firewall restrictions or local hosting.');
+          break;
+      }
+      $causes[] = t('The Mollom service is unavailable. <a href="!check_url">Check service status.</a>', array(
+        '!check_url' => 'https://status.acquia.com',
+      ));
+      $log_message .= theme('item_list', array(
+        'title' => t('Possible causes:'),
+        'items' => $causes,
+      ));
+    }
+
   }
   else {
-    $log_message = t('Ping request succeeded.  Please check your <a href="!log_url">Recent log messages</a> for pong callback.', array(
+    $log_message = t('<strong>Mollom connection test succeeded.</strong> Please check your <a href="!log_url">Recent log messages</a> for the Mollom response.', array(
       '!log_url' => url('admin/reports/dblog'),
     ));
   }
