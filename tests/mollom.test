@@ -2579,6 +2579,14 @@ class MollomFormConfigurationTestCase extends MollomWebTestCase {
     }
     $this->assertEqual($elements, array_keys($form_info['elements']), t('Field list only contains available form elements.'));
 
+    // Verify the Mollom CMP availability.
+    variable_del('mollom_cmp_enabled');
+    $this->drupalGet('admin/config/content/mollom/manage/mollom_test_form');
+    $this->assertNoFieldByName('mollom[moderation]');
+    variable_set('mollom_cmp_enabled', TRUE);
+    $this->drupalGet('admin/config/content/mollom/manage/mollom_test_form');
+    $this->assertFieldByName('mollom[moderation]');
+
     // Try a simple submit of the form.
     $this->drupalLogout();
     $edit = array(
@@ -4019,7 +4027,7 @@ class MollomDataTestCase extends MollomWebTestCase {
     $edit = array(
       'name' => $this->randomString(6) . ' & ' . $this->randomString(8),
       'mail' => 'mollom@example.com',
-      'homepage' => 'http://mollom.com',
+      'homepage' => 'http://www.mollom.com',
       'subject' => '"' . $this->randomString() . '"',
       'comment_body[und][0][value]' => 'unsure',
     );
@@ -5476,6 +5484,7 @@ abstract class MollomModerationBaseTestCase extends MollomWebTestCase {
 
     // CMP integration requires clean URLs to be enabled.
     variable_set('clean_url', TRUE);
+    variable_set('mollom_cmp_enabled', TRUE);
   }
 
   /**
@@ -5629,9 +5638,8 @@ class MollomModerationIntegrationTestCase extends MollomModerationBaseTestCase {
   /**
    * Tests that the 'stored' property of checked content is updated according to local events.
    *
-   * @todo
-   * - Verify that a form protecting a non-entity-API-entity does not throw a
-   *   fatal error (on entity_load()).
+   * @todo: Remove tests after Mollom CMP is retired on Oct. 1, 2015.
+   * @see https://www.drupal.org/node/2503171
    */
   function testStored() {
     // Post something.
@@ -5654,6 +5662,19 @@ class MollomModerationIntegrationTestCase extends MollomModerationBaseTestCase {
     // Verify that 'stored=0' was passed to Mollom.
     $record = $this->getServerRecord('content');
     $this->assertIdentical($record['stored'], '0');
+
+    // Now disable Mollom CMP integration.
+    variable_set('mollom_cmp_enabled', FALSE);
+
+    $edit = array(
+      'title' => 'ham',
+    );
+    $this->drupalPost('mollom-test/form', $edit, 'Submit');
+    $this->assertText('Successful form submission');
+
+    // Verify that stored was not passed to Mollom.
+    $record = $this->getServerRecord('content', TRUE);
+    $this->assertFalse(isset($record['stored']));
   }
 
   /**
