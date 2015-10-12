@@ -452,51 +452,6 @@ function mollom_admin_configure_form($form, &$form_state, $mollom_form = NULL) {
         ),
       );
 
-      // CMP integration requires Clean URLs to be enabled, in order for the
-      // local moderation callback endpoints to work.
-      $has_clean_urls = variable_get('clean_url', FALSE);
-      $cmp_enabled = mollom_cmp_enabled();
-      if ($cmp_enabled) {
-        $form['mollom']['moderation'] = array(
-          '#type' => 'checkbox',
-          '#title' => t('Allow content to be moderated from the <a href="@moderation-url">@moderation-product</a>', array(
-            '@moderation-url' => 'https://www.mollom.com/moderation',
-            '@moderation-product' => 'Mollom Content Moderation Platform',
-          )),
-          '#default_value' => (string) (int) ($mollom_form['moderation'] && $has_clean_urls),
-          '#disabled' => !$has_clean_urls,
-          // Only possible for forms which result in a locally stored entity.
-          '#access' => !empty($mollom_form['entity']),
-          // Only possible for forms protected via text analysis.
-          '#states' => array(
-            'visible' => array(
-              ':input[name="mollom[mode]"]' => array('value' => (string) MOLLOM_MODE_ANALYSIS),
-            ),
-          ),
-          '#description' => t('On %date, Acquia is ending support for the %moderation-product feature of Mollom', array(
-            '%date' => format_date(MOLLOM_CMP_RETIRE_DATE, 'custom', 'l, F j, Y'),
-            '%moderation-product' => 'Content Moderation Platform',
-          )),
-        );
-        if (!$has_clean_urls) {
-          $form['mollom']['moderation']['#description'] .= '<br />' . t('Requires <a href="@clean-urls">Clean URLs</a> to be enabled.', array(
-            '@clean-urls' => url('admin/config/search/clean-urls'),
-          ));
-        }
-        else {
-          $form['mollom']['moderation']['#description'] .= '<br />' . t('Note: All content that was created while this option was disabled cannot be moderated from the @moderation-product; only new content will appear.', array(
-            '@moderation-product' => 'Mollom Content Moderation Platform',
-          ));
-        }
-      }
-      else {
-        // CMP access is not enabled.
-        $form['mollom']['moderation'] = array(
-          '#type' => 'value',
-          '#value' => 0,
-        );
-      }
-
       $form['actions']['submit'] = array(
         '#type' => 'submit',
         '#value' => t('Save'),
