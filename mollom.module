@@ -45,6 +45,7 @@ function mollom_hook_info() {
     'mollom_data_insert',
     'mollom_data_update',
     'mollom_data_delete',
+    'mollom_content_alter',
   );
   $hooks = array_fill_keys($hooks, array(
     'group' => 'mollom',
@@ -2165,6 +2166,8 @@ function mollom_validate_analysis(&$form, &$form_state) {
       $data['trackingImageId'] = $form_state['values']['mollom']['fba'];
     }
   }
+  // Allow modules to alter data sent.
+  drupal_alter('mollom_content', $data);
   $result = mollom()->checkContent($data);
 
   // Use all available data properties for log messages below.
