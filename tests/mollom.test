@@ -4516,6 +4516,42 @@ class MollomAnalysisTestCase extends MollomWebTestCase {
     $this->assertNoCaptchaField();
     $this->assertTestSubmitData();
   }
+
+  /**
+   * Tests incorrect CAPTCHA with ham content.
+   */
+  function subtestUnsureIncorrectCaptcha() {
+    $this->drupalGet('mollom-test/form');
+    $this->assertNoCaptchaField();
+    $edit = array(
+      'body' => 'unsure',
+    );
+    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->assertResponseIDInForm('contentId', TRUE);
+    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertCaptchaField();
+
+    // Make the content ham, but fail the CAPTCHA.
+    $edit = array(
+      'body' => 'ham',
+      'mollom[captcha]' => 'incorrect',
+    );
+    $this->drupalPost(NULL, $edit, 'Submit');
+
+    // CAPTCHA is still shown
+    $this->assertResponseIDInForm('contentId', TRUE);
+    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertCaptchaField();
+
+    // Allow post to be submitted
+    $edit = array(
+      'title' => 'ham',
+      'mollom[captcha]' => 'correct',
+    );
+    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->assertNoCaptchaField();
+    $this->assertTestSubmitData();
+  }
 }
 
 /**

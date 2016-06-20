@@ -2397,12 +2397,10 @@ function mollom_validate_captcha(&$form, &$form_state) {
     ), WATCHDOG_INFO);
   }
   else {
-    // Text analysis will re-check the content and may trigger a CAPTCHA on its
-    // own again (not guaranteed).
-    if (!$form_state['mollom']['require_analysis']) {
-      form_set_error('mollom][captcha', t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _mollom_format_message_falsepositive($form_state, $data));
-      mollom_form_add_captcha($form['mollom'], $form_state);
-    }
+    form_set_error('mollom][captcha', t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _mollom_format_message_falsepositive($form_state, $data));
+    mollom_form_add_captcha($form['mollom'], $form_state);
+    // The textual analysis result doesn't matter if the CAPTCHA failed.
+    $form_state['mollom']['require_analysis'] = '';
 
     mollom_log(array(
       'message' => 'Incorrect CAPTCHA',
