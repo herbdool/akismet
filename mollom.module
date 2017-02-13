@@ -1047,6 +1047,11 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
     'orphan' => TRUE,
   );
 
+  // If the module does not exist, then the form has vanished.
+  if (!module_exists($module)) {
+    return $form_info;
+  }
+
   // Fetch the basic form information from hook_mollom_form_list() first.
   // This makes the integrating module (needlessly) rebuild all of its available
   // forms, but the base properties are absolutely required here, so we can
