@@ -17,14 +17,14 @@ $refresh_alt = t('Refresh');
 
 <?php
   $refresh_image_output = theme('image', array(
-    'path' => drupal_get_path('module', 'mollom') . '/images/refresh.png',
+    'path' => drupal_get_path('module', 'akismet') . '/images/refresh.png',
     'alt' => $refresh_alt,
     'getsize' => FALSE,
   ));
   $captcha_output = theme('image', array('path' => $captcha_url, 'alt' => $image_alt_text, 'getsize' => FALSE));
 ?>
-<span class="mollom-captcha-container">
-  <a href="javascript:void(0);" class="mollom-refresh-captcha mollom-refresh-image"><?php print $refresh_image_output; ?></a>
-  <span class="mollom-captcha-content mollom-image-captcha"><?php print $captcha_output; ?></span>
-  <span class="mollom-image-captcha-instructions"><?php print $instructions; ?><?php if ($audio_enabled) { ?>&nbsp;&nbsp;<a href="#" class="mollom-switch-captcha mollom-audio-captcha"><?php print $switch_verify; ?></a><?php } ?></span>
+<span class="akismet-captcha-container">
+  <a href="javascript:void(0);" class="akismet-refresh-captcha akismet-refresh-image"><?php print $refresh_image_output; ?></a>
+  <span class="akismet-captcha-content akismet-image-captcha"><?php print $captcha_output; ?></span>
+  <span class="akismet-image-captcha-instructions"><?php print $instructions; ?><?php if ($audio_enabled) { ?>&nbsp;&nbsp;<a href="#" class="akismet-switch-captcha akismet-audio-captcha"><?php print $switch_verify; ?></a><?php } ?></span>
 </span>

@@ -1,10 +1,10 @@
 {
-  "name": "mollom/client",
-  "description": "Generic PHP library for Mollom's REST API.",
+  "name": "akismet/client",
+  "description": "Generic PHP library for Akismet's REST API.",
   "license": "MIT",
-  "keywords": ["mollom", "spam"],
+  "keywords": ["akismet", "spam"],
   "authors": [{
     "name": "sun",
-    "email": "sun@mollom.com"
+    "email": "sun@akismet.com"
   }]
 }

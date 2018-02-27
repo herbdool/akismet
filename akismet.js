@@ -1,15 +1,15 @@
 (function ($) {
 
-Drupal.mollom = Drupal.mollom || {};
+Drupal.akismet = Drupal.akismet || {};
 
 /**
- * Open links to Mollom.com in a new window.
+ * Open links to Akismet.com in a new window.
  *
  * Required for valid XHTML Strict markup.
  */
-Drupal.behaviors.mollomTarget = {
+Drupal.behaviors.akismetTarget = {
   attach: function (context) {
-    $(context).find('.mollom-target').click(function () {
+    $(context).find('.akismet-target').click(function () {
       this.target = '_blank';
     });
   }
@@ -19,12 +19,12 @@ Drupal.behaviors.mollomTarget = {
  * Retrieve and attach the form behavior analysis tracking image if it has not
  * yet been added for the form.
  */
-Drupal.behaviors.mollomFBA = {
+Drupal.behaviors.akismetFBA = {
   attach: function (context, settings) {
-    $(':input[name="mollom[fba]"][value=""]', context).once().each(function() {
+    $(':input[name="akismet[fba]"][value=""]', context).once().each(function() {
       $input = $(this);
       $.ajax({
-        url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'mollom/fba',
+        url: Drupal.settings.basePath + Drupal.settings.pathPrefix + 'akismet/fba',
         type: 'POST',
         dataType: 'json',
         success: function(data) {
@@ -44,36 +44,36 @@ Drupal.behaviors.mollomFBA = {
  /**
  * Attach click event handlers for CAPTCHA links.
  */
-Drupal.behaviors.mollomCaptcha = {
+Drupal.behaviors.akismetCaptcha = {
   attach: function (context, settings) {
-    $('a.mollom-switch-captcha', context).click(function (e) {
-      var $mollomForm = $(this).parents('form');
-      var newCaptchaType = $(this).hasClass('mollom-audio-captcha') ? 'audio' : 'image';
-      Drupal.mollom.getMollomCaptcha(newCaptchaType, $mollomForm);
+    $('a.akismet-switch-captcha', context).click(function (e) {
+      var $akismetForm = $(this).parents('form');
+      var newCaptchaType = $(this).hasClass('akismet-audio-captcha') ? 'audio' : 'image';
+      Drupal.akismet.getAkismetCaptcha(newCaptchaType, $akismetForm);
     });
-    $('a.mollom-refresh-captcha', context).click(function (e) {
-      var $mollomForm = $(this).parents('form');
-      var currentCaptchaType = $(this).hasClass('mollom-refresh-audio') ? 'audio' : 'image';
-      Drupal.mollom.getMollomCaptcha(currentCaptchaType, $mollomForm);
+    $('a.akismet-refresh-captcha', context).click(function (e) {
+      var $akismetForm = $(this).parents('form');
+      var currentCaptchaType = $(this).hasClass('akismet-refresh-audio') ? 'audio' : 'image';
+      Drupal.akismet.getAkismetCaptcha(currentCaptchaType, $akismetForm);
     });
   }
 };
 
 /**
- * Fetch a Mollom CAPTCHA and output the image or audio into the form.
+ * Fetch a Akismet CAPTCHA and output the image or audio into the form.
  *
  * @param captchaType
  *   The type of CAPTCHA to retrieve; one of "audio" or "image".
  * @param context
  *   The form context for this retrieval.
  */
-Drupal.mollom.getMollomCaptcha = function (captchaType, context) {
+Drupal.akismet.getAkismetCaptcha = function (captchaType, context) {
   var formBuildId = $('input[name="form_build_id"]', context).val();
-  var mollomContentId = $('input.mollom-content-id', context).val();
+  var akismetContentId = $('input.akismet-content-id', context).val();
 
-  var path = 'mollom/captcha/' + captchaType + '/' + formBuildId;
-  if (mollomContentId) {
-    path += '/' + mollomContentId;
+  var path = 'akismet/captcha/' + captchaType + '/' + formBuildId;
+  if (akismetContentId) {
+    path += '/' + akismetContentId;
   }
   path += '?cb=' + new Date().getTime();
 
@@ -87,19 +87,19 @@ Drupal.mollom.getMollomCaptcha = function (captchaType, context) {
         return;
       }
       // Inject new CAPTCHA.
-      $('.mollom-captcha-content', context).parent().replaceWith(data.content);
+      $('.akismet-captcha-content', context).parent().replaceWith(data.content);
       // Update CAPTCHA ID.
-      $('input.mollom-captcha-id', context).val(data.captchaId);
+      $('input.akismet-captcha-id', context).val(data.captchaId);
       // Add an onclick-event handler for the new link.
       Drupal.attachBehaviors(context);
       // Focus on the CAPTCHA input.
       if (captchaType == 'image') {
-          $('input[name="mollom[captcha]"]', context).focus();
+          $('input[name="akismet[captcha]"]', context).focus();
       } else {
          // Focus on audio player.
          // Fallback player code is responsible for setting focus upon embed.
-         if ($('#mollom_captcha_audio').is(":visible")) {
-             $('#mollom_captcha_audio').focus();
+         if ($('#akismet_captcha_audio').is(":visible")) {
+             $('#akismet_captcha_audio').focus();
          }
       }
     }

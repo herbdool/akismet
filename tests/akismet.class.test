@@ -2,28 +2,28 @@
 
 /**
  * @file
- * Unit tests for Mollom class.
+ * Unit tests for Akismet class.
  *
- * @todo After final Mollom class commit, move all low-level tests from
- *   mollom.test into this file.
+ * @todo After final Akismet class commit, move all low-level tests from
+ *   akismet.test into this file.
  */
 
 /**
- * Tests Mollom class functionality.
+ * Tests Akismet class functionality.
  */
-class MollomClassUnitTestCase extends DrupalUnitTestCase {
+class AkismetClassUnitTestCase extends DrupalUnitTestCase {
   public static function getInfo() {
     return array(
-      'name' => 'Mollom class',
-      'description' => 'Tests Mollom class functionality.',
-      'group' => 'Mollom',
+      'name' => 'Akismet class',
+      'description' => 'Tests Akismet class functionality.',
+      'group' => 'Akismet',
     );
   }
 
   function setUp() {
     parent::setUp();
     // DrupalUnitTestCase does not autoload classes for whatever reason.
-    module_load_include('inc', 'mollom', 'includes/mollom.class');
+    module_load_include('inc', 'akismet', 'includes/akismet.class');
   }
 
   /**
@@ -42,7 +42,7 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
    * @return
    *   TRUE if the assertion succeeded, FALSE otherwise.
    *
-   * @see MollomWebTestCase::assertNotSame()
+   * @see AkismetWebTestCase::assertNotSame()
    *
    * @todo D8: Move into core. This improved assertEqual() did not get into D7,
    *   since the function signature differs and it's plenty of work to manually
@@ -73,7 +73,7 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
    * @return
    *   TRUE if the assertion succeeded, FALSE otherwise.
    *
-   * @see MollomWebTestCase::assertSame()
+   * @see AkismetWebTestCase::assertSame()
    */
   protected function assertNotSame($name, $first, $second) {
     $message = t("@name: @first is not equal to @second.", array(
@@ -85,38 +85,38 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
   }
 
   /**
-   * Tests Mollom::httpBuildQuery().
+   * Tests Akismet::httpBuildQuery().
    */
   function testHttpBuildQuery() {
     // Single parameter.
     $input = array('checks' => 'spam');
     $expected = 'checks=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Multiple parameters, numbers.
     $input = array('foo' => 1, 'bar' => 2);
     $expected = 'bar=2&foo=1';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Parameter with multiple values.
     $input = array('checks' => array('spam', 'profanity'));
     $expected = 'checks=profanity&checks=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Parameter with multiple values, empty.
     $input = array('checks' => array('spam', ''));
     $expected = 'checks=&checks=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Parameter with multiple values, NULL.
     $input = array('checks' => array('spam', NULL));
     $expected = 'checks=&checks=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Multiple parameters with NULL value.
     $input = array('foo' => 1, 'checks' => NULL);
     $expected = 'checks=&foo=1';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Multiple parameters with multiple values.
     // (official OAuth protocol example)
@@ -134,18 +134,18 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
       'c2' => '',
     );
     $expected = 'a2=r%20b&a3=2%20q&a3=a&b5=%3D%253D&c%40=&c2=&oauth_consumer_key=9djdj82h48djs9d2&oauth_nonce=7d8f3e4a&oauth_signature_method=HMAC-SHA1&oauth_timestamp=137131201&oauth_token=kkk9d7dh3k39sjv7';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Parameter with recursive multiple values.
     $input = array('checks' => array(array('spam'), array('profanity')));
     $expected = 'checks=profanity&checks=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Parameter with multiple named values.
     // @todo Drop support for this?
     $input = array('checks' => array('foo' => 'spam', 'bar' => 'profanity'));
     $expected = 'checks[bar]=profanity&checks[foo]=spam';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
 
     // Prior to PHP 5.3.0, rawurlencode() encoded tildes (~) as per RFC 1738.
     $input = array(
@@ -153,48 +153,48 @@ class MollomClassUnitTestCase extends DrupalUnitTestCase {
       'unreserved' => '-._~',
     );
     $expected = 'reserved=%3A%2F%3F%23%5B%5D%40%21%24%26%27%28%29%2A%2B%2C%3B%3D&unreserved=-._~';
-    $this->assertSame(var_export($input, TRUE), Mollom::httpBuildQuery($input), $expected);
+    $this->assertSame(var_export($input, TRUE), Akismet::httpBuildQuery($input), $expected);
   }
 
   /**
-   * Tests Mollom::httpParseQuery().
+   * Tests Akismet::httpParseQuery().
    */
   function testHttpParseQuery() {
     $input = 'foo=1&bar=2';
     $expected = array('foo' => 1, 'bar' => 2);
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
     $input = 'checks=spam&checks=profanity';
     $expected = array('checks' => array('spam', 'profanity'));
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
-    // Mollom::httpParseQuery() does not attempt to work transparently. Thus,
+    // Akismet::httpParseQuery() does not attempt to work transparently. Thus,
     // multiple parameter names containing brackets itself (regular PHP syntax)
     // will lead to an "unexpected" result. Although it wouldn't be hard to add
     // support for this, there's currently no need for it.
     $input = 'checks[]=spam&checks[]=profanity';
     $expected = array('checks' => array(array('spam'), array('profanity')));
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
     $input = 'checks=spam&checks=';
     $expected = array('checks' => array('spam', ''));
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
     $input = 'checks=spam&checks';
     $expected = array('checks' => array('spam', ''));
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
     $input = 'checks=spam&';
     $expected = array('checks' => 'spam');
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
 
     $input = 'checks=spam';
     $expected = array('checks' => 'spam');
-    $this->assertSame($input, Mollom::httpParseQuery($input), $expected);
+    $this->assertSame($input, Akismet::httpParseQuery($input), $expected);
   }
 
   /**
-   * Tests Mollom::parseXML().
+   * Tests Akismet::parseXML().
    */
   function testParseXML() {
     $header = '<?xml version="1.0"?>';
@@ -229,7 +229,7 @@ EOF;
         ),
       ),
     );
-    $this->assertSame($input, Mollom::parseXML(new SimpleXmlIterator($input)), $expected);
+    $this->assertSame($input, Akismet::parseXML(new SimpleXmlIterator($input)), $expected);
 
     $input = $header . <<<EOF
 <response>
@@ -255,11 +255,11 @@ EOF;
         ),
       ),
     );
-    $this->assertSame($input, Mollom::parseXML(new SimpleXmlIterator($input)), $expected);
+    $this->assertSame($input, Akismet::parseXML(new SimpleXmlIterator($input)), $expected);
   }
 
   /**
-   * Test Mollom::addAuthentication().
+   * Test Akismet::addAuthentication().
    *
    * @todo Requires class instance for unit testing.
    *

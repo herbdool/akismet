@@ -2,25 +2,25 @@
 
 /**
  * @file
- * Mollom client class.
+ * Akismet client class.
  *
  * @license MIT|GNU GPL v2
  *   See LICENSE-MIT.txt or LICENSE-GPL.txt shipped with this library.
  */
 
 /**
- * The base class for Mollom client implementations.
+ * The base class for Akismet client implementations.
  */
-abstract class Mollom {
+abstract class Akismet {
   /**
-   * The Mollom API version, used in HTTP requests.
+   * The Akismet API version, used in HTTP requests.
    */
   const API_VERSION = 'v1';
 
   /**
    * Network communication failure code: Server could not be reached.
    *
-   * @see MollomNetworkException
+   * @see AkismetNetworkException
    */
   const NETWORK_ERROR = 900;
 
@@ -31,7 +31,7 @@ abstract class Mollom {
    * code to prevent bogus bug reports. 511 is the closest comparable code
    * 501 (Not Implemented) plus 10.
    *
-   * @see MollomResponseException
+   * @see AkismetResponseException
    */
   const RESPONSE_ERROR = 511;
 
@@ -40,30 +40,30 @@ abstract class Mollom {
    *
    * Used in case of a too large system time offset from UTC.
    *
-   * @see MollomBadRequestException
-   * @see Mollom::TIME_OFFSET_MAX
+   * @see AkismetBadRequestException
+   * @see Akismet::TIME_OFFSET_MAX
    */
   const REQUEST_ERROR = 400;
 
   /**
    * Client communication failure code: Authentication error.
    *
-   * @see MollomAuthenticationException
+   * @see AkismetAuthenticationException
    */
   const AUTH_ERROR = 401;
 
   /**
    * Maximum allowed time offset from UTC in seconds allowed for the client's local time.
    *
-   * @see Mollom::handleRequest()
-   * @see MollomBadRequestException
+   * @see Akismet::handleRequest()
+   * @see AkismetBadRequestException
    *
    * @var integer
    */
   const TIME_OFFSET_MAX = 300;
 
   /**
-   * List of ISO 639-1 language codes supported by Mollom.
+   * List of ISO 639-1 language codes supported by Akismet.
    *
    * If your application has a predefined list of ISO 639-1 languages already,
    * intersect your list with this via strtok($langcode, '-').
@@ -127,14 +127,14 @@ abstract class Mollom {
   );
 
   /**
-   * The public Mollom API key to use for request authentication.
+   * The public Akismet API key to use for request authentication.
    *
    * @var string
    */
   public $publicKey = '';
 
   /**
-   * The private Mollom API key to use for request authentication.
+   * The private Akismet API key to use for request authentication.
    *
    * @var string
    */
@@ -146,44 +146,44 @@ abstract class Mollom {
    * Either 'header' for HTTP headers (preferred), or 'query' for GET/POST
    * request parameters.
    *
-   * @see Mollom::addAuthentication()
+   * @see Akismet::addAuthentication()
    *
    * @var string
    */
   public $oAuthStrategy = 'header';
 
   /**
-   * The Mollom server to communicate with, without protocol.
+   * The Akismet server to communicate with, without protocol.
    *
    * @var string
    */
-  public $server = 'rest.mollom.com';
+  public $server = 'rest.akismet.com';
 
   /**
-   * Maximum number of attempts for a request to a Mollom server.
+   * Maximum number of attempts for a request to a Akismet server.
    *
-   * @see Mollom::query()
-   * @see Mollom::$requestTimeout
+   * @see Akismet::query()
+   * @see Akismet::$requestTimeout
    *
    * @var integer
    */
   public $requestMaxAttempts = 2;
 
   /**
-   * Seconds in which a request to a Mollom server times out.
+   * Seconds in which a request to a Akismet server times out.
    *
-   * Mollom servers usually respond within a few milliseconds. However, if a
+   * Akismet servers usually respond within a few milliseconds. However, if a
    * server is under very high load, or in case of networking issues, a response
    * might take longer. A maximum response time of 3 seconds ensures that the
    * client waits long enough in edge-cases, but also not too long in case a
    * particular server is unreachable.
    *
-   * The timeout applies per request. Mollom::query() will retry a request until
-   * it reaches Mollom::$requestMaxAttempts. With the default values, a Mollom
+   * The timeout applies per request. Akismet::query() will retry a request until
+   * it reaches Akismet::$requestMaxAttempts. With the default values, a Akismet
    * API call has a total timeout of 6 seconds in case of a server failure.
    *
-   * @see Mollom::request()
-   * @see Mollom::$requestMaxAttempts
+   * @see Akismet::request()
+   * @see Akismet::$requestMaxAttempts
    *
    * @var float
    */
@@ -193,10 +193,10 @@ abstract class Mollom {
    * The status code of the last server response, or TRUE if the request succeeded.
    *
    * If not TRUE, then the value is either one of
-   * - Mollom::NETWORK_ERROR
-   * - Mollom::RESPONSE_ERROR
-   * - Mollom::REQUEST_ERROR
-   * - Mollom::AUTH_ERROR
+   * - Akismet::NETWORK_ERROR
+   * - Akismet::RESPONSE_ERROR
+   * - Akismet::REQUEST_ERROR
+   * - Akismet::AUTH_ERROR
    * or the actual HTTP status code returned by the server.
    *
    * @var int|bool|null
@@ -225,7 +225,7 @@ abstract class Mollom {
   public $listTotal = NULL;
 
   /**
-   * Flag indicating whether to invoke Mollom::writeLog() in Mollom::query().
+   * Flag indicating whether to invoke Akismet::writeLog() in Akismet::query().
    *
    * @var bool
    */
@@ -248,15 +248,15 @@ abstract class Mollom {
    *
    * @param string $name
    *   The configuration setting name to load, one of:
-   *   - publicKey: The public API key for Mollom authentication.
-   *   - privateKey: The private API key for Mollom authentication.
+   *   - publicKey: The public API key for Akismet authentication.
+   *   - privateKey: The private API key for Akismet authentication.
    *   - expectedLanguages: List of expected language codes for site content.
    *
    * @return mixed
    *   The stored configuration value or NULL if there is none.
    *
-   * @see Mollom::saveConfiguration()
-   * @see Mollom::deleteConfiguration()
+   * @see Akismet::saveConfiguration()
+   * @see Akismet::deleteConfiguration()
    */
   abstract protected function loadConfiguration($name);
 
@@ -268,8 +268,8 @@ abstract class Mollom {
    * @param mixed $value
    *   The value to save.
    *
-   * @see Mollom::loadConfiguration()
-   * @see Mollom::deleteConfiguration()
+   * @see Akismet::loadConfiguration()
+   * @see Akismet::deleteConfiguration()
    */
   abstract protected function saveConfiguration($name, $value);
 
@@ -279,19 +279,19 @@ abstract class Mollom {
    * @param string $name
    *   The configuration setting name to delete.
    *
-   * @see Mollom::loadConfiguration()
-   * @see Mollom::saveConfiguration()
+   * @see Akismet::loadConfiguration()
+   * @see Akismet::saveConfiguration()
    */
   abstract protected function deleteConfiguration($name);
 
   /**
-   * Returns platform and version information about the Mollom client.
+   * Returns platform and version information about the Akismet client.
    *
-   * Retrieves platform and Mollom client version information to send along to
-   * Mollom when verifying keys.
+   * Retrieves platform and Akismet client version information to send along to
+   * Akismet when verifying keys.
    *
    * This information is used to speed up support requests and technical
-   * inquiries. The data may also be aggregated to help the Mollom staff to make
+   * inquiries. The data may also be aggregated to help the Akismet staff to make
    * decisions on new features or the necessity of back-porting improved
    * functionality to older versions.
    *
@@ -299,8 +299,8 @@ abstract class Mollom {
    *   An associative array containing:
    *   - platformName: The name of the platform/distribution; e.g., "Drupal".
    *   - platformVersion: The version of platform/distribution; e.g., "7.0".
-   *   - clientName: The official Mollom client name; e.g., "Mollom".
-   *   - clientVersion: The version of the Mollom client; e.g., "7.x-1.0".
+   *   - clientName: The official Akismet client name; e.g., "Akismet".
+   *   - clientVersion: The version of the Akismet client; e.g., "7.x-1.0".
    */
   abstract public function getClientInformation();
 
@@ -313,7 +313,7 @@ abstract class Mollom {
    * The log may be written and appended to a file (via file_put_contents()),
    * syslog (on *nix-based systems), or a database.
    *
-   * @see Mollom::log
+   * @see Akismet::log
    */
   public function writeLog() {
     // After writing log messages, empty the log.
@@ -323,14 +323,14 @@ abstract class Mollom {
   /**
    * Purges captured log messages.
    *
-   * @see Mollom::writeLog()
+   * @see Akismet::writeLog()
    */
   final public function purgeLog() {
     $this->log = array();
   }
 
   /**
-   * Send or retrieve data from/to Mollom.
+   * Send or retrieve data from/to Akismet.
    *
    * @param string $method
    *   The HTTP method to use; i.e., 'GET', 'POST', or 'PUT'.
@@ -346,10 +346,10 @@ abstract class Mollom {
    *
    * @return mixed
    *   On success, the parsed response body. On failure, the last response code,
-   *   in case it is a known one; otherwise Mollom::NETWORK_ERROR.
+   *   in case it is a known one; otherwise Akismet::NETWORK_ERROR.
    *
-   * @see Mollom::handleRequest()
-   * @see Mollom::request()
+   * @see Akismet::handleRequest()
+   * @see Akismet::request()
    */
   public function query($method, $path, array $data = array(), array $expected = array()) {
     // Reset list response properties.
@@ -364,15 +364,15 @@ abstract class Mollom {
       try {
         $result = $this->handleRequest($method, $server, $path, $data, $expected);
       }
-      catch (MollomBadRequestException $e) {
+      catch (AkismetBadRequestException $e) {
         // Irrecoverable error, so don't try further.
         break;
       }
-      catch (MollomAuthenticationException $e) {
+      catch (AkismetAuthenticationException $e) {
         // Irrecoverable error, so don't try further.
         break;
       }
-      catch (MollomException $e) {
+      catch (AkismetException $e) {
         // If the requested resource does not exist, or the request was
         // malformed, there is no point in trying further.
         if ($e->getCode() >= 400 && $e->getCode() < 500) {
@@ -435,13 +435,13 @@ abstract class Mollom {
   }
 
   /**
-   * Prepares a HTTP request to a Mollom server and processes the response.
+   * Prepares a HTTP request to a Akismet server and processes the response.
    *
    * @param string $method
    *   The HTTP method to use; i.e., 'GET' or 'POST'.
    * @param string $server
    *   The base URL of the server to perform the request against; e.g.,
-   *   'http://foo.mollom.com'.
+   *   'http://foo.akismet.com'.
    * @param string $path
    *   The REST path/resource to request; e.g., 'site/1a2b3c'.
    * @param array $data
@@ -451,23 +451,23 @@ abstract class Mollom {
    *   of parent element keys to the element and the element key itself; e.g., a
    *   value of array('content', 'id') expects $response['content']['id'] to
    *   exist in the response. If the expected element does not exist, a
-   *   MollomResponseException is thrown.
+   *   AkismetResponseException is thrown.
    *
    * @return array
    *   An associative array representing the parsed response body on success. On
-   *   any failure, a MollomException is thrown. Additionally,
-   *   Mollom::lastResponseCode is set to TRUE on success, or to the Mollom or
+   *   any failure, a AkismetException is thrown. Additionally,
+   *   Akismet::lastResponseCode is set to TRUE on success, or to the Akismet or
    *   HTTP status code on failure.
    *
-   * @throws MollomNetworkException
-   * @throws MollomAuthenticationException
-   * @throws MollomResponseException
-   * @throws MollomException
+   * @throws AkismetNetworkException
+   * @throws AkismetAuthenticationException
+   * @throws AkismetResponseException
+   * @throws AkismetException
    *
-   * @see Mollom::lastResponseCode
-   * @see Mollom::query()
-   * @see Mollom::httpBuildQuery()
-   * @see Mollom::parseXML()
+   * @see Akismet::lastResponseCode
+   * @see Akismet::query()
+   * @see Akismet::httpBuildQuery()
+   * @see Akismet::parseXML()
    * @see json_decode()
    */
   protected function handleRequest($method, $server, $path, $data, $expected = array()) {
@@ -561,7 +561,7 @@ abstract class Mollom {
     );
     if ($response->isError) {
       if ($response->code <= 0) {
-        throw new MollomNetworkException('Network error.', self::NETWORK_ERROR, NULL, $this, $request_info);
+        throw new AkismetNetworkException('Network error.', self::NETWORK_ERROR, NULL, $this, $request_info);
       }
       if ($response->code == self::AUTH_ERROR) {
         // Check whether authentication failed due to a too large time offset.
@@ -574,15 +574,15 @@ abstract class Mollom {
           // The abs() above turns a negative offset into an absolute integer
           // value, so the difference is always positive.
           if ($offset > self::TIME_OFFSET_MAX) {
-            throw new MollomBadRequestException(sprintf('Invalid client system time: Too large offset from UTC: %s seconds.', $offset), self::REQUEST_ERROR, NULL, $this, $request_info);
+            throw new AkismetBadRequestException(sprintf('Invalid client system time: Too large offset from UTC: %s seconds.', $offset), self::REQUEST_ERROR, NULL, $this, $request_info);
           }
         }
-        throw new MollomAuthenticationException('Invalid authentication.', self::AUTH_ERROR, NULL, $this, $request_info);
+        throw new AkismetAuthenticationException('Invalid authentication.', self::AUTH_ERROR, NULL, $this, $request_info);
       }
       if ($response->code == self::RESPONSE_ERROR || $response->code >= 500) {
-        throw new MollomResponseException($response->message, $response->code, NULL, $this, $request_info);
+        throw new AkismetResponseException($response->message, $response->code, NULL, $this, $request_info);
       }
-      throw new MollomException($response->message, $response->code, NULL, $this, $request_info);
+      throw new AkismetException($response->message, $response->code, NULL, $this, $request_info);
     }
     else {
       $this->lastResponseCode = TRUE;
@@ -612,7 +612,7 @@ abstract class Mollom {
    *   The HTTP method to use; i.e., 'GET' or 'POST'.
    * @param string $server
    *   The base URL of the server to perform the request against; e.g.,
-   *   'http://foo.mollom.com'.
+   *   'http://foo.akismet.com'.
    * @param string $path
    *   The REST path/resource to request; e.g., 'site/1a2b3c'.
    * @param array $data
@@ -627,7 +627,7 @@ abstract class Mollom {
    *   GET query string or POST body data.
    *
    * @see http://tools.ietf.org/html/rfc5849
-   * @see Mollom::oAuthStrategy
+   * @see Akismet::oAuthStrategy
    */
   public function addAuthentication($method, $server, $path, &$data, &$headers) {
     $oauth['oauth_consumer_key'] = $this->publicKey;
@@ -641,7 +641,7 @@ abstract class Mollom {
 
     // Prepare the request query parameters to return (and pass on to request())
     // and the query parameters to include in the OAuth signature base string.
-    // Note that Mollom::httpBuildQuery() sorts parameters already.
+    // Note that Akismet::httpBuildQuery() sorts parameters already.
     if ($this->oAuthStrategy == 'header') {
       $query = $this->httpBuildQuery($data);
       $oauth_query = $this->httpBuildQuery($oauth + $data);
@@ -709,13 +709,13 @@ abstract class Mollom {
   }
 
   /**
-   * Performs a HTTP request to a Mollom server.
+   * Performs a HTTP request to a Akismet server.
    *
    * @param string $method
    *   The HTTP method to use; i.e., 'GET', 'POST', or 'PUT'.
    * @param string $server
    *   The base URL of the server to perform the request against; e.g.,
-   *   'http://foo.mollom.com'.
+   *   'http://foo.akismet.com'.
    * @param string $path
    *   The REST path/resource to request; e.g., 'site/1a2b3c'.
    * @param string $query
@@ -727,23 +727,23 @@ abstract class Mollom {
    *
    * @return object
    *   An object containing response properties:
-   *   - code: The HTTP status code as integer returned by the Mollom server.
-   *   - message: The HTTP status message string returned by the Mollom server,
+   *   - code: The HTTP status code as integer returned by the Akismet server.
+   *   - message: The HTTP status message string returned by the Akismet server,
    *     or NULL if there is no message.
    *   - headers: An associative array containing the HTTP response headers
-   *     returned by the Mollom server. Header name keys are expected to be
+   *     returned by the Akismet server. Header name keys are expected to be
    *     lower-case; i.e., "content-type" instead of "Content-Type".
-   *   - body: The HTTP response body string returned by the Mollom server, or
+   *   - body: The HTTP response body string returned by the Akismet server, or
    *     NULL if there is none.
    *
-   * @see Mollom::handleRequest()
+   * @see Akismet::handleRequest()
    */
   abstract protected function request($method, $server, $path, $query = NULL, array $headers = array());
 
   /**
    * Converts a SimpleXMLIterator structure into an associative array.
    *
-   * Used to parse an XML response from Mollom servers into a PHP array. For
+   * Used to parse an XML response from Akismet servers into a PHP array. For
    * example:
    * @code
    * $elements = new SimpleXmlIterator($response_body);
@@ -803,7 +803,7 @@ abstract class Mollom {
    *
    * PHP did a design decision to only support HTTP query parameters in the form
    * of foo[]=1&foo[]=2, primarily for its built-in and automated conversion to
-   * PHP arrays. Other platforms (including the Mollom backend) do not support
+   * PHP arrays. Other platforms (including the Akismet backend) do not support
    * this syntax and expect multiple parameters to be in the form of
    * foo=1&foo=2.
    *
@@ -820,7 +820,7 @@ abstract class Mollom {
    *   A rawurlencoded string which can be used as or appended to the URL query
    *   string.
    *
-   * @see Mollom::httpParseQuery()
+   * @see Akismet::httpParseQuery()
    */
   public static function httpBuildQuery(array $query, $parent = '') {
     $params = array();
@@ -877,7 +877,7 @@ abstract class Mollom {
   /**
    * Parses an RFC-compliant, rawurlencoded query string.
    *
-   * Mollom clients normally do not need this function, as they do not need to
+   * Akismet clients normally do not need this function, as they do not need to
    * process requests from a server - unless a client attempts to implement
    * client-side unit testing.
    *
@@ -888,7 +888,7 @@ abstract class Mollom {
    * @return array
    *   A query parameter array parsed from $query.
    *
-   * @see Mollom::httpBuildQuery()
+   * @see Akismet::httpBuildQuery()
    * @see parse_str()
    */
   public static function httpParseQuery($query) {
@@ -980,10 +980,10 @@ abstract class Mollom {
   /**
    * Retrieves a list of sites accessible to this client.
    *
-   * Used by Mollom resellers only.
+   * Used by Akismet resellers only.
    *
    * @return array
-   *   An array containing site resources, as returned by Mollom::getsite().
+   *   An array containing site resources, as returned by Akismet::getsite().
    */
   public function getSites() {
     $result = $this->query('GET', 'site', array(), array('list'));
@@ -994,22 +994,22 @@ abstract class Mollom {
    * Retrieves information about a site.
    *
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to retrieve. Defaults to
+   *   (optional) The public Akismet API key of the site to retrieve. Defaults to
    *   the public key of the client.
    *
    * @return mixed
    *   On success, an associative array containing:
-   *   - publicKey: The public Mollom API key of the site.
-   *   - privateKey: The private Mollom API key of the site.
+   *   - publicKey: The public Akismet API key of the site.
+   *   - privateKey: The private Akismet API key of the site.
    *   - url: The URL of the site.
    *   - email: The e-mail address of the primary contact of the site.
    *   - platformName: (optional) The name of the platform running the site
    *     (e.g., "Drupal").
    *   - platformVersion: (optional) The version of the platform running the
    *     site (e.g., "6.20").
-   *   - clientName: (optional) The name of the Mollom client plugin used
-   *     (e.g., "Mollom").
-   *   - clientVersion: (optional) The version of the Mollom client plugin used
+   *   - clientName: (optional) The name of the Akismet client plugin used
+   *     (e.g., "Akismet").
+   *   - clientVersion: (optional) The version of the Akismet client plugin used
    *     (e.g., "6.15").
    *   - expectedLanguages: (optional) An array of language ISO codes, content
    *     is expected to be submitted in on the site.
@@ -1029,11 +1029,11 @@ abstract class Mollom {
    *
    * @param array $data
    *   An associative array of properties for the new site. At least 'url' and
-   *   'email' are required. See Mollom::getSite() for details.
+   *   'email' are required. See Akismet::getSite() for details.
    *
    * @return mixed
    *   On success, the full site information of the created site; see
-   *   Mollom::getSite() for details. On failure, the error response code
+   *   Akismet::getSite() for details. On failure, the error response code
    *   returned by the server. Or FALSE if 'url' or 'email' was not specified.
    */
   public function createSite(array $data = array()) {
@@ -1047,20 +1047,20 @@ abstract class Mollom {
   /**
    * Updates a site.
    *
-   * Note that most Mollom clients want to use Mollom::verifyKeys() only. This
-   * method is primarily used by Mollom resellers, who are provisioning sites
+   * Note that most Akismet clients want to use Akismet::verifyKeys() only. This
+   * method is primarily used by Akismet resellers, who are provisioning sites
    * and may need to set other site properties.
    *
    * @param array $data
    *   (optional) An associative array of properties to set for the site. See
-   *   Mollom::getSite() for details.
+   *   Akismet::getSite() for details.
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to update. Defaults to
+   *   (optional) The public Akismet API key of the site to update. Defaults to
    *   the public key of the client.
    *
    * @return mixed
    *   On success, the full site information of the created site; see
-   *   Mollom::getSite() for details. On failure, the error response code
+   *   Akismet::getSite() for details. On failure, the error response code
    *   returned by the server.
    */
   public function updateSite(array $data = array(), $publicKey = NULL) {
@@ -1075,15 +1075,15 @@ abstract class Mollom {
   /**
    * Updates a site to verify API keys and send client information.
    *
-   * Mollom API keys are validated in all API calls already. This method should
-   * be used when the API keys of a Mollom client are configured for a site. It
+   * Akismet API keys are validated in all API calls already. This method should
+   * be used when the API keys of a Akismet client are configured for a site. It
    * should be invoked at least once for a site, to send client and version
-   * information to Mollom in order to aid with Mollom support requests.
+   * information to Akismet in order to aid with Akismet support requests.
    *
    * @return mixed
    *   TRUE on success. On failure, the error response code returned by the
-   *   server; either Mollom::REQUEST_ERROR, Mollom::AUTH_ERROR or
-   *   Mollom::NETWORK_ERROR.
+   *   server; either Akismet::REQUEST_ERROR, Akismet::AUTH_ERROR or
+   *   Akismet::NETWORK_ERROR.
    */
   public function verifyKeys() {
     $data = $this->getClientInformation();
@@ -1097,7 +1097,7 @@ abstract class Mollom {
    * Deletes a site.
    *
    * @param string $publicKey
-   *   The public Mollom API key of the site to delete.
+   *   The public Akismet API key of the site to delete.
    *
    * @return bool
    *   TRUE on success, FALSE otherwise.
@@ -1109,7 +1109,7 @@ abstract class Mollom {
   }
 
   /**
-   * Checks user-submitted content with Mollom.
+   * Checks user-submitted content with Akismet.
    *
    * @param array $data
    *   An associative array containing any of the keys:
@@ -1138,7 +1138,7 @@ abstract class Mollom {
    *   - unsure: Integer denoting whether a "unsure" response should be allowed
    *     (1) for the 'spam' check (which should lead to CAPTCHA) or not (0).
    *     Defaults to 1.
-   *   - strictness: A string denoting the strictness of Mollom checks to
+   *   - strictness: A string denoting the strictness of Akismet checks to
    *     perform; one of 'strict', 'normal', or 'relaxed'. Defaults to 'normal'.
    *   - rateLimit: Seconds that must have passed by for the same author to post
    *     again. Defaults to 15.
@@ -1180,8 +1180,8 @@ abstract class Mollom {
    *   - sentimentScore: A floating point value with a precision of 2, ranging
    *     between 0.00 and 1.00; whereas 0.00 denotes bad sentiment and 1.00
    *     good sentiment. Only returned if 'sentiment' was passed for 'checks'.
-   *   - reason: A string denoting the reason for Mollom's classification; e.g.,
-   *     - rateLimit: Author was seen on Mollom-protected sites within the given
+   *   - reason: A string denoting the reason for Akismet's classification; e.g.,
+   *     - rateLimit: Author was seen on Akismet-protected sites within the given
    *       'rateLimit' time-frame.
    *   On failure, the error response code returned by the server.
    */
@@ -1207,7 +1207,7 @@ abstract class Mollom {
   }
 
   /**
-   * Retrieves a CAPTCHA resource from Mollom.
+   * Retrieves a CAPTCHA resource from Akismet.
    *
    * @param array $data
    *   An associative array containing:
@@ -1215,7 +1215,7 @@ abstract class Mollom {
    *     or 'audio'.
    *   and any of the keys:
    *   - contentId: The ID of a content resource to link the CAPTCHA to. Allows
-   *     Mollom to learn when it was unsure.
+   *     Akismet to learn when it was unsure.
    *   - ssl: An integer denoting whether to create a CAPTCHA URL using HTTPS
    *     (1) or not (0). Only available for paid subscriptions.
    *
@@ -1260,8 +1260,8 @@ abstract class Mollom {
    *   On success, an associative array representing the full CAPTCHA record,
    *   additionally containing:
    *   - solved: Whether the provided solution was correct (1) or not (0).
-   *   - reason: A string denoting the reason for Mollom's classification; e.g.,
-   *     - rateLimit: Author was seen on Mollom-protected sites within the given
+   *   - reason: A string denoting the reason for Akismet's classification; e.g.,
+   *     - rateLimit: Author was seen on Akismet-protected sites within the given
    *       'rateLimit' time-frame.
    *   On failure, the error response code returned by the server.
    *   Or FALSE if no 'id' was specified.
@@ -1284,7 +1284,7 @@ abstract class Mollom {
   }
 
   /**
-   * Sends feedback to Mollom.
+   * Sends feedback to Akismet.
    *
    * @param array $data
    *   An associative array containing:
@@ -1299,8 +1299,8 @@ abstract class Mollom {
    *     - flag: feedback from end users flagging content as inappropriate
    *   - source (optional): A string denoting the user-interface source of the feedback.
    *   and at least one of:
-   *   - contentId: A Mollom content ID associated with the content.
-   *   - captchaId: A Mollom CAPTCHA ID associated with the content.
+   *   - contentId: A Akismet content ID associated with the content.
+   *   - captchaId: A Akismet CAPTCHA ID associated with the content.
    *
    * @return bool
    *   TRUE if the feedback was sent successfully, FALSE otherwise.
@@ -1320,11 +1320,11 @@ abstract class Mollom {
    * Retrieves the blacklist for a site.
    *
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to retrieve the
+   *   (optional) The public Akismet API key of the site to retrieve the
    *   blacklist for. Defaults to the public key of the client.
    *
    * @return mixed
-   *   An array containing blacklist entries; see Mollom::getBlacklistEntry()
+   *   An array containing blacklist entries; see Akismet::getBlacklistEntry()
    *   for details. On failure, the error response code returned by the server.
    *
    * @todo List parameters.
@@ -1344,7 +1344,7 @@ abstract class Mollom {
    * @param string $entryId
    *   The ID of the blacklist entry to retrieve.
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to retrieve the
+   *   (optional) The public Akismet API key of the site to retrieve the
    *   blacklist entry for. Defaults to the public key of the client.
    *
    * @return mixed
@@ -1381,15 +1381,15 @@ abstract class Mollom {
    *
    * @param array $data
    *   An associative array describing the blacklist entry to create or update.
-   *   See return value of Mollom::getBlacklistEntry() for details. To update
+   *   See return value of Akismet::getBlacklistEntry() for details. To update
    *   an existing entry, its ID must be specified in 'id'.
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to save the blacklist
+   *   (optional) The public Akismet API key of the site to save the blacklist
    *   entry for. Defaults to the public key of the client.
    *
    * @return mixed
    *   On success, the full blacklist entry record of the saved entry; see
-   *   Mollom::getBlacklistEntry() for details. On failure, the error response
+   *   Akismet::getBlacklistEntry() for details. On failure, the error response
    *   code returned by the server.
    */
   public function saveBlacklistEntry(array $data = array(), $publicKey = NULL) {
@@ -1411,7 +1411,7 @@ abstract class Mollom {
    * @param string $entryId
    *   The ID of the blacklist entry to delete.
    * @param string $publicKey
-   *   (optional) The public Mollom API key of the site to create the blacklist
+   *   (optional) The public Akismet API key of the site to create the blacklist
    *   entry for. Defaults to the public key of the client.
    *
    * @return bool
@@ -1451,21 +1451,21 @@ abstract class Mollom {
 }
 
 /**
- * A catchable Mollom exception.
+ * A catchable Akismet exception.
  *
- * The Mollom class internally uses exceptions to handle HTTP request errors
- * within the Mollom::handleRequest() method. All exceptions thrown in the
- * Mollom class and derived classes should be instances of the MollomException
+ * The Akismet class internally uses exceptions to handle HTTP request errors
+ * within the Akismet::handleRequest() method. All exceptions thrown in the
+ * Akismet class and derived classes should be instances of the AkismetException
  * class if they pertain to errors that can be catched/handled within the class.
- * Other errors should not use the MollomException class and handled
+ * Other errors should not use the AkismetException class and handled
  * differently.
  *
- * No MollomException is supposed to pile up as a user-facing fatal error. All
- * functions that invoke Mollom::handleRequest() have to catch Mollom
+ * No AkismetException is supposed to pile up as a user-facing fatal error. All
+ * functions that invoke Akismet::handleRequest() have to catch Akismet
  * exceptions.
  *
- * @see Mollom::query()
- * @see Mollom::handleRequest()
+ * @see Akismet::query()
+ * @see Akismet::handleRequest()
  *
  * @param $message
  *   The Exception message to throw.
@@ -1474,23 +1474,23 @@ abstract class Mollom {
  * @param $previous
  *   (optional) The previous Exception, if any.
  * @param $instance
- *   The Mollom class instance the Exception is thrown in.
+ *   The Akismet class instance the Exception is thrown in.
  * @param $arguments
  *   (optional) A associative array containing information about a performed
  *   HTTP request that failed:
  *   - request: (string) The HTTP method and URI of the performed request; e.g.,
- *     "GET http://server.mollom.com/v1/foo/bar". In case of GET requests, do
+ *     "GET http://server.akismet.com/v1/foo/bar". In case of GET requests, do
  *     not add query parameters to the URI; pass them in 'data' instead.
  *   - data: (array) An associative array containing HTTP GET/POST/PUT request
  *     query parameters that were sent to the server.
  *   - response: (mixed) The server response, either as string, or the already
  *     parsed response; i.e., an array.
  */
-class MollomException extends Exception {
+class AkismetException extends Exception {
   /**
-   * @var Mollom
+   * @var Akismet
    */
-  protected $mollom;
+  protected $akismet;
 
   /**
    * The severity of this exception.
@@ -1505,7 +1505,7 @@ class MollomException extends Exception {
   /**
    * Overrides Exception::__construct().
    */
-  function __construct($message = '', $code = 0, Exception $previous = NULL, Mollom $mollom, array $request_info = array()) {
+  function __construct($message = '', $code = 0, Exception $previous = NULL, Akismet $akismet, array $request_info = array()) {
     // Fatal error on PHP <5.3 when passing more arguments to Exception.
     if (version_compare(phpversion(), '5.3') >= 0) {
       parent::__construct($message, $code, $previous);
@@ -1513,13 +1513,13 @@ class MollomException extends Exception {
     else {
       parent::__construct($message, $code);
     }
-    $this->mollom = $mollom;
+    $this->akismet = $akismet;
 
-    // Set the error code on the Mollom class.
-    $mollom->lastResponseCode = $code;
+    // Set the error code on the Akismet class.
+    $akismet->lastResponseCode = $code;
 
     // Log the exception.
-    // To aid Mollom technical support, include the IP address of the server we
+    // To aid Akismet technical support, include the IP address of the server we
     // tried to reach in case a request fails.
     // PHP's native gethostbyname() is available on all platforms, but its DNS
     // lookup and caching behavior is undocumented and unclear. User comments on
@@ -1532,26 +1532,26 @@ class MollomException extends Exception {
       'arguments' => array(
         '@code' => $code,
         '%message' => $message,
-        '@server-ip' => gethostbyname($mollom->server),
+        '@server-ip' => gethostbyname($akismet->server),
       ),
     );
     // Add HTTP request information, if available.
     if (!empty($request_info)) {
       $message += $request_info;
     }
-    $mollom->log[] = $message;
+    $akismet->log[] = $message;
   }
 }
 
 /**
- * Mollom network error exception.
+ * Akismet network error exception.
  *
  * Thrown in case a HTTP request results in code <= 0, denoting a low-level
  * communication error.
  */
-class MollomNetworkException extends MollomException {
+class AkismetNetworkException extends AkismetException {
   /**
-   * Overrides MollomException::$severity.
+   * Overrides AkismetException::$severity.
    *
    * The client may be able to recover from this error, so use a warning level.
    */
@@ -1559,37 +1559,37 @@ class MollomNetworkException extends MollomException {
 }
 
 /**
- * Mollom authentication error exception.
+ * Akismet authentication error exception.
  *
  * Thrown in case API keys or other authentication parameters are invalid.
  */
-class MollomAuthenticationException extends MollomException {
+class AkismetAuthenticationException extends AkismetException {
 }
 
 /**
- * Mollom error due to bad client request exception.
+ * Akismet error due to bad client request exception.
  *
  * Thrown in case the local time diverges too much from UTC.
  *
- * @see Mollom::TIME_OFFSET_MAX
- * @see Mollom::REQUEST_ERROR
- * @see Mollom::handleRequest()
+ * @see Akismet::TIME_OFFSET_MAX
+ * @see Akismet::REQUEST_ERROR
+ * @see Akismet::handleRequest()
  */
-class MollomBadRequestException extends MollomException {
+class AkismetBadRequestException extends AkismetException {
 }
 
 /**
- * Mollom server response exception.
+ * Akismet server response exception.
  *
- * Thrown when a request to a Mollom server succeeds, but the response does not
+ * Thrown when a request to a Akismet server succeeds, but the response does not
  * contain an expected element; e.g., a backend configuration or execution
  * error that possibly exists on one server only.
  *
- * @see Mollom::handleRequest()
+ * @see Akismet::handleRequest()
  */
-class MollomResponseException extends MollomException {
+class AkismetResponseException extends AkismetException {
   /**
-   * Overrides MollomException::$severity.
+   * Overrides AkismetException::$severity.
    *
    * Might be a client-side error, but more likely a server-side error. The
    * client may be able to recover from this error.

@@ -2,18 +2,18 @@
 
 /**
  * @file
- * Mollom client class for Drupal.
+ * Akismet client class for Drupal.
  */
 
 /**
- * Drupal Mollom client implementation.
+ * Drupal Akismet client implementation.
  */
-class MollomDrupal extends Mollom {
+class AkismetDrupal extends Akismet {
 
   /**
    * Overrides the connection timeout based on module configuration.
    *
-   * @see Mollom::__construct().
+   * @see Akismet::__construct().
    */
   public function __construct() {
     // Set any configured endpoint that may be different from the default.
@@ -22,23 +22,23 @@ class MollomDrupal extends Mollom {
     if (!empty($configured_server)) {
       $this->server = $configured_server;
     }
-    $this->requestTimeout = variable_get('mollom_connection_timeout', 3);
+    $this->requestTimeout = variable_get('akismet_connection_timeout', 3);
   }
 
   /**
    * Mapping of configuration names to Drupal variables.
    *
-   * @see Mollom::loadConfiguration()
+   * @see Akismet::loadConfiguration()
    */
   public $configuration_map = array(
-    'publicKey' => 'mollom_public_key',
-    'privateKey' => 'mollom_private_key',
-    'expectedLanguages' => 'mollom_languages_expected',
-    'server' => 'mollom_api_endpoint',
+    'publicKey' => 'akismet_public_key',
+    'privateKey' => 'akismet_private_key',
+    'expectedLanguages' => 'akismet_languages_expected',
+    'server' => 'akismet_api_endpoint',
   );
 
   /**
-   * Implements Mollom::loadConfiguration().
+   * Implements Akismet::loadConfiguration().
    */
   public function loadConfiguration($name) {
     $name = $this->configuration_map[$name];
@@ -46,11 +46,11 @@ class MollomDrupal extends Mollom {
   }
 
   /**
-   * Implements Mollom::saveConfiguration().
+   * Implements Akismet::saveConfiguration().
    */
   public function saveConfiguration($name, $value) {
     // Set local variable.
-    if (property_exists('MollomDrupal', $name)) {
+    if (property_exists('AkismetDrupal', $name)) {
       $this->{$name} = $value;
     }
     // Persist in Drupal.
@@ -59,7 +59,7 @@ class MollomDrupal extends Mollom {
   }
 
   /**
-   * Implements Mollom::deleteConfiguration().
+   * Implements Akismet::deleteConfiguration().
    */
   public function deleteConfiguration($name) {
     $name = $this->configuration_map[$name];
@@ -67,7 +67,7 @@ class MollomDrupal extends Mollom {
   }
 
   /**
-   * Implements Mollom::getClientInformation().
+   * Implements Akismet::getClientInformation().
    */
   public function getClientInformation() {
     // Retrieve Drupal distribution and installation profile information.
@@ -77,24 +77,24 @@ class MollomDrupal extends Mollom {
       'version' => VERSION,
     );
 
-    // Retrieve Mollom module information.
-    $mollom_info = system_get_info('module', 'mollom');
-    if (empty($mollom_info['version'])) {
+    // Retrieve Akismet module information.
+    $akismet_info = system_get_info('module', 'akismet');
+    if (empty($akismet_info['version'])) {
       // Manually build a module version string for repository checkouts.
-      $mollom_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-2.x-dev';
+      $akismet_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-2.x-dev';
     }
 
     $data = array(
       'platformName' => $profile_info['distribution_name'],
       'platformVersion' => $profile_info['version'],
-      'clientName' => $mollom_info['name'],
-      'clientVersion' => $mollom_info['version'],
+      'clientName' => $akismet_info['name'],
+      'clientVersion' => $akismet_info['version'],
     );
     return $data;
   }
 
   /**
-   * Overrides Mollom::writeLog().
+   * Overrides Akismet::writeLog().
    */
   function writeLog() {
     foreach ($this->log as $entry) {
@@ -111,8 +111,8 @@ class MollomDrupal extends Mollom {
       // and log messages are only written after that happened. Therefore, we
       // can normalize the severity of all log entries to the overall success or
       // failure of the attempted request.
-      // @see Mollom::query()
-      mollom_log($entry, $this->lastResponseCode === TRUE ? NULL : WATCHDOG_ERROR);
+      // @see Akismet::query()
+      akismet_log($entry, $this->lastResponseCode === TRUE ? NULL : WATCHDOG_ERROR);
     }
 
     // After writing log messages, empty the log.
@@ -120,7 +120,7 @@ class MollomDrupal extends Mollom {
   }
 
   /**
-   * Implements Mollom::request().
+   * Implements Akismet::request().
    */
   protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
     $request = array(
@@ -183,13 +183,13 @@ class MollomDrupal extends Mollom {
 }
 
 /**
- * Drupal Mollom client implementation using testing API servers.
+ * Drupal Akismet client implementation using testing API servers.
  */
-class MollomDrupalTest extends MollomDrupal {
+class AkismetDrupalTest extends AkismetDrupal {
   /**
-   * Overrides Mollom::$server.
+   * Overrides Akismet::$server.
    */
-  public $server = 'dev.mollom.com';
+  public $server = 'dev.akismet.com';
 
   /**
    * Flag indicating whether to verify and automatically create testing API keys upon class instantiation.
@@ -199,13 +199,13 @@ class MollomDrupalTest extends MollomDrupal {
   public $createKeys;
 
   /**
-   * Overrides Mollom::__construct().
+   * Overrides Akismet::__construct().
    *
    * This class accounts for multiple scenarios:
    * - Straight low-level requests against the testing API from a custom script,
    *   caring for API keys on its own.
    * - Whenever the testing mode is enabled (either through the module's
-   *   settings page or by changing the mollom_testing_mode system variable),
+   *   settings page or by changing the akismet_testing_mode system variable),
    *   the client requires valid testing API keys to perform any calls. Testing
    *   API keys are different to production API keys, need to be created first,
    *   and may vanish at any time (whenever the testing API server is
@@ -217,7 +217,7 @@ class MollomDrupalTest extends MollomDrupal {
    *   are handled correctly by the class' error handling. The automatic
    *   creation and recovery of testing API keys would break those assertions,
    *   so said tests can disable the behavior by preemptively setting
-   *   $createKeys or the 'mollom_testing_create_keys' system variable to FALSE,
+   *   $createKeys or the 'akismet_testing_create_keys' system variable to FALSE,
    *   and manually create testing API keys (once).
    */
   function __construct() {
@@ -226,15 +226,15 @@ class MollomDrupalTest extends MollomDrupal {
     // "production" API keys on the local fake server on its own. This special
     // override must only be possible when executing tests.
     // @todo Add global test_info as condition?
-    if (module_exists('mollom_test_server') && !variable_get('mollom_testing_mode', 0)) {
+    if (module_exists('akismet_test_server') && !variable_get('akismet_testing_mode', 0)) {
       // Disable authentication error auto-recovery.
       $this->createKeys = FALSE;
     }
     else {
       // Do not destroy production variables when testing mode is enabled.
-      $this->configuration_map['publicKey'] = 'mollom_test_public_key';
-      $this->configuration_map['privateKey'] = 'mollom_test_private_key';
-      $this->configuration_map['server'] = 'mollom_test_api_endpoint';
+      $this->configuration_map['publicKey'] = 'akismet_test_public_key';
+      $this->configuration_map['privateKey'] = 'akismet_test_private_key';
+      $this->configuration_map['server'] = 'akismet_test_api_endpoint';
     }
 
     // Load and set publicKey and privateKey configuration values.
@@ -242,15 +242,15 @@ class MollomDrupalTest extends MollomDrupal {
 
     // Unless pre-set, determine whether API keys should be auto-created.
     if (!isset($this->createKeys)) {
-      $this->createKeys = (bool) variable_get('mollom_testing_create_keys', TRUE);
+      $this->createKeys = (bool) variable_get('akismet_testing_create_keys', TRUE);
     }
 
     // Testing can require additional time.
-    $this->requestTimeout = variable_get('mollom_connection_timeout', 3) + 10;
+    $this->requestTimeout = variable_get('akismet_connection_timeout', 3) + 10;
   }
 
   /**
-   * Overrides Mollom::handleRequest().
+   * Overrides Akismet::handleRequest().
    *
    * Automatically tries to generate new API keys in case of a 401 or 404 error.
    * Intentionally reacts on 401 or 404 errors only, since any other error code
@@ -261,14 +261,14 @@ class MollomDrupalTest extends MollomDrupal {
     try {
       $response = parent::handleRequest($method, $server, $path, $data, $expected);
     }
-    catch (MollomException $e) {
+    catch (AkismetException $e) {
       $is_auth_error = $e->getCode() == self::AUTH_ERROR || ($e->getCode() == 404 && strpos($path, 'site') === 0);
       $current_public_key = $this->publicKey;
       if ($this->createKeys && $is_auth_error && $this->createKeys()) {
         $this->saveKeys();
         // Avoid to needlessly hit the previous/invalid public key again.
-        // Mollom::handleRequest() will sign the new request correctly.
-        // If it was empty, Mollom::handleRequest() returned an AUTH_ERROR
+        // Akismet::handleRequest() will sign the new request correctly.
+        // If it was empty, Akismet::handleRequest() returned an AUTH_ERROR
         // without issuing a request.
         if ($path == 'site/') {
           $path = 'site/' . $this->publicKey;
@@ -289,7 +289,7 @@ class MollomDrupalTest extends MollomDrupal {
    * Creates new testing API keys.
    *
    * @todo Move site properties into $data argument (Drupal-specific values),
-   *   rename to createTestingSite(), and move into Mollom class?
+   *   rename to createTestingSite(), and move into Akismet class?
    */
   public function createKeys() {
     // Do not attempt to create API keys repeatedly.
@@ -305,7 +305,7 @@ class MollomDrupalTest extends MollomDrupal {
     $this->oAuthStrategy = '';
     $result = $this->createSite(array(
       'url' => $GLOBALS['base_url'],
-      'email' => variable_get('site_mail', 'mollom-drupal-test@example.com'),
+      'email' => variable_get('site_mail', 'akismet-drupal-test@example.com'),
     ));
     $this->oAuthStrategy = $oAuthStrategy;
 
@@ -339,34 +339,34 @@ class MollomDrupalTest extends MollomDrupal {
 }
 
 /**
- * Drupal Mollom client implementation using local dummy/fake REST server.
+ * Drupal Akismet client implementation using local dummy/fake REST server.
  */
-class MollomDrupalTestLocal extends MollomDrupalTest {
+class AkismetDrupalTestLocal extends AkismetDrupalTest {
 
   /**
-   * Overrides MollomDrupalTest::__construct().
+   * Overrides AkismetDrupalTest::__construct().
    */
   function __construct() {
     // Replace server/endpoint with our local fake server.
     list(, $server) = explode('://', $GLOBALS['base_url'], 2);
-    $this->server = $server . '/mollom-test/rest';
+    $this->server = $server . '/akismet-test/rest';
 
     // Do not destroy production server variables when testing mode is enabled.
-    $this->configuration_map['server'] = 'mollom_test_local_api_endpoint';
+    $this->configuration_map['server'] = 'akismet_test_local_api_endpoint';
 
     parent::__construct();
   }
 
   /**
-   * Overrides MollomDrupal::saveKeys().
+   * Overrides AkismetDrupal::saveKeys().
    */
   public function saveKeys() {
     parent::saveKeys();
 
     // Ensure that the site exists on the local fake server. Not required for
     // remote REST testing API, because our testing API keys persist there.
-    // @see mollom_test_server_rest_site()
-    $bin = 'mollom_test_server_site';
+    // @see akismet_test_server_rest_site()
+    $bin = 'akismet_test_server_site';
     $sites = variable_get($bin, array());
     if (!isset($sites[$this->publicKey])) {
       // Apply default values.
@@ -381,7 +381,7 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
   }
 
   /**
-   * Overrides MollomDrupal::request().
+   * Overrides AkismetDrupal::request().
    *
    * Passes-through SimpleTest assertion HTTP headers from child-child-site and
    * triggers errors to make them appear in parent site (where tests are ran).
@@ -409,12 +409,12 @@ class MollomDrupalTestLocal extends MollomDrupalTest {
 }
 
 /**
- * Drupal Mollom client implementation using an invalid server.
+ * Drupal Akismet client implementation using an invalid server.
  */
-class MollomDrupalTestInvalid extends MollomDrupalTest {
+class AkismetDrupalTestInvalid extends AkismetDrupalTest {
 
   /**
-   * Overrides MollomDrupalTest::$createKeys.
+   * Overrides AkismetDrupalTest::$createKeys.
    *
    * Do not attempt to verify API keys against invalid server.
    */
@@ -425,18 +425,18 @@ class MollomDrupalTestInvalid extends MollomDrupalTest {
   private $originalServer;
 
   /**
-   * Overrides MollomDrupalTest::__construct().
+   * Overrides AkismetDrupalTest::__construct().
    */
   function __construct() {
     parent::__construct();
     $this->originalServer = $this->server;
-    $this->configuration_map['server'] = 'mollom_test_invalid_api_endpoint';
+    $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';
     $this->saveConfiguration('server', 'fake-host');
     $this->server = 'fake-host';
   }
 
   /**
-   * Overrides Mollom::query().
+   * Overrides Akismet::query().
    */
   public function query($method, $path, array $data = array(), array $expected = array()) {
     $this->currentAttempt = 0;
@@ -444,18 +444,18 @@ class MollomDrupalTestInvalid extends MollomDrupalTest {
   }
 
   /**
-   * Overrides Mollom::handleRequest().
+   * Overrides Akismet::handleRequest().
    *
-   * Mollom::$server is replaced with an invalid server, so all requests will
-   * result in a network error. However, if the 'mollom_testing_server_failover'
+   * Akismet::$server is replaced with an invalid server, so all requests will
+   * result in a network error. However, if the 'akismet_testing_server_failover'
    * variable is set to TRUE, then the last request attempt will succeed.
    */
   protected function handleRequest($method, $server, $path, $data, $expected = array()) {
     $this->currentAttempt++;
 
-    if (variable_get('mollom_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
+    if (variable_get('akismet_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
       // Prior to PHP 5.3, there is no late static binding, so there is no way
-      // to access the original value of MollomDrupalTest::$server.
+      // to access the original value of AkismetDrupalTest::$server.
       $server = strtr($server, array($this->server => $this->originalServer));
     }
     return parent::handleRequest($method, $server, $path, $data, $expected);

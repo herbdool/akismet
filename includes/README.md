@@ -1,11 +1,11 @@
-A generic Mollom client PHP class.
+A generic Akismet client PHP class.
 
-This base class aims to ease integration of the [Mollom](http://mollom.com) content moderation service into PHP based applications.  The class implements essential code logic expected from Mollom clients and provides many helper functions to communicate with Mollom's [REST API](http://mollom.com/api).
+This base class aims to ease integration of the [Akismet](http://akismet.com) content moderation service into PHP based applications.  The class implements essential code logic expected from Akismet clients and provides many helper functions to communicate with Akismet's [REST API](http://akismet.com/api).
 
 Make sure that your server time is synchronized with the world clocks, and that you do not share your private key with anyone else.
 
 To submit bug reports and feature suggestions, or to track changes:
-  https://github.com/Mollom/MollomPHP/issues
+  https://github.com/Akismet/AkismetPHP/issues
 
 
 ## Requirements
@@ -15,11 +15,11 @@ To submit bug reports and feature suggestions, or to track changes:
 
 ## Usage
 
-* Extend the Mollom class for your platform.  At minimum, you need to implement the following methods:
+* Extend the Akismet class for your platform.  At minimum, you need to implement the following methods:
 
     ```php
     <?php
-    class MollomMyPlatform extends Mollom {
+    class AkismetMyPlatform extends Akismet {
 
       public function loadConfiguration($name) {}
       
@@ -33,17 +33,17 @@ To submit bug reports and feature suggestions, or to track changes:
     }
     ```
 
-    These methods are documented in detail in the Mollom class.
+    These methods are documented in detail in the Akismet class.
 
 * For example, to check a post for spam:
 
     ```php
     <?php
     // When a comment is submitted:
-    $mollom = new MollomMyPlatform();
+    $akismet = new AkismetMyPlatform();
     $comment = $_POST['comment'];
 
-    $result = $mollom->checkContent(array(
+    $result = $akismet->checkContent(array(
       'checks' => array('spam'),
       'postTitle' => $comment['title'],
       'postBody' => $comment['body'],
@@ -73,7 +73,7 @@ To submit bug reports and feature suggestions, or to track changes:
     
       case 'unsure':
         // Require to solve a CAPTCHA to get the post submitted.
-        $captcha = $mollom->createCaptcha(array(
+        $captcha = $akismet->createCaptcha(array(
           'contentId' => $result['id'],
           'type' => 'image',
         ));
@@ -90,7 +90,7 @@ To submit bug reports and feature suggestions, or to track changes:
         break;
     
       default:
-        // If we end up here, Mollom responded with a unknown spamClassification.
+        // If we end up here, Akismet responded with a unknown spamClassification.
         // Normally, this should not happen.
         break;
     }
@@ -99,17 +99,17 @@ To submit bug reports and feature suggestions, or to track changes:
 
 ## Examples
 
-These are examples for implementations of the Mollom class.  As visible in the above code snippet, the class only takes over the basic logic to communicate with Mollom.  Every implementation still needs application-specific code to handle the results provided by Mollom.
+These are examples for implementations of the Akismet class.  As visible in the above code snippet, the class only takes over the basic logic to communicate with Akismet.  Every implementation still needs application-specific code to handle the results provided by Akismet.
 
-* [MollomDrupal](http://drupalcode.org/project/mollom.git/blob/refs/heads/7.x-2.x:/mollom.drupal.inc)
-* [MollomWordpress](https://github.com/netsensei/WP-Mollom/blob/master/includes/mollom.wordpress.inc)
+* [AkismetDrupal](http://drupalcode.org/project/akismet.git/blob/refs/heads/7.x-2.x:/akismet.drupal.inc)
+* [AkismetWordpress](https://github.com/netsensei/WP-Akismet/blob/master/includes/akismet.wordpress.inc)
 
 ## API
 
 This library is considered stable and is actively used, but API changes may not be able to avoid.
 
-* See the [change log](https://github.com/Mollom/MollomPHP/blob/master/CHANGELOG.md) for details.
-* See the [todo list](https://github.com/Mollom/MollomPHP/blob/master/TODO.md) for future refactoring tasks (which will happen in a new major version).
+* See the [change log](https://github.com/Akismet/AkismetPHP/blob/master/CHANGELOG.md) for details.
+* See the [todo list](https://github.com/Akismet/AkismetPHP/blob/master/TODO.md) for future refactoring tasks (which will happen in a new major version).
 
 ## Configuration
 
@@ -131,4 +131,4 @@ GNU General Public License (GPL), Version 2.
 See LICENSE-MIT.txt and LICENSE-GPL.txt.
 
 
-[CMP]: http://mollom.com/moderation
+[CMP]: http://akismet.com/moderation

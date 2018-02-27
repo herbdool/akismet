@@ -2,53 +2,53 @@
 
 /**
  * @file
- * Main Mollom integration module functions.
+ * Main Akismet integration module functions.
  */
 
 /**
  * Form protection mode: No protection.
  */
-define('MOLLOM_MODE_DISABLED', 0);
+define('AKISMET_MODE_DISABLED', 0);
 
 /**
  * Form protection mode: CAPTCHA-only protection.
  */
-define('MOLLOM_MODE_CAPTCHA', 1);
+define('AKISMET_MODE_CAPTCHA', 1);
 
 /**
  * Form protection mode: Text analysis with fallback to CAPTCHA.
  */
-define('MOLLOM_MODE_ANALYSIS', 2);
+define('AKISMET_MODE_ANALYSIS', 2);
 
 /**
  * Server communication failure fallback mode: Block all submissions of protected forms.
  */
-define('MOLLOM_FALLBACK_BLOCK', 0);
+define('AKISMET_FALLBACK_BLOCK', 0);
 
 /**
  * Server communication failure fallback mode: Accept all submissions of protected forms.
  */
-define('MOLLOM_FALLBACK_ACCEPT', 1);
+define('AKISMET_FALLBACK_ACCEPT', 1);
 
 /**
  * Implements hook_hook_info().
  */
-function mollom_hook_info() {
+function akismet_hook_info() {
   $hooks = array(
-    'mollom_form_list',
-    'mollom_form_list_alter',
-    'mollom_form_info',
-    'mollom_form_info_alter',
-    'mollom_form_insert',
-    'mollom_form_update',
-    'mollom_form_delete',
-    'mollom_data_insert',
-    'mollom_data_update',
-    'mollom_data_delete',
-    'mollom_content_alter',
+    'akismet_form_list',
+    'akismet_form_list_alter',
+    'akismet_form_info',
+    'akismet_form_info_alter',
+    'akismet_form_insert',
+    'akismet_form_update',
+    'akismet_form_delete',
+    'akismet_data_insert',
+    'akismet_data_update',
+    'akismet_data_delete',
+    'akismet_content_alter',
   );
   $hooks = array_fill_keys($hooks, array(
-    'group' => 'mollom',
+    'group' => 'akismet',
   ));
   return $hooks;
 }
@@ -56,25 +56,25 @@ function mollom_hook_info() {
 /**
  * Implements hook_help().
  */
-function mollom_help($path, $arg) {
+function akismet_help($path, $arg) {
   $output = '';
 
-  if ($path == 'admin/config/content/mollom') {
+  if ($path == 'admin/config/content/akismet') {
     $output .= '<p>';
-    $output .= t('All listed forms below are protected by Mollom, unless users are able to <a href="@permissions-url">bypass Mollom\'s protection</a>.', array(
-      '@permissions-url' => url('admin/people/permissions', array('fragment' => 'module-mollom')),
+    $output .= t('All listed forms below are protected by Akismet, unless users are able to <a href="@permissions-url">bypass Akismet\'s protection</a>.', array(
+      '@permissions-url' => url('admin/people/permissions', array('fragment' => 'module-akismet')),
     ));
     $output .= ' ';
     $output .= t('You can <a href="@add-form-url">add a form</a> to protect, configure already protected forms, or remove the protection.', array(
-      '@add-form-url' => url('admin/config/content/mollom/add'),
+      '@add-form-url' => url('admin/config/content/akismet/add'),
     ));
     $output .= '</p>';
     return $output;
   }
 
-  if ($path == 'admin/config/content/mollom/blacklist') {
+  if ($path == 'admin/config/content/akismet/blacklist') {
     $output = '<p>';
-    $output .= t('Mollom automatically blocks unwanted content and learns from all participating sites to improve its filters. On top of automatic filtering, you can define a custom blacklist.');
+    $output .= t('Akismet automatically blocks unwanted content and learns from all participating sites to improve its filters. On top of automatic filtering, you can define a custom blacklist.');
     $output .= '</p>';
     $output .= '<p>';
     $output .= t('Use an "exact" match for short, single words that could be contained within another word.');
@@ -82,39 +82,39 @@ function mollom_help($path, $arg) {
     return $output;
   }
 
-  if ($path == 'admin/help#mollom') {
+  if ($path == 'admin/help#akismet') {
     $output = '<p>';
-    $output .= t('Allowing users to react, participate and contribute while still keeping your site\'s content under control can be a huge challenge. <a href="@mollom-website">Mollom</a> is a web service that helps you identify content quality and, most importantly, helps you stop spam. When content moderation becomes easier, you have more time and energy to interact with your site visitors and community. For more information, see <a href="@mollom-works">How Mollom Works</a> and the <a href="@mollom-faq">Mollom FAQ</a>.', array(
-      '@mollom-website' => 'https://www.mollom.com',
-      '@mollom-works' => 'https://www.mollom.com/how-mollom-works',
-      '@mollom-faq' => 'https://www.mollom.com/faq',
+    $output .= t('Allowing users to react, participate and contribute while still keeping your site\'s content under control can be a huge challenge. <a href="@akismet-website">Akismet</a> is a web service that helps you identify content quality and, most importantly, helps you stop spam. When content moderation becomes easier, you have more time and energy to interact with your site visitors and community. For more information, see <a href="@akismet-works">How Akismet Works</a> and the <a href="@akismet-faq">Akismet FAQ</a>.', array(
+      '@akismet-website' => 'https://www.akismet.com',
+      '@akismet-works' => 'https://www.akismet.com/how-akismet-works',
+      '@akismet-faq' => 'https://www.akismet.com/faq',
     ));
     $output .= '</p><p>';
-    $output .= t('Mollom can protect forms your site from unwanted posts. Each form can be set to one of the following options:');
+    $output .= t('Akismet can protect forms your site from unwanted posts. Each form can be set to one of the following options:');
     $output .= '</p><ul>';
     $output .= '<li><p><strong>';
     $output .= t('Text analysis with CAPTCHA backup');
     $output .= '</strong></p><p>';
-    $output .= t('Mollom analyzes the data submitted on the form and presents a CAPTCHA challenge if necessary. This option is strongly recommended, as it takes full advantage of the Mollom service to categorize posts into ham (not spam) and spam.');
+    $output .= t('Akismet analyzes the data submitted on the form and presents a CAPTCHA challenge if necessary. This option is strongly recommended, as it takes full advantage of the Akismet service to categorize posts into ham (not spam) and spam.');
     $output .= '</p></li>';
     $output .= '<li><p><strong>';
     $output .= t('CAPTCHA only');
     $output .= '</strong></p><p>';
-    $output .= t('The form data is not sent to Mollom for analysis, and a remotely-hosted CAPTCHA challenge is always presented. This option is useful when you want to send less data to the Mollom network. Note, however, that forms displayed with a CAPTCHA are never cached, so always displaying a CAPTCHA challenge may reduce performance.');
+    $output .= t('The form data is not sent to Akismet for analysis, and a remotely-hosted CAPTCHA challenge is always presented. This option is useful when you want to send less data to the Akismet network. Note, however, that forms displayed with a CAPTCHA are never cached, so always displaying a CAPTCHA challenge may reduce performance.');
     $output .= '</p></li>';
     $output .= '</ul><p>';
-    $output .= t('Data is processed and stored as explained in the <a href="@mollom-privacy">Mollom Web Service Privacy Policy</a>. It is your responsibility to provide necessary notices and obtain the appropriate consent regarding Mollom\'s use of submitted data.', array(
-      '@mollom-privacy' => 'https://www.mollom.com/web-service-privacy-policy',
-      '@mollom-works' => 'https://www.mollom.com/how-mollom-works',
-      '@mollom-faq' => 'https://www.mollom.com/faq',
+    $output .= t('Data is processed and stored as explained in the <a href="@akismet-privacy">Akismet Web Service Privacy Policy</a>. It is your responsibility to provide necessary notices and obtain the appropriate consent regarding Akismet\'s use of submitted data.', array(
+      '@akismet-privacy' => 'https://www.akismet.com/web-service-privacy-policy',
+      '@akismet-works' => 'https://www.akismet.com/how-akismet-works',
+      '@akismet-faq' => 'https://www.akismet.com/faq',
     ));
     $output .= '</p>';
     $output .= '<p>';
-    $output .= t('If Mollom may not block a spam post for any reason, you can help to train and improve its filters by choosing the appropriate feedback option when deleting the post on your site.');
+    $output .= t('If Akismet may not block a spam post for any reason, you can help to train and improve its filters by choosing the appropriate feedback option when deleting the post on your site.');
     $output .= '</p>';
-    $output .= '<h3>' . t('Mollom blacklist') . '</h3>';
+    $output .= '<h3>' . t('Akismet blacklist') . '</h3>';
     $output .= '<p>';
-    $output .= t("Mollom's filters are shared and trained globally over all participating sites. Due to this, unwanted content might still be accepted on your site, even after sending feedback to Mollom. By using the site-specific blacklist, the filters can be customized to your specific needs. Each entry specifies a reason for why it has been blacklisted, which further helps in improving Mollom's automated filtering.");
+    $output .= t("Akismet's filters are shared and trained globally over all participating sites. Due to this, unwanted content might still be accepted on your site, even after sending feedback to Akismet. By using the site-specific blacklist, the filters can be customized to your specific needs. Each entry specifies a reason for why it has been blacklisted, which further helps in improving Akismet's automated filtering.");
     $output .= '</p>';
     $output .= '<p>';
     $output .= t("All blacklist entries are applied to a context: the entire submitted post, or only links in the post. When limiting the context to links, both the link URL and the link text is taken into account.");
@@ -149,146 +149,146 @@ function mollom_help($path, $arg) {
 /**
  * Implements hook_exit().
  */
-function mollom_exit() {
+function akismet_exit() {
   // Write log messages.
-  mollom_log_write();
+  akismet_log_write();
 }
 
 /**
  * Implements hook_menu().
  */
-function mollom_menu() {
-  $items['mollom/report/%/%'] = array(
-    'title' => 'Report to Mollom',
+function akismet_menu() {
+  $items['akismet/report/%/%'] = array(
+    'title' => 'Report to Akismet',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_report_form', 2, 3),
-    'access callback' => 'mollom_report_access',
+    'page arguments' => array('akismet_report_form', 2, 3),
+    'access callback' => 'akismet_report_access',
     'access arguments' => array(2, 3),
-    'file' => 'mollom.pages.inc',
+    'file' => 'akismet.pages.inc',
     'type' => MENU_CALLBACK,
   );
-  $items['admin/config/content/mollom'] = array(
-    'title' => 'Mollom content moderation',
-    'description' => 'Configure how the Mollom service moderates user-submitted content such as spam and profanity.',
-    'page callback' => 'mollom_admin_form_list',
-    'access arguments' => array('administer mollom'),
-    'file' => 'mollom.admin.inc',
+  $items['admin/config/content/akismet'] = array(
+    'title' => 'Akismet content moderation',
+    'description' => 'Configure how the Akismet service moderates user-submitted content such as spam and profanity.',
+    'page callback' => 'akismet_admin_form_list',
+    'access arguments' => array('administer akismet'),
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/forms'] = array(
+  $items['admin/config/content/akismet/forms'] = array(
     'title' => 'Forms',
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'weight' => -10,
   );
-  $items['admin/config/content/mollom/add'] = array(
+  $items['admin/config/content/akismet/add'] = array(
     'title' => 'Add form',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_configure_form'),
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_configure_form'),
+    'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_ACTION,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/manage/%mollom_form'] = array(
+  $items['admin/config/content/akismet/manage/%akismet_form'] = array(
     'title' => 'Configure',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_configure_form', 5),
-    'access arguments' => array('administer mollom'),
-    'file' => 'mollom.admin.inc',
+    'page arguments' => array('akismet_admin_configure_form', 5),
+    'access arguments' => array('administer akismet'),
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/unprotect/%mollom_form'] = array(
+  $items['admin/config/content/akismet/unprotect/%akismet_form'] = array(
     'title' => 'Unprotect form',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_unprotect_form', 5),
-    'access arguments' => array('administer mollom'),
-    'file' => 'mollom.admin.inc',
+    'page arguments' => array('akismet_admin_unprotect_form', 5),
+    'access arguments' => array('administer akismet'),
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist'] = array(
+  $items['admin/config/content/akismet/blacklist'] = array(
     'title' => 'Blacklists',
     'description' => 'Configure blacklists.',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_form'),
-    'access callback' => '_mollom_access',
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_blacklist_form'),
+    'access callback' => '_akismet_access',
+    'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist/spam'] = array(
+  $items['admin/config/content/akismet/blacklist/spam'] = array(
     'title' => 'Spam',
     'description' => 'Configure spam blacklist entries.',
     'type' => MENU_DEFAULT_LOCAL_TASK,
     'weight' => -10,
   );
-  $items['admin/config/content/mollom/blacklist/profanity'] = array(
+  $items['admin/config/content/akismet/blacklist/profanity'] = array(
     'title' => 'Profanity',
     'description' => 'Configure profanity blacklist entries.',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_form', 5),
-    'access callback' => '_mollom_access',
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_blacklist_form', 5),
+    'access callback' => '_akismet_access',
+    'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist/unwanted'] = array(
+  $items['admin/config/content/akismet/blacklist/unwanted'] = array(
     'title' => 'Unwanted',
     'description' => 'Configure unwanted blacklist entries.',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_form', 5),
-    'access callback' => '_mollom_access',
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_blacklist_form', 5),
+    'access callback' => '_akismet_access',
+    'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/blacklist/delete'] = array(
+  $items['admin/config/content/akismet/blacklist/delete'] = array(
     'title' => 'Delete blacklist entry',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_blacklist_delete'),
-    'access callback' => '_mollom_access',
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_blacklist_delete'),
+    'access callback' => '_akismet_access',
+    'access arguments' => array('administer akismet'),
     'type' => MENU_CALLBACK,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/mollom/settings'] = array(
+  $items['admin/config/content/akismet/settings'] = array(
     'title' => 'Settings',
-    'description' => 'Configure Mollom keys and global settings.',
+    'description' => 'Configure Akismet keys and global settings.',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_admin_settings'),
-    'access arguments' => array('administer mollom'),
+    'page arguments' => array('akismet_admin_settings'),
+    'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'mollom.admin.inc',
+    'file' => 'akismet.admin.inc',
   );
 
-  $items['admin/reports/mollom'] = array(
-    'title' => 'Mollom statistics',
-    'description' => 'Reports and usage statistics for the Mollom module.',
+  $items['admin/reports/akismet'] = array(
+    'title' => 'Akismet statistics',
+    'description' => 'Reports and usage statistics for the Akismet module.',
     'page callback' => 'drupal_get_form',
-    'page arguments' => array('mollom_reports_page'),
-    'access callback' => '_mollom_access',
-    'access arguments' => array('access mollom statistics'),
-    'file' => 'mollom.admin.inc',
+    'page arguments' => array('akismet_reports_page'),
+    'access callback' => '_akismet_access',
+    'access arguments' => array('access akismet statistics'),
+    'file' => 'akismet.admin.inc',
   );
 
   // AJAX callback to request new CAPTCHA.
-  $items['mollom/captcha/%/%'] = array(
-    'page callback' => 'mollom_captcha_js',
+  $items['akismet/captcha/%/%'] = array(
+    'page callback' => 'akismet_captcha_js',
     'page arguments' => array(2, 3),
-    'access callback' => '_mollom_access',
-    'file' => 'mollom.pages.inc',
+    'access callback' => '_akismet_access',
+    'file' => 'akismet.pages.inc',
     'type' => MENU_CALLBACK,
   );
 
-  $items['mollom/fba'] = array(
-    'page callback' => 'mollom_fba_js',
-    'access callback' => '_mollom_access',
+  $items['akismet/fba'] = array(
+    'page callback' => 'akismet_fba_js',
+    'access callback' => '_akismet_access',
     'type' => MENU_CALLBACK,
   );
 
   // Report as inappropriate.
-  $items['mollom/flag/%/%/%/%'] = array(
-    'page callback' => '_mollom_flag',
+  $items['akismet/flag/%/%/%/%'] = array(
+    'page callback' => '_akismet_flag',
     'page arguments' => array(2, 3, 4),
-    'access callback' => '_mollom_flag_access',
+    'access callback' => '_akismet_flag_access',
     'access arguments' => array(3, 4),
     'type' => MENU_CALLBACK,
-    'file' => 'mollom.flag.inc',
+    'file' => 'akismet.flag.inc',
   );
 
   return $items;
@@ -297,8 +297,8 @@ function mollom_menu() {
 /**
  * Implements hook_menu_local_tasks_alter().
  */
-function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
-  if ($router_item['tab_root'] === 'admin/config/content/mollom' && user_access('access mollom statistics')) {
+function akismet_menu_local_tasks_alter(&$data, $router_item, $root_path) {
+  if ($router_item['tab_root'] === 'admin/config/content/akismet' && user_access('access akismet statistics')) {
     // Inject link to 'Statistics' before the last 'Settings' tab.
     // The render array supports the regular #weight, but D7 core does not
     // assign a #weight property for local tasks derived from the menu router.
@@ -309,7 +309,7 @@ function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
       '#theme' => 'menu_local_task',
       '#link' => array(
         'title' => t('Statistics'),
-        'href' => 'admin/reports/mollom',
+        'href' => 'admin/reports/akismet',
         'localized_options' => array('html' => FALSE),
       ),
     )));
@@ -326,40 +326,40 @@ function mollom_menu_local_tasks_alter(&$data, $router_item, $root_path) {
  *   TRUE if the module has been configured and user_access() has been checked,
  *   FALSE otherwise.
  */
-function _mollom_access($permission = FALSE) {
-  $status = _mollom_status();
+function _akismet_access($permission = FALSE) {
+  $status = _akismet_status();
   return $status['isVerified'] && (!$permission || user_access($permission));
 }
 
 /**
- * Menu access callback; Determine access to report to Mollom.
+ * Menu access callback; Determine access to report to Akismet.
  *
- * There are two special $entity types "mollom_content" and "mollom_captcha",
+ * There are two special $entity types "akismet_content" and "akismet_captcha",
  * which do not map to actual entity types in the Drupal system. They are
  * primarily used for mails, messages, and posts, which pertain to forms
- * protected by Mollom that do no result in stored entities after submission.
+ * protected by Akismet that do no result in stored entities after submission.
  * For example, Contact module's contact form. They can be reported by anyone
- * having the link. $id is expected to be either a {mollom}.content_id or
- * {mollom}.captcha_id respectively.
+ * having the link. $id is expected to be either a {akismet}.content_id or
+ * {akismet}.captcha_id respectively.
  *
- * @see mollom_mail_add_report_link()
+ * @see akismet_mail_add_report_link()
  *
  * @param $entity
  *   The entity type of the data to report.
  * @param $id
  *   The entity id of the data to report.
  *
- * @todo Revamp this based on new {mollom}.form_id info.
+ * @todo Revamp this based on new {akismet}.form_id info.
  */
-function mollom_report_access($entity, $id) {
+function akismet_report_access($entity, $id) {
   // The special entity types can be reported by anyone.
-  if ($entity == 'mollom_content' || $entity == 'mollom_captcha') {
+  if ($entity == 'akismet_content' || $entity == 'akismet_captcha') {
     return !empty($id) ? TRUE : FALSE;
   }
   // Retrieve information about all protectable forms. We use the first valid
   // definition, because we assume that multiple form definitions just denote
   // variations of the same entity (e.g. node content types).
-  foreach (mollom_form_list() as $form_id => $info) {
+  foreach (akismet_form_list() as $form_id => $info) {
     if (!isset($info['entity']) || $info['entity'] != $entity) {
       continue;
     }
@@ -386,18 +386,18 @@ function mollom_report_access($entity, $id) {
 /**
  * Implements hook_permission().
  */
-function mollom_permission() {
+function akismet_permission() {
   return array(
-    'administer mollom' => array(
-      'title' => t('Administer Mollom-protected forms and Mollom settings'),
+    'administer akismet' => array(
+      'title' => t('Administer Akismet-protected forms and Akismet settings'),
     ),
-    'bypass mollom protection' => array(
-      'title' => t('Bypass Mollom protection on forms'),
+    'bypass akismet protection' => array(
+      'title' => t('Bypass Akismet protection on forms'),
     ),
-    'access mollom statistics' => array(
-      'title' => t('View Mollom statistics'),
+    'access akismet statistics' => array(
+      'title' => t('View Akismet statistics'),
     ),
-    'report to mollom' => array(
+    'report to akismet' => array(
       'title' => t('Report content as inappropriate'),
     )
   );
@@ -406,24 +406,24 @@ function mollom_permission() {
 /**
  * Implements hook_modules_installed().
  */
-function mollom_modules_installed($modules) {
-  drupal_static_reset('mollom_get_form_info');
+function akismet_modules_installed($modules) {
+  drupal_static_reset('akismet_get_form_info');
 }
 
 /**
  * Implements hook_modules_uninstalled().
  */
-function mollom_modules_uninstalled($modules) {
-  db_delete('mollom_form')->condition('module', $modules)->execute();
+function akismet_modules_uninstalled($modules) {
+  db_delete('akismet_form')->condition('module', $modules)->execute();
 }
 
 /**
  * Implements hook_cron().
  */
-function mollom_cron() {
-  // Mollom session data auto-expires after 6 months.
+function akismet_cron() {
+  // Akismet session data auto-expires after 6 months.
   $expired = REQUEST_TIME - 86400 * 30 * 6;
-  db_delete('mollom')
+  db_delete('akismet')
     ->condition('changed', $expired, '<')
     ->execute();
 }
@@ -442,7 +442,7 @@ function mollom_cron() {
  * @return stdClass
  *   The updated object with converted field names.
  */
-function _mollom_convert_db_names($db_result, $reverse = FALSE) {
+function _akismet_convert_db_names($db_result, $reverse = FALSE) {
   if (!is_object($db_result)) {
     return $db_result;
   }
@@ -473,41 +473,41 @@ function _mollom_convert_db_names($db_result, $reverse = FALSE) {
 
 
 /**
- * Load a Mollom data record by contentId.
+ * Load a Akismet data record by contentId.
  *
  * @param $contentId
  *   The contentId to retrieve data for.
  */
-function mollom_content_load($contentId) {
-  $data = mollom_db_query_range('SELECT * FROM {mollom} WHERE content_id = :contentId', 0, 1, array(':contentId' => $contentId))->fetchObject();
-  return _mollom_convert_db_names($data);
+function akismet_content_load($contentId) {
+  $data = akismet_db_query_range('SELECT * FROM {akismet} WHERE content_id = :contentId', 0, 1, array(':contentId' => $contentId))->fetchObject();
+  return _akismet_convert_db_names($data);
 }
 
 /**
- * Load a Mollom data record from the database.
+ * Load a Akismet data record from the database.
  *
  * @param $entity
  *   The entity type to retrieve data for.
  * @param $id
  *   The entity id to retrieve data for.
  */
-function mollom_data_load($entity, $id) {
-  $data = mollom_db_query_range('SELECT * FROM {mollom} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
-  return _mollom_convert_db_names($data);
+function akismet_data_load($entity, $id) {
+  $data = akismet_db_query_range('SELECT * FROM {akismet} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
+  return _akismet_convert_db_names($data);
 }
 
 /**
- * Loads the Mollom data records from the database for a specific entity type.
+ * Loads the Akismet data records from the database for a specific entity type.
  *
  * @param $entity
  *   The entity type to retrieve data for.
  *
  * @return array
- *   The matching Mollom data as an array keyed by entity id.
+ *   The matching Akismet data as an array keyed by entity id.
  */
-function mollom_entity_type_load($type) {
-  $data = mollom_db_query('SELECT * FROM {mollom} WHERE entity = :entity', array(':entity' => $type))->fetchAllAssoc('id');
-  return _mollom_convert_db_names($data);
+function akismet_entity_type_load($type) {
+  $data = akismet_db_query('SELECT * FROM {akismet} WHERE entity = :entity', array(':entity' => $type))->fetchAllAssoc('id');
+  return _akismet_convert_db_names($data);
 }
 
 /**
@@ -518,7 +518,7 @@ function mollom_entity_type_load($type) {
  *
  * @see http://drupal.org/node/1171866
  */
-function mollom_db_query($query, array $args = array(), array $options = array()) {
+function akismet_db_query($query, array $args = array(), array $options = array()) {
   if (empty($options['target'])) {
     $options['target'] = 'default';
   }
@@ -542,7 +542,7 @@ function mollom_db_query($query, array $args = array(), array $options = array()
  *
  * @see http://drupal.org/node/1171866
  */
-function mollom_db_query_range($query, $from, $count, array $args = array(), array $options = array()) {
+function akismet_db_query_range($query, $from, $count, array $args = array(), array $options = array()) {
   if (empty($options['target'])) {
     $options['target'] = 'default';
   }
@@ -559,29 +559,29 @@ function mollom_db_query_range($query, $from, $count, array $args = array(), arr
 }
 
 /**
- * Save Mollom validation data to the database.
+ * Save Akismet validation data to the database.
  *
  * Based on the specified entity type and id, this function stores the
- * validation results returned by Mollom in the database.
+ * validation results returned by Akismet in the database.
  *
  * The special $entity type "session" may be used for mails and messages, which
- * originate from form submissions protected by Mollom, and can be reported by
- * anyone; $id is expected to be a Mollom session id instead of an entity id
+ * originate from form submissions protected by Akismet, and can be reported by
+ * anyone; $id is expected to be a Akismet session id instead of an entity id
  * then.
  *
  * @param $data
- *   An object containing Mollom session data for the entity, containing at
+ *   An object containing Akismet session data for the entity, containing at
  *   least the following properties:
  *   - entity: The entity type of the data to save.
  *   - id: The entity ID the data belongs to.
  *   - form_id: The form ID the session data belongs to.
- *   - session_id: The session ID returned by Mollom.
+ *   - session_id: The session ID returned by Akismet.
  *   And optionally:
- *   - spam: A spam check result double returned by Mollom.
+ *   - spam: A spam check result double returned by Akismet.
  *   - spamClassification: A final spam classification result string; 'ham',
  *     'spam', or 'unsure'.
  *   - quality: A rating of the content's quality, in the range of 0 and 1.0.
- *   - profanity: A profanity check rating returned by Mollom, in the range of
+ *   - profanity: A profanity check rating returned by Akismet, in the range of
  *     0 and 1.0.
  *   - languages: An array containing language codes the content might be
  *     written in.
@@ -591,7 +591,7 @@ function mollom_db_query_range($query, $from, $count, array $args = array(), arr
  *   - flags_quality: Total count of low quality feedback reports.
  *   - flags_unwanted: Total count of unwanted feedback reports.
  */
-function mollom_data_save($data) {
+function akismet_data_save($data) {
   $data->changed = REQUEST_TIME;
 
   // Convert languages array into a string.
@@ -604,90 +604,90 @@ function mollom_data_save($data) {
   }
 
   // Convert mixed case variable names to lower-case _ separated database names.
-  $converted = _mollom_convert_db_names($data, TRUE);
+  $converted = _akismet_convert_db_names($data, TRUE);
 
-  $update = db_query_range("SELECT 'id' FROM {mollom} WHERE entity = :entity AND id = :id", 0, 1, array(
+  $update = db_query_range("SELECT 'id' FROM {akismet} WHERE entity = :entity AND id = :id", 0, 1, array(
     ':entity' => $data->entity,
     ':id' => $data->id,
   ))->fetchField();
-  drupal_write_record('mollom', $converted, $update ? array('entity', $update) : array());
+  drupal_write_record('akismet', $converted, $update ? array('entity', $update) : array());
 
   // Pass unconverted data to other modules for backwards compatibility.
   if (!$update) {
-    module_invoke_all('mollom_data_insert', $data);
+    module_invoke_all('akismet_data_insert', $data);
   }
   else {
-    module_invoke_all('mollom_data_update', $data);
+    module_invoke_all('akismet_data_update', $data);
   }
 
   return $data;
 }
 
 /**
- * Updates stored Mollom session data to mark a bad post as moderated.
+ * Updates stored Akismet session data to mark a bad post as moderated.
  *
  * @param $entity
  *   The entity type of the moderated post.
  * @param $id
  *   The entity id of the moderated post.
  */
-function mollom_data_moderate($entity, $id) {
-  $data = mollom_data_load($entity, $id);
+function akismet_data_moderate($entity, $id) {
+  $data = akismet_data_load($entity, $id);
   // Nothing to do, if no data exists.
   if (!$data) {
     return;
   }
 
-  // Report the session to Mollom.
-  _mollom_send_feedback($data, 'approve', 'moderate', 'mollom_data_moderate');
+  // Report the session to Akismet.
+  _akismet_send_feedback($data, 'approve', 'moderate', 'akismet_data_moderate');
 
   // Mark the session data as moderated.
   $data->moderate = 0;
-  mollom_data_save($data);
+  akismet_data_save($data);
 }
 
 /**
- * Deletes a Mollom session data record from the database.
+ * Deletes a Akismet session data record from the database.
  *
  * @param $entity
  *   The entity type to delete data for.
  * @param $id
  *   The entity id to delete data for.
  */
-function mollom_data_delete($entity, $id) {
-  return mollom_data_delete_multiple($entity, array($id));
+function akismet_data_delete($entity, $id) {
+  return akismet_data_delete_multiple($entity, array($id));
 }
 
 /**
- * Deletes multiple Mollom session data records from the database.
+ * Deletes multiple Akismet session data records from the database.
  *
  * @param $entity
  *   The entity type to delete data for.
  * @param $ids
  *   An array of entity ids to delete data for.
  */
-function mollom_data_delete_multiple($entity, array $ids) {
+function akismet_data_delete_multiple($entity, array $ids) {
   foreach ($ids as $id) {
-    $data = mollom_data_load($entity, $id);
+    $data = akismet_data_load($entity, $id);
     if ($data) {
-      module_invoke_all('mollom_data_delete', $data);
+      module_invoke_all('akismet_data_delete', $data);
     }
   }
-  return db_delete('mollom')->condition('entity', $entity)->condition('id', $ids)->execute();
+  return db_delete('akismet')->condition('entity', $entity)->condition('id', $ids)->execute();
 }
 
 /**
- * Helper function to add Mollom feedback options to confirmation forms.
+ * Helper function to add Akismet feedback options to confirmation forms.
  */
-function mollom_data_delete_form_alter(&$form, &$form_state) {
+function akismet_data_delete_form_alter(&$form, &$form_state) {
   if (!isset($form['description']['#weight'])) {
     $form['description']['#weight'] = 90;
   }
-  $form['mollom'] = array(
+  $form['akismet'] = array(
     '#tree' => TRUE,
     '#weight' => 80,
   );
-  $form['mollom']['feedback'] = array(
+  $form['akismet']['feedback'] = array(
     '#type' => 'radios',
     '#title' => t('Report as…'),
     '#options' => array(
@@ -698,35 +698,35 @@ function mollom_data_delete_form_alter(&$form, &$form_state) {
       '' => t('Do not report'),
     ),
     '#default_value' => 'spam',
-    '#description' => t('Sending feedback to <a href="@mollom-url">Mollom</a> improves the automated moderation of new submissions.', array('@mollom-url' => 'https://www.mollom.com')),
+    '#description' => t('Sending feedback to <a href="@akismet-url">Akismet</a> improves the automated moderation of new submissions.', array('@akismet-url' => 'https://www.akismet.com')),
   );
 }
 
 /**
- * Send feedback to Mollom and delete Mollom data.
+ * Send feedback to Akismet and delete Akismet data.
  *
- * @see mollom_form_alter()
+ * @see akismet_form_alter()
  */
-function mollom_data_delete_form_submit($form, &$form_state) {
-  $forms = mollom_form_cache();
-  $mollom_form = mollom_form_load($forms['delete'][$form_state['values']['form_id']]);
-  $data = mollom_form_get_values($form_state, $mollom_form['enabled_fields'], $mollom_form['mapping']);
+function akismet_data_delete_form_submit($form, &$form_state) {
+  $forms = akismet_form_cache();
+  $akismet_form = akismet_form_load($forms['delete'][$form_state['values']['form_id']]);
+  $data = akismet_form_get_values($form_state, $akismet_form['enabled_fields'], $akismet_form['mapping']);
 
-  $entity = $mollom_form['entity'];
+  $entity = $akismet_form['entity'];
   $id = $data['postId'];
 
-  if (!empty($form_state['values']['mollom']['feedback'])) {
-    if (mollom_data_report($entity, $id, $form_state['values']['mollom']['feedback'], 'moderate', 'mollom_data_delete_form_submit')) {
+  if (!empty($form_state['values']['akismet']['feedback'])) {
+    if (akismet_data_report($entity, $id, $form_state['values']['akismet']['feedback'], 'moderate', 'akismet_data_delete_form_submit')) {
       drupal_set_message(t('The content was successfully reported as inappropriate.'));
     }
   }
 
-  // Remove Mollom session data.
-  mollom_data_delete($entity, $id);
+  // Remove Akismet session data.
+  akismet_data_delete($entity, $id);
 }
 
 /**
- * Sends feedback for a Mollom session data record.
+ * Sends feedback for a Akismet session data record.
  *
  * @param $entity
  *   The entity type to send feedback for.
@@ -741,12 +741,12 @@ function mollom_data_delete_form_submit($form, &$form_state) {
  *   This is tracked along with the feedback to provide a more complete picture
  *   of how feedback is used and submitted on the site.
  */
-function mollom_data_report($entity, $id, $feedback, $type = 'moderate', $source = 'mollom_data_report') {
-  return mollom_data_report_multiple($entity, array($id), $feedback, $type, $source);
+function akismet_data_report($entity, $id, $feedback, $type = 'moderate', $source = 'akismet_data_report') {
+  return akismet_data_report_multiple($entity, array($id), $feedback, $type, $source);
 }
 
 /**
- * Sends feedback for multiple Mollom session data records.
+ * Sends feedback for multiple Akismet session data records.
  *
  * @param $entity
  *   The entity type to send feedback for.
@@ -761,14 +761,14 @@ function mollom_data_report($entity, $id, $feedback, $type = 'moderate', $source
  *   This is tracked along with the feedback to provide a more complete picture
  *   of how feedback is used and submitted on the site.
  */
-function mollom_data_report_multiple($entity, array $ids, $feedback, $type = 'moderate', $source = 'mollom_data_report_multiple') {
+function akismet_data_report_multiple($entity, array $ids, $feedback, $type = 'moderate', $source = 'akismet_data_report_multiple') {
   $return = TRUE;
   foreach ($ids as $id) {
-    // Load the Mollom session data.
-    $data = mollom_data_load($entity, $id);
+    // Load the Akismet session data.
+    $data = akismet_data_load($entity, $id);
     // Send feedback, if we have session data.
     if (!empty($data->contentId) || !empty($data->captchaId)) {
-      $result = _mollom_send_feedback($data, $feedback, $type, $source);
+      $result = _akismet_send_feedback($data, $feedback, $type, $source);
       $return = $return && $result;
     }
   }
@@ -778,67 +778,67 @@ function mollom_data_report_multiple($entity, array $ids, $feedback, $type = 'mo
 /**
  * Implements hook_form_alter().
  *
- * Protects all configured forms with Mollom.
+ * Protects all configured forms with Akismet.
  *
- * @see mollom_element_info()
- * @see mollom_process_mollom()
- * @see mollom_pre_render_mollom()
+ * @see akismet_element_info()
+ * @see akismet_process_akismet()
+ * @see akismet_pre_render_akismet()
  */
-function mollom_form_alter(&$form, &$form_state, $form_id) {
+function akismet_form_alter(&$form, &$form_state, $form_id) {
   // Skip installation and update forms.
   if (defined('MAINTENANCE_MODE')) {
     return;
   }
   // Retrieve a list of all protected forms once.
-  $forms = mollom_form_cache();
+  $forms = akismet_form_cache();
 
   // Remind of enabled testing mode on all protected forms.
-  if (isset($forms['protected'][$form_id]) || strpos($_GET['q'], 'admin/config/content/mollom') === 0) {
-    _mollom_testing_mode_warning();
+  if (isset($forms['protected'][$form_id]) || strpos($_GET['q'], 'admin/config/content/akismet') === 0) {
+    _akismet_testing_mode_warning();
   }
 
-  // Site administrators don't have their content checked with Mollom.
-  if (!user_access('bypass mollom protection')) {
+  // Site administrators don't have their content checked with Akismet.
+  if (!user_access('bypass akismet protection')) {
     // Retrieve configuration for this form.
-    if (isset($forms['protected'][$form_id]) && ($mollom_form = mollom_form_load($form_id))) {
+    if (isset($forms['protected'][$form_id]) && ($akismet_form = akismet_form_load($form_id))) {
       // Determine whether to bypass validation for the current user.
-      foreach ($mollom_form['bypass access'] as $permission) {
+      foreach ($akismet_form['bypass access'] as $permission) {
         if (user_access($permission)) {
           return;
         }
       }
-      // Verify global Mollom configuration status.
+      // Verify global Akismet configuration status.
       // Only do this if the form is actually protected and if the current user
-      // is not privileged to bypass the Mollom protection. Otherwise, if e.g.
+      // is not privileged to bypass the Akismet protection. Otherwise, if e.g.
       // the Testing API is down, then every hook_form_alter() for every single
       // form on the page would potentially cause a (two) API keys verification
       // requests (in case caches are disabled).
       // If API keys have been configured, then the form has to be processed,
       // regardless of whether API keys could be verified; otherwise, the
       // fallback mode would not be triggered.
-      $status = _mollom_status();
+      $status = _akismet_status();
       if (!$status['isConfigured']) {
         return;
       }
 
-      // Add Mollom form widget.
-      $form['mollom'] = array(
-        '#type' => 'mollom',
-        '#mollom_form' => $mollom_form,
+      // Add Akismet form widget.
+      $form['akismet'] = array(
+        '#type' => 'akismet',
+        '#akismet_form' => $akismet_form,
         // #type 'actions' defaults to 100.
         '#weight' => (isset($form['actions']['#weight']) ? $form['actions']['#weight'] - 1 : 99),
         '#tree' => TRUE,
       );
 
-      // Add Mollom form validation handlers.
+      // Add Akismet form validation handlers.
       // Form-level validation handlers are required, since we need access to
       // all validated and submitted form values. _form_validate() invokes
       // #element_validate handlers while it is recursing into the form.
-      $form['#validate'][] = 'mollom_validate_captcha';
-      $form['#validate'][] = 'mollom_validate_analysis';
-      $form['#validate'][] = 'mollom_validate_post';
+      $form['#validate'][] = 'akismet_validate_captcha';
+      $form['#validate'][] = 'akismet_validate_analysis';
+      $form['#validate'][] = 'akismet_validate_post';
 
-      // Append a submit handler to store Mollom session data. Requires that
+      // Append a submit handler to store Akismet session data. Requires that
       // the primary submit handler has run already, so a potential 'post_id'
       // mapping can be retrieved from $form_state['values'].
       // @todo Core: node_form_submit() uses a button-level submit handler,
@@ -853,35 +853,35 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
       else {
         $form_submit_key = &$form;
       }
-      $form_submit_key['#submit'][] = 'mollom_form_submit';
+      $form_submit_key['#submit'][] = 'akismet_form_submit';
 
       // Add link to privacy policy on forms protected via textual analysis,
       // if enabled.
-      if ($mollom_form['mode'] == MOLLOM_MODE_ANALYSIS && variable_get('mollom_privacy_link', 1)) {
-        $form['mollom']['privacy'] = array(
-          '#prefix' => '<div class="description mollom-privacy">',
+      if ($akismet_form['mode'] == AKISMET_MODE_ANALYSIS && variable_get('akismet_privacy_link', 1)) {
+        $form['akismet']['privacy'] = array(
+          '#prefix' => '<div class="description akismet-privacy">',
           '#suffix' => '</div>',
-          '#markup' => t('By submitting this form, you accept the <a href="@privacy-policy-url" class="mollom-target" rel="nofollow">Mollom privacy policy</a>.', array(
-            '@privacy-policy-url' => 'https://www.mollom.com/web-service-privacy-policy',
+          '#markup' => t('By submitting this form, you accept the <a href="@privacy-policy-url" class="akismet-target" rel="nofollow">Akismet privacy policy</a>.', array(
+            '@privacy-policy-url' => 'https://www.akismet.com/web-service-privacy-policy',
           )),
           '#weight' => 10,
         );
       }
     }
   }
-  // Integrate with delete confirmation forms to send feedback to Mollom.
+  // Integrate with delete confirmation forms to send feedback to Akismet.
   if (isset($forms['delete'][$form_id])) {
-    // Check whether the user is allowed to report to Mollom. Limiting report
+    // Check whether the user is allowed to report to Akismet. Limiting report
     // access is optional for forms integrating via 'delete form' and allowed by
     // default, since we assume that users being able to delete entities are
-    // sufficiently trusted to also report to Mollom.
+    // sufficiently trusted to also report to Akismet.
     $access = TRUE;
     // Retrieve information about the protected form; the form cache maps delete
     // confirmation forms to protected form_ids, and protected form_ids to their
     // originating modules.
-    $mollom_form_id = $forms['delete'][$form_id];
-    $module = $forms['protected'][$mollom_form_id];
-    $form_info = mollom_form_load($mollom_form_id, $module);
+    $akismet_form_id = $forms['delete'][$form_id];
+    $module = $forms['protected'][$akismet_form_id];
+    $form_info = akismet_form_load($akismet_form_id, $module);
 
     // For entities, there is only one delete confirmation form per entity type.
     // But not all of its bundles may be protected. We therefore need to figure
@@ -892,7 +892,7 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
     $has_entity_argument = isset($form_state['build_info']['args'][0]) && is_object($form_state['build_info']['args'][0]);
     if ($is_entity && $has_entity_argument) {
       list(, , $bundle) = entity_extract_ids($form_info['entity'], $form_state['build_info']['args'][0]);
-      $is_protected = db_query_range('SELECT 1 FROM {mollom_form} WHERE entity = :entity AND bundle = :bundle', 0, 1, array(
+      $is_protected = db_query_range('SELECT 1 FROM {akismet_form} WHERE entity = :entity AND bundle = :bundle', 0, 1, array(
         ':entity' => $form_info['entity'],
         ':bundle' => $bundle,
       ))->fetchField();
@@ -911,10 +911,10 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
       }
     }
     if ($access) {
-      mollom_data_delete_form_alter($form, $form_state);
+      akismet_data_delete_form_alter($form, $form_state);
       // Report before deleting. This needs to be handled here, since
-      // mollom_data_delete_form_alter() is re-used for mass-operation forms.
-      array_unshift($form['#submit'], 'mollom_data_delete_form_submit');
+      // akismet_data_delete_form_alter() is re-used for mass-operation forms.
+      array_unshift($form['#submit'], 'akismet_data_delete_form_submit');
     }
   }
 }
@@ -942,13 +942,13 @@ function mollom_form_alter(&$form, &$form_state, $form_id) {
  *     we assume that all 'TYPE_node_form' definitions belong to the same entity
  *     and therefore have an identical 'post_id' mapping.
  */
-function mollom_form_cache($reset = FALSE) {
+function akismet_form_cache($reset = FALSE) {
   $forms = &drupal_static(__FUNCTION__);
 
   if ($reset) {
-    // This catches both 'mollom:form_cache' as well as mollom_form_load()'s
-    // 'mollom:form:*' entries.
-    cache_clear_all('mollom:form', 'cache', TRUE);
+    // This catches both 'akismet:form_cache' as well as akismet_form_load()'s
+    // 'akismet:form:*' entries.
+    cache_clear_all('akismet:form', 'cache', TRUE);
     unset($forms);
     return;
   }
@@ -957,18 +957,18 @@ function mollom_form_cache($reset = FALSE) {
     return $forms;
   }
 
-  if ($cache = cache_get('mollom:form_cache')) {
+  if ($cache = cache_get('akismet:form_cache')) {
     $forms = $cache->data;
     return $forms;
   }
 
-  $forms['protected'] = db_query("SELECT form_id, module FROM {mollom_form}")->fetchAllKeyed();
+  $forms['protected'] = db_query("SELECT form_id, module FROM {akismet_form}")->fetchAllKeyed();
 
   // Build a list of delete confirmation forms of entities integrating with
-  // Mollom, so we are able to alter the delete confirmation form to display
+  // Akismet, so we are able to alter the delete confirmation form to display
   // our feedback options.
   $forms['delete'] = array();
-  foreach (mollom_form_list() as $form_id => $info) {
+  foreach (akismet_form_list() as $form_id => $info) {
     if (!isset($info['delete form']) || !isset($info['entity'])) {
       continue;
     }
@@ -977,24 +977,24 @@ function mollom_form_cache($reset = FALSE) {
     // once. Additionally, we only care for protected forms.
     if (!isset($forms['delete'][$info['delete form']]) && isset($forms['protected'][$form_id])) {
       // A delete confirmation form integration requires a 'post_id' mapping.
-      $form_info = mollom_form_info($form_id, $info['module']);
+      $form_info = akismet_form_info($form_id, $info['module']);
       if (isset($form_info['mapping']['post_id'])) {
         $forms['delete'][$info['delete form']] = $form_id;
       }
     }
   }
-  cache_set('mollom:form_cache', $forms);
+  cache_set('akismet:form_cache', $forms);
 
   return $forms;
 }
 
 /**
- * Returns a list of protectable forms registered via hook_mollom_form_info().
+ * Returns a list of protectable forms registered via hook_akismet_form_info().
  */
-function mollom_form_list() {
+function akismet_form_list() {
   $form_list = array();
-  foreach (module_implements('mollom_form_list') as $module) {
-    $function = $module . '_mollom_form_list';
+  foreach (module_implements('akismet_form_list') as $module) {
+    $function = $module . '_akismet_form_list';
     $module_forms = $function();
     foreach ($module_forms as $form_id => $info) {
       $form_list[$form_id] = $info;
@@ -1006,23 +1006,23 @@ function mollom_form_list() {
   }
 
   // Allow modules to alter the form list.
-  drupal_alter('mollom_form_list', $form_list);
+  drupal_alter('akismet_form_list', $form_list);
 
   return $form_list;
 }
 
 /**
- * Returns information about a form registered via hook_mollom_form_info().
+ * Returns information about a form registered via hook_akismet_form_info().
  *
  * @param $form_id
  *   The form id to return information for.
  * @param $module
  *   The module name $form_id belongs to.
  * @param array $form_list
- *   (optional) The return value of hook_mollom_form_list() of $module, if
- *   already kown. Primarily used by mollom_form_load().
+ *   (optional) The return value of hook_akismet_form_list() of $module, if
+ *   already kown. Primarily used by akismet_form_load().
  */
-function mollom_form_info($form_id, $module, $form_list = NULL) {
+function akismet_form_info($form_id, $module, $form_list = NULL) {
   // Default properties.
   $form_info = array(
     // Base properties.
@@ -1052,30 +1052,30 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
     return $form_info;
   }
 
-  // Fetch the basic form information from hook_mollom_form_list() first.
+  // Fetch the basic form information from hook_akismet_form_list() first.
   // This makes the integrating module (needlessly) rebuild all of its available
   // forms, but the base properties are absolutely required here, so we can
   // apply the default properties below.
   if (!isset($form_list)) {
-    $form_list = module_invoke($module, 'mollom_form_list');
+    $form_list = module_invoke($module, 'akismet_form_list');
   }
   // If it is not listed, then the form has vanished.
   if (!isset($form_list[$form_id])) {
     return $form_info;
   }
-  $module_form_info = module_invoke($module, 'mollom_form_info', $form_id);
+  $module_form_info = module_invoke($module, 'akismet_form_info', $form_id);
   // If no form info exists, then the form has vanished.
   if (!isset($module_form_info)) {
     return $form_info;
   }
   unset($form_info['orphan']);
 
-  // Any information in hook_mollom_form_info() overrides the list info.
+  // Any information in hook_akismet_form_info() overrides the list info.
   $form_info = array_merge($form_info, $form_list[$form_id]);
   $form_info = array_merge($form_info, $module_form_info);
 
   // Allow modules to alter the default form information.
-  drupal_alter('mollom_form_info', $form_info, $form_id);
+  drupal_alter('akismet_form_info', $form_info, $form_id);
 
   return $form_info;
 }
@@ -1083,7 +1083,7 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
 /**
  * Helper function to add field form element mappings for fieldable entities.
  *
- * May be used by hook_mollom_form_info() implementations to automatically
+ * May be used by hook_akismet_form_info() implementations to automatically
  * populate the 'elements' definition with attached text fields on the entity
  * type's bundle.
  *
@@ -1101,7 +1101,7 @@ function mollom_form_info($form_id, $module, $form_list = NULL) {
  *     $form_info['elements']['field_name][und][0][value'] = 'Field label';
  *   @endcode
  */
-function mollom_form_info_add_fields(&$form_info, $entity_type, $bundle) {
+function akismet_form_info_add_fields(&$form_info, $entity_type, $bundle) {
   if (!$entity_info = entity_get_info($entity_type)) {
     return;
   }
@@ -1119,108 +1119,108 @@ function mollom_form_info_add_fields(&$form_info, $entity_type, $bundle) {
 }
 
 /**
- * Creates a bare Mollom form configuration.
+ * Creates a bare Akismet form configuration.
  *
  * @param $form_id
- *   The form ID to create the Mollom form configuration for.
+ *   The form ID to create the Akismet form configuration for.
  */
-function mollom_form_new($form_id) {
-  $mollom_form = array();
-  $form_list = mollom_form_list();
+function akismet_form_new($form_id) {
+  $akismet_form = array();
+  $form_list = akismet_form_list();
   if (isset($form_list[$form_id])) {
-    $mollom_form += $form_list[$form_id];
+    $akismet_form += $form_list[$form_id];
   }
-  $mollom_form += mollom_form_info($form_id, $form_list[$form_id]['module'], $form_list);
+  $akismet_form += akismet_form_info($form_id, $form_list[$form_id]['module'], $form_list);
 
   // Enable all fields for textual analysis by default.
-  $mollom_form['checks'] = array('spam');
-  $mollom_form['enabled_fields'] = array_keys($mollom_form['elements']);
+  $akismet_form['checks'] = array('spam');
+  $akismet_form['enabled_fields'] = array_keys($akismet_form['elements']);
 
-  return $mollom_form;
+  return $akismet_form;
 }
 
 /**
- * Menu argument loader; Loads Mollom configuration and form information for a given form id.
+ * Menu argument loader; Loads Akismet configuration and form information for a given form id.
  */
-function mollom_form_load($form_id) {
-  $cid = 'mollom:form:' . $form_id;
+function akismet_form_load($form_id) {
+  $cid = 'akismet:form:' . $form_id;
   if ($cache = cache_get($cid)) {
     return $cache->data;
   }
   else {
-    $mollom_form = db_query('SELECT * FROM {mollom_form} WHERE form_id = :form_id', array(':form_id' => $form_id))->fetchAssoc();
-    if ($mollom_form) {
-      $mollom_form['checks'] = unserialize($mollom_form['checks']);
-      $mollom_form['enabled_fields'] = unserialize($mollom_form['enabled_fields']);
+    $akismet_form = db_query('SELECT * FROM {akismet_form} WHERE form_id = :form_id', array(':form_id' => $form_id))->fetchAssoc();
+    if ($akismet_form) {
+      $akismet_form['checks'] = unserialize($akismet_form['checks']);
+      $akismet_form['enabled_fields'] = unserialize($akismet_form['enabled_fields']);
 
       // Attach form registry information.
-      $form_info = mollom_form_info($form_id, $mollom_form['module']);
-      $mollom_form += $form_info;
+      $form_info = akismet_form_info($form_id, $akismet_form['module']);
+      $akismet_form += $form_info;
 
       // Override entity type and bundle information with current values from
       // the form registry. These properties were originally not stored in
-      // {mollom_form} and only introduced in 7.x-2.2. The update path is only
+      // {akismet_form} and only introduced in 7.x-2.2. The update path is only
       // able to map entity types/bundles in Drupal core. Any other form
       // protections need to be updated manually. That is the situation in which
-      // $mollom_form has NULL values from the database, but the form registry
+      // $akismet_form has NULL values from the database, but the form registry
       // actually contains the proper values.
       // @todo Remove in later versions.
       // @todo Clean up _list() + _info() hook API design and pass the base
       //   $form_info from _list() into _info(), so that it extends that
       //   definition instead of replacing it.
-      $mollom_form['entity'] = $form_info['entity'];
-      $mollom_form['bundle'] = $form_info['bundle'];
+      $akismet_form['entity'] = $form_info['entity'];
+      $akismet_form['bundle'] = $form_info['bundle'];
 
-      cache_set($cid, $mollom_form);
+      cache_set($cid, $akismet_form);
     }
   }
-  return $mollom_form;
+  return $akismet_form;
 }
 
 /**
- * Saves a Mollom form configuration.
+ * Saves a Akismet form configuration.
  */
-function mollom_form_save(&$mollom_form) {
-  $exists = db_query_range('SELECT 1 FROM {mollom_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $mollom_form['form_id']))->fetchField();
-  $status = drupal_write_record('mollom_form', $mollom_form, ($exists ? 'form_id' : array()));
+function akismet_form_save(&$akismet_form) {
+  $exists = db_query_range('SELECT 1 FROM {akismet_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $akismet_form['form_id']))->fetchField();
+  $status = drupal_write_record('akismet_form', $akismet_form, ($exists ? 'form_id' : array()));
 
   // Allow modules to react on saved form configurations.
   if ($status === SAVED_NEW) {
-    module_invoke_all('mollom_form_insert', $mollom_form);
+    module_invoke_all('akismet_form_insert', $akismet_form);
   }
   else {
-    module_invoke_all('mollom_form_update', $mollom_form);
+    module_invoke_all('akismet_form_update', $akismet_form);
   }
 
-  // Flush cached Mollom forms and the Mollom form mapping cache.
-  mollom_form_cache(TRUE);
+  // Flush cached Akismet forms and the Akismet form mapping cache.
+  akismet_form_cache(TRUE);
 
   return $status;
 }
 
 /**
- * Deletes a Mollom form configuration.
+ * Deletes a Akismet form configuration.
  */
-function mollom_form_delete($form_id) {
-  $mollom_form = mollom_form_load($form_id);
+function akismet_form_delete($form_id) {
+  $akismet_form = akismet_form_load($form_id);
 
-  db_delete('mollom_form')
+  db_delete('akismet_form')
     ->condition('form_id', $form_id)
     ->execute();
 
   // Allow modules to react on saved form configurations.
-  module_invoke_all('mollom_form_delete', $mollom_form);
+  module_invoke_all('akismet_form_delete', $akismet_form);
 
-  // Flush cached Mollom forms and the Mollom form mapping cache.
-  mollom_form_cache(TRUE);
+  // Flush cached Akismet forms and the Akismet form mapping cache.
+  akismet_form_cache(TRUE);
 }
 
 /**
  * Given an array of values and an array of fields, extract data for use.
  *
- * This function generates the data to send for validation to Mollom by walking
+ * This function generates the data to send for validation to Akismet by walking
  * through the submitted form values and
- * - copying element values as specified via 'mapping' in hook_mollom_form_info()
+ * - copying element values as specified via 'mapping' in hook_akismet_form_info()
  *   into the dedicated data properties
  * - collecting and concatenating all fields that have been selected for textual
  *   analysis into the 'post_body' property
@@ -1245,15 +1245,15 @@ function mollom_form_delete($form_id) {
  *   A list of strings representing form elements to extract. Nested fields are
  *   in the form of 'parent][child'.
  * @param $mapping
- *   An associative array of form elements to map to Mollom's dedicated data
- *   properties. See hook_mollom_form_info() for details.
+ *   An associative array of form elements to map to Akismet's dedicated data
+ *   properties. See hook_akismet_form_info() for details.
  *
- * @see hook_mollom_form_info()
+ * @see hook_akismet_form_info()
  */
-function mollom_form_get_values(&$form_state, $fields, $mapping) {
+function akismet_form_get_values(&$form_state, $fields, $mapping) {
   global $user;
 
-  // @todo Unless mollom_form_submit() directly attempts to retrieve 'postId'
+  // @todo Unless akismet_form_submit() directly attempts to retrieve 'postId'
   //   from $form_state['values'], the resulting content properties of this
   //   function cannot be cached.
 
@@ -1306,7 +1306,7 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
       elseif (is_array($value) && !empty($value)) {
         // Ensure we have a flat, indexed array to implode(); form values of
         // field_attach_form() use several subkeys.
-        $value = _mollom_flatten_form_values($value);
+        $value = _akismet_flatten_form_values($value);
         $post_body = array_merge($post_body, $value);
       }
     }
@@ -1330,19 +1330,19 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
     }
     if (isset($value)) {
       if (is_array($value)) {
-        $value = _mollom_flatten_form_values($value);
+        $value = _akismet_flatten_form_values($value);
         $value = implode(' ', $value);
       }
       $mapping[$property] = $value;
     }
   }
 
-  // Mollom's XML-RPC methods only accept data properties that are defined. We
+  // Akismet's XML-RPC methods only accept data properties that are defined. We
   // also do not want to send more than we have to, so we need to build an
   // exact data structure.
   $data = array();
-  // Post id; not sent to Mollom.
-  // @see mollom_form_submit()
+  // Post id; not sent to Akismet.
+  // @see akismet_form_submit()
   if (!empty($mapping['post_id'])) {
     $data['postId'] = $mapping['post_id'];
   }
@@ -1407,7 +1407,7 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
   if (!empty($mapping['author_openid'])) {
     $data['authorOpenid'] = $mapping['author_openid'];
   }
-  elseif (!empty($account) && ($openid = _mollom_get_openid($account))) {
+  elseif (!empty($account) && ($openid = _akismet_get_openid($account))) {
     $data['authorOpenid'] = $openid;
   }
 
@@ -1415,18 +1415,18 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
   $data['authorIp'] = ip_address();
 
   // Honeypot.
-  // For the Mollom backend, it only matters whether 'honeypot' is non-empty.
+  // For the Akismet backend, it only matters whether 'honeypot' is non-empty.
   // The submitted value is only taken over to allow site administrators to
   // see the actual honeypot value in watchdog log entries.
-  if (isset($form_values['mollom']['homepage']) && $form_values['mollom']['homepage'] !== '') {
-    $data['honeypot'] = $form_values['mollom']['homepage'];
+  if (isset($form_values['akismet']['homepage']) && $form_values['akismet']['homepage'] !== '') {
+    $data['honeypot'] = $form_values['akismet']['homepage'];
   }
 
   // Add the contextCreated parameter if a callback exists.
-  if (isset($form_state['mollom']['context created callback']) && function_exists($form_state['mollom']['context created callback'])) {
+  if (isset($form_state['akismet']['context created callback']) && function_exists($form_state['akismet']['context created callback'])) {
     if (!empty($mapping['context_id'])) {
       $context_id_field = $mapping['context_id'];
-      $contextCreated = call_user_func($form_state['mollom']['context created callback'], $mapping['context_id']);
+      $contextCreated = call_user_func($form_state['akismet']['context created callback'], $mapping['context_id']);
       if ($contextCreated !== FALSE) {
         $data['contextCreated'] = $contextCreated;
       }
@@ -1434,12 +1434,12 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
   }
 
   // Ensure that all $data values contain valid UTF-8. Invalid UTF-8 would be
-  // sanitized into an empty string, so the Mollom backend would not receive
+  // sanitized into an empty string, so the Akismet backend would not receive
   // any value.
   $invalid_utf8 = FALSE;
   $invalid_xml = FALSE;
   // Include the CAPTCHA solution user input in the UTF-8 validation.
-  $solution = isset($form_values['mollom']['captcha']) ? array('solution' => $form_values['mollom']['captcha']) : array();
+  $solution = isset($form_values['akismet']['captcha']) ? array('solution' => $form_values['akismet']['captcha']) : array();
   foreach ($data + $solution as $key => $value) {
     // Check for invalid UTF-8 byte sequences first.
     if (!drupal_validate_utf8($value)) {
@@ -1459,7 +1459,7 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
   }
   if ($invalid_utf8 || $invalid_xml) {
     form_set_error('', t('Your submission contains invalid characters and will not be accepted.'));
-    mollom_log(array(
+    akismet_log(array(
       'message' => 'Invalid !type in form values',
       'arguments' => array('!type' => $invalid_utf8 ? 'UTF-8' : 'XML characters'),
       'Data:' => $data,
@@ -1476,7 +1476,7 @@ function mollom_form_get_values(&$form_state, $fields, $mapping) {
  * Takes a potentially nested array and returns all non-empty string values in
  * nested keys as new indexed array.
  */
-function _mollom_flatten_form_values($values) {
+function _akismet_flatten_form_values($values) {
   $flat_values = array();
   foreach ($values as $value) {
     if (is_array($value)) {
@@ -1491,7 +1491,7 @@ function _mollom_flatten_form_values($values) {
         }
       }
       elseif (!empty($value)) {
-        $flat_values = array_merge($flat_values, _mollom_flatten_form_values($value));
+        $flat_values = array_merge($flat_values, _akismet_flatten_form_values($value));
       }
     }
     elseif (is_string($value) && strlen($value)) {
@@ -1504,7 +1504,7 @@ function _mollom_flatten_form_values($values) {
 /**
  * Helper function to return OpenID identifiers associated with a given user account.
  */
-function _mollom_get_openid($account) {
+function _akismet_get_openid($account) {
   if (isset($account->uid)) {
     $ids = db_query('SELECT authname FROM {authmap} WHERE module = :module AND uid = :uid', array(':module' => 'openid', ':uid' => $account->uid))->fetchCol();
 
@@ -1525,7 +1525,7 @@ function _mollom_get_openid($account) {
  * @return array
  *   An array of protected bundles for this entity type.
  */
-function _mollom_get_entity_forms_protected($type, $bundles = array()) {
+function _akismet_get_entity_forms_protected($type, $bundles = array()) {
     // Find out if this entity bundle is protected.
   $protected = &drupal_static(__FUNCTION__,array());
   if (empty($bundles)) {
@@ -1535,7 +1535,7 @@ function _mollom_get_entity_forms_protected($type, $bundles = array()) {
   $protected_bundles = array();
   foreach ($bundles as $bundle) {
     if (!isset($protected[$type][$bundle])) {
-      $protected[$type][$bundle] = db_query_range('SELECT 1 FROM {mollom_form} WHERE entity = :entity AND bundle = :bundle', 0, 1, array(
+      $protected[$type][$bundle] = db_query_range('SELECT 1 FROM {akismet_form} WHERE entity = :entity AND bundle = :bundle', 0, 1, array(
         ':entity' => $type,
         ':bundle' => isset($bundle) ? $bundle : $type,
       ))->fetchField();
@@ -1548,36 +1548,36 @@ function _mollom_get_entity_forms_protected($type, $bundles = array()) {
 }
 
 /**
- * Returns the (last known) status of the configured Mollom API keys.
+ * Returns the (last known) status of the configured Akismet API keys.
  *
  * @param bool $force
  *   (optional) Boolean whether to ignore the cached state and re-check.
  *   Defaults to FALSE.
  * @param bool $update
- *   (optional) Whether to update Mollom with locally stored configuration.
+ *   (optional) Whether to update Akismet with locally stored configuration.
  *   Defaults to FALSE.
  *
  * @return array
  *   An associative array describing the current status of the module:
- *   - isConfigured: Boolean whether Mollom API keys have been configured.
- *   - isVerified: Boolean whether Mollom API keys have been verified.
+ *   - isConfigured: Boolean whether Akismet API keys have been configured.
+ *   - isVerified: Boolean whether Akismet API keys have been verified.
  *   - response: The response error code of the API verification request.
- *   - ...: The full site resource, as returned by the Mollom API.
+ *   - ...: The full site resource, as returned by the Akismet API.
  *
- * @see mollom_init()
- * @see mollom_admin_settings()
- * @see mollom_requirements()
+ * @see akismet_init()
+ * @see akismet_admin_settings()
+ * @see akismet_requirements()
  */
-function _mollom_status($force = FALSE, $update = FALSE) {
+function _akismet_status($force = FALSE, $update = FALSE) {
   $static_cache = &drupal_static(__FUNCTION__, array());
-  $testing_mode = (int) variable_get('mollom_testing_mode', 0);
+  $testing_mode = (int) variable_get('akismet_testing_mode', 0);
   $status = &$static_cache[$testing_mode];
 
   if (!$force && isset($status)) {
     return $status;
   }
   // Check the cached status.
-  $cid = 'mollom_status:' . $testing_mode;
+  $cid = 'akismet_status:' . $testing_mode;
   $expire_valid = 86400; // once per day
   $expire_invalid = 3600; // once per hour
 
@@ -1589,15 +1589,15 @@ function _mollom_status($force = FALSE, $update = FALSE) {
   }
 
   // Re-check configuration status.
-  $mollom = mollom();
+  $akismet = akismet();
   $status = array(
     'isConfigured' => FALSE,
     'isVerified' => FALSE,
     'isTesting' => (bool) $testing_mode,
     'response' => NULL,
-    'publicKey' => $mollom->loadConfiguration('publicKey'),
-    'privateKey' => $mollom->loadConfiguration('privateKey'),
-    'expectedLanguages' => $mollom->loadConfiguration('expectedLanguages'),
+    'publicKey' => $akismet->loadConfiguration('publicKey'),
+    'privateKey' => $akismet->loadConfiguration('privateKey'),
+    'expectedLanguages' => $akismet->loadConfiguration('expectedLanguages'),
   );
   $status['isConfigured'] = (!empty($status['publicKey']) && !empty($status['privateKey']));
   $status['expectedLanguages'] = is_array($status['expectedLanguages']) ? array_values($status['expectedLanguages']) : array();
@@ -1607,20 +1607,20 @@ function _mollom_status($force = FALSE, $update = FALSE) {
     $data = array();
     if ($update) {
       // Ensure to use the most current API keys (might have been changed).
-      $mollom->publicKey = $status['publicKey'];
-      $mollom->privateKey = $status['privateKey'];
+      $akismet->publicKey = $status['publicKey'];
+      $akismet->privateKey = $status['privateKey'];
 
       $data += array(
         'expectedLanguages' => $status['expectedLanguages'],
       );
     }
-    $data += $mollom->getClientInformation();
-    $response = $mollom->updateSite($data);
+    $data += $akismet->getClientInformation();
+    $response = $akismet->updateSite($data);
 
-    if (is_array($response) && $mollom->lastResponseCode === TRUE) {
+    if (is_array($response) && $akismet->lastResponseCode === TRUE) {
       $status = array_merge($status,$response);
       $status['isVerified'] = TRUE;
-      mollom_log(array(
+      akismet_log(array(
         'message' => 'API keys are valid.',
       ), WATCHDOG_INFO);
 
@@ -1628,29 +1628,29 @@ function _mollom_status($force = FALSE, $update = FALSE) {
       if (!$update) {
         $languages_expected = is_array($status['expectedLanguages']) ? array_values($status['expectedLanguages']) : array();
         if ($old_status['expectedLanguages'] != $status['expectedLanguages']) {
-          $mollom->saveConfiguration('expectedLanguages', $status['expectedLanguages']);
+          $akismet->saveConfiguration('expectedLanguages', $status['expectedLanguages']);
         }
       }
     }
-    elseif ($response === Mollom::AUTH_ERROR) {
+    elseif ($response === Akismet::AUTH_ERROR) {
       $status['response'] = $response;
-      mollom_log(array(
+      akismet_log(array(
         'message' => 'Invalid API keys.',
       ), WATCHDOG_ERROR);
     }
-    elseif ($response === Mollom::REQUEST_ERROR) {
+    elseif ($response === Akismet::REQUEST_ERROR) {
       $status['response'] = $response;
-      mollom_log(array(
+      akismet_log(array(
         'message' => 'Invalid client configuration.',
       ), WATCHDOG_ERROR);
     }
     else {
       $status['response'] = $response;
       // A NETWORK_ERROR and other possible responses may be caused by the
-      // client-side environment, but also by Mollom service downtimes. Try to
+      // client-side environment, but also by Akismet service downtimes. Try to
       // recover as soon as possible.
       $expire_invalid = 60 * 5;
-      mollom_log(array(
+      akismet_log(array(
         'message' => 'API keys could not be verified.',
       ), WATCHDOG_ERROR);
     }
@@ -1662,23 +1662,23 @@ function _mollom_status($force = FALSE, $update = FALSE) {
 /**
  * Outputs a warning message about enabled testing mode (once).
  */
-function _mollom_testing_mode_warning() {
+function _akismet_testing_mode_warning() {
   // drupal_set_message() starts a session and disables page caching, which
   // breaks cache-related tests. Thus, tests set the verbose variable to TRUE.
-  $warned = &drupal_static(__FUNCTION__, variable_get('mollom_testing_mode_omit_warning', NULL));
+  $warned = &drupal_static(__FUNCTION__, variable_get('akismet_testing_mode_omit_warning', NULL));
   if (isset($warned)) {
     return;
   }
   $warned = TRUE;
 
-  if (variable_get('mollom_testing_mode', 0) && empty($_POST)) {
+  if (variable_get('akismet_testing_mode', 0) && empty($_POST)) {
     $admin_message = '';
-    if (user_access('administer mollom') && $_GET['q'] != 'admin/config/content/mollom/settings') {
-      $admin_message = t('Visit the <a href="@settings-url">Mollom settings page</a> to disable it.', array(
-        '@settings-url' => url('admin/config/content/mollom/settings'),
+    if (user_access('administer akismet') && $_GET['q'] != 'admin/config/content/akismet/settings') {
+      $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to disable it.', array(
+        '@settings-url' => url('admin/config/content/akismet/settings'),
       ));
     }
-    $message = t('Mollom testing mode is still enabled. !admin-message', array(
+    $message = t('Akismet testing mode is still enabled. !admin-message', array(
       '!admin-message' => $admin_message,
     ));
     drupal_set_message($message, 'warning');
@@ -1686,12 +1686,12 @@ function _mollom_testing_mode_warning() {
 }
 
 /**
- * Helper function to log and optionally output an error message when Mollom servers are unavailable.
+ * Helper function to log and optionally output an error message when Akismet servers are unavailable.
  */
-function _mollom_fallback() {
-  $fallback = variable_get('mollom_fallback', MOLLOM_FALLBACK_BLOCK);
-  if ($fallback == MOLLOM_FALLBACK_BLOCK) {
-    form_set_error('mollom', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
+function _akismet_fallback() {
+  $fallback = variable_get('akismet_fallback', AKISMET_FALLBACK_BLOCK);
+  if ($fallback == AKISMET_FALLBACK_BLOCK) {
+    form_set_error('akismet', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
   }
 }
 
@@ -1701,31 +1701,31 @@ function _mollom_fallback() {
  * @param array $form_state
  *   The current state of the form.
  * @param array $data
- *   The latest Mollom session data pertaining to the form submission attempt.
+ *   The latest Akismet session data pertaining to the form submission attempt.
  *
  * @return string
- *   A message string containing a specially crafted link to Mollom's
+ *   A message string containing a specially crafted link to Akismet's
  *   false-positive report form, supplying these parameters:
  *   - public_key: The public API key of this site.
  *   - url: The current, absolute URL of the form.
  *   At least one or both of:
- *   - contentId: The content ID of the Mollom session.
- *   - captchaId: The CAPTCHA ID of the Mollom session.
+ *   - contentId: The content ID of the Akismet session.
+ *   - captchaId: The CAPTCHA ID of the Akismet session.
  *   If available, to speed up and simplify the false-positive report form:
  *   - authorName: The author name, if supplied.
  *   - authorMail: The author's e-mail address, if supplied.
  */
-function _mollom_format_message_falsepositive($form_state, $data) {
-  $mollom = mollom();
-  $report_url = 'https://www.mollom.com/false-positive';
+function _akismet_format_message_falsepositive($form_state, $data) {
+  $akismet = akismet();
+  $report_url = 'https://www.akismet.com/false-positive';
   $params = array(
-    'public_key' => $mollom->loadConfiguration('publicKey'),
+    'public_key' => $akismet->loadConfiguration('publicKey'),
   );
-  $params += array_intersect_key($form_state['values']['mollom'], array_flip(array('contentId', 'captchaId')));
+  $params += array_intersect_key($form_state['values']['akismet'], array_flip(array('contentId', 'captchaId')));
   $params += array_intersect_key($data, array_flip(array('authorName', 'authorMail')));
   $params['url'] = $GLOBALS['base_root'] . request_uri();
   $report_url .= '?' . drupal_http_build_query($params);
-  return t('If you feel this is in error, please <a href="@report-url" class="mollom-target">report that you are blocked</a>.', array(
+  return t('If you feel this is in error, please <a href="@report-url" class="akismet-target">report that you are blocked</a>.', array(
     '@report-url' => $report_url,
   ));
 }
@@ -1733,13 +1733,13 @@ function _mollom_format_message_falsepositive($form_state, $data) {
 /**
  * Implements hook_element_info().
  */
-function mollom_element_info() {
+function akismet_element_info() {
   return array(
-    'mollom' => array(
+    'akismet' => array(
       '#process' => array(
-        'mollom_process_mollom',
+        'akismet_process_akismet',
       ),
-      '#pre_render' => array('mollom_pre_render_mollom'),
+      '#pre_render' => array('akismet_pre_render_akismet'),
     ),
   );
 }
@@ -1747,32 +1747,32 @@ function mollom_element_info() {
 /**
  * Implements hook_theme().
  */
-function mollom_theme() {
-  $base_path = base_path() . drupal_get_path('module', 'mollom');
+function akismet_theme() {
+  $base_path = base_path() . drupal_get_path('module', 'akismet');
   return array(
-    'mollom_admin_blacklist_form' => array(
+    'akismet_admin_blacklist_form' => array(
       'render element' => 'form',
-      'file' => 'mollom.admin.inc',
+      'file' => 'akismet.admin.inc',
     ),
-    'mollom_captcha_audio' => array(
+    'akismet_captcha_audio' => array(
       'variables' => array(
         'captcha_url' => NULL,
-        'flash_fallback_player' => $base_path . '/mollom-captcha-player.swf',
+        'flash_fallback_player' => $base_path . '/akismet-captcha-player.swf',
       ),
-      'template' => 'mollom-captcha-audio',
+      'template' => 'akismet-captcha-audio',
     ),
-    'mollom_captcha_image' => array(
+    'akismet_captcha_image' => array(
       'variables' => array(
         'captcha_url' => NULL,
         'audio_enabled' => TRUE,
       ),
-      'template' => 'mollom-captcha-image',
+      'template' => 'akismet-captcha-image',
     ),
   );
 }
 
 /**
- * Helper function to determine if "report to Mollom" is available
+ * Helper function to determine if "report to Akismet" is available
  * and activated for a specific entity type.
  *
  * @param $type
@@ -1780,22 +1780,22 @@ function mollom_theme() {
  * @param $bundles
  *   An array of entity bundles to check.
  */
-function mollom_flag_entity_type_access($type, $bundles = array()) {
+function akismet_flag_entity_type_access($type, $bundles = array()) {
   // Check to see if flag as inappropriate is enabled for this entity type.
-  $allowed = variable_get('mollom_fai_entity_types', array('comment' => 1));
+  $allowed = variable_get('akismet_fai_entity_types', array('comment' => 1));
   if (empty($allowed[$type])) {
     return;
   }
 
   // Check to see if there are protected forms for this content type.
-  $protected = _mollom_get_entity_forms_protected($type, $bundles);
+  $protected = _akismet_get_entity_forms_protected($type, $bundles);
   if (empty($protected)) {
     return FALSE;
   }
 
   // Make sure that flag as inappropriate is active for this type.
   // If any form for this entity type is reportable, then show data.
-  $forms = mollom_form_list();
+  $forms = akismet_form_list();
   foreach ($forms as $info) {
     if (!isset($info['entity']) || $info['entity'] != $type) {
       continue;
@@ -1813,16 +1813,16 @@ function mollom_flag_entity_type_access($type, $bundles = array()) {
 /**
  * Implements hook_library().
  */
-function mollom_library() {
+function akismet_library() {
   $libraries['flag'] = array(
     'title' => 'Flag as Inappropriate',
     'version' => '1.0',
     'js' => array(
-      drupal_get_path('module', 'mollom') . '/mollom.flag.js' => array(),
+      drupal_get_path('module', 'akismet') . '/akismet.flag.js' => array(),
     ),
     'css' => array(
-      drupal_get_path('module', 'mollom') . '/mollom.flag.position.css' => array(),
-      drupal_get_path('module', 'mollom') . '/mollom.flag.css' => array(),
+      drupal_get_path('module', 'akismet') . '/akismet.flag.position.css' => array(),
+      drupal_get_path('module', 'akismet') . '/akismet.flag.css' => array(),
     ),
     'dependencies' => array(
       array('system', 'drupal.ajax'),
@@ -1832,7 +1832,7 @@ function mollom_library() {
 }
 
 /**
- * Helper function to determine if "report to mollom" is available for the
+ * Helper function to determine if "report to akismet" is available for the
  * current entity.
  *
  * @param $type
@@ -1842,9 +1842,9 @@ function mollom_library() {
  * @return bool
  *   True if reporting is available and false if not available.
  */
-function _mollom_flag_access($type, $entity) {
-  // make sure that Mollom is active and user is able to report.
-  if (!_mollom_access('report to mollom')) {
+function _akismet_flag_access($type, $entity) {
+  // make sure that Akismet is active and user is able to report.
+  if (!_akismet_access('report to akismet')) {
     return FALSE;
   }
   // Find out if this entity bundle is protected.
@@ -1853,34 +1853,34 @@ function _mollom_flag_access($type, $entity) {
     $entity = $entities[$entity];
   }
   list($id, $rid, $bundle) = entity_extract_ids($type, $entity);
-  return mollom_flag_entity_type_access($type, array($bundle));
+  return akismet_flag_entity_type_access($type, array($bundle));
 }
 
 /**
  * Implements hook_entity_view().
  */
-function mollom_entity_view($entity, $type, $view_mode, $langcode) {
-  module_load_include('inc', 'mollom', 'mollom.flag');
-  mollom_flag_entity_view($entity, $type, $view_mode, $langcode);
+function akismet_entity_view($entity, $type, $view_mode, $langcode) {
+  module_load_include('inc', 'akismet', 'akismet.flag');
+  akismet_flag_entity_view($entity, $type, $view_mode, $langcode);
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_comment_form_alter(&$form, &$form_state, $form_id) {
-  module_load_include('inc', 'mollom', 'mollom.flag');
-  mollom_flag_comment_form_alter($form, $form_state, $form_id);
+function akismet_form_comment_form_alter(&$form, &$form_state, $form_id) {
+  module_load_include('inc', 'akismet', 'akismet.flag');
+  akismet_flag_comment_form_alter($form, $form_state, $form_id);
 }
 
 /**
  * Ajax callback for retrieving a form behavior analysis image.
  *
- * Outputs the JSON encoded tracking information received from Mollom.  This
+ * Outputs the JSON encoded tracking information received from Akismet.  This
  * will include keys of:
  *   - tracking_url: the URL to the tracking image
  *   - tracking_id: an ID to track for the image
  */
-function mollom_fba_js() {
+function akismet_fba_js() {
   // Deny GET requests to make automated security audit tools not complain
   // about a JSON Hijacking possibility.
   // @see http://capec.mitre.org/data/definitions/111.html
@@ -1892,30 +1892,30 @@ function mollom_fba_js() {
     drupal_exit();
   }
 
-  $mollom = mollom();
-  $tracking = $mollom->getTrackingImage();
+  $akismet = akismet();
+  $tracking = $akismet->getTrackingImage();
   drupal_json_output($tracking);
 }
 
 /**
- * #process callback for #type 'mollom'.
+ * #process callback for #type 'akismet'.
  *
- * Mollom supports two fundamentally different protection modes:
- * - For text analysis, the state of a post is essentially tracked by the Mollom
+ * Akismet supports two fundamentally different protection modes:
+ * - For text analysis, the state of a post is essentially tracked by the Akismet
  *   API/backend:
- *   - Every form submission attempt (re-)sends the post data to Mollom, and the
+ *   - Every form submission attempt (re-)sends the post data to Akismet, and the
  *     API ensures to return the correct spamClassification each time.
  *   - The client-side logic fully relies on the returned spamClassification
  *     value to trigger the corresponding actions and does not track the state
  *     of the form submission attempt locally.
- *   - For example, when Mollom is "unsure" and the user solved the CAPTCHA,
+ *   - For example, when Akismet is "unsure" and the user solved the CAPTCHA,
  *     then subsequent Content API responses will return "ham" instead of
  *     "unsure", so the user is not asked to solve more than one CAPTCHA.
  * - For CAPTCHA-only, the solution state of a CAPTCHA has to be tracked locally:
  *   - Unlike text analysis, a CAPTCHA can only be solved or not. Additionally,
- *     a CAPTCHA cannot be solved more than once. The Mollom API only returns
+ *     a CAPTCHA cannot be solved more than once. The Akismet API only returns
  *     (once) whether a CAPTCHA has been solved correctly. A previous state
- *     cannot be queried from Mollom.
+ *     cannot be queried from Akismet.
  *   - State-tracking would not be necessary, if there could not be other form
  *     validation errors preventing the form from submitting directly, as well as
  *     "Preview" buttons that may rebuild the entire form from scratch (if there
@@ -1928,18 +1928,18 @@ function mollom_fba_js() {
  *     force-starting a session for all users that try to submit a CAPTCHA-only
  *     protected form. However, a session would persist across other pages.
  *
- * @see mollom_form_alter()
- * @see mollom_element_info()
- * @see mollom_pre_render_mollom()
+ * @see akismet_form_alter()
+ * @see akismet_element_info()
+ * @see akismet_pre_render_akismet()
  */
-function mollom_process_mollom($element, &$form_state, $complete_form) {
-  // Setup initial Mollom session and form information.
-  $form_state += array('mollom' => array());
-  $form_state['mollom'] += array(
+function akismet_process_akismet($element, &$form_state, $complete_form) {
+  // Setup initial Akismet session and form information.
+  $form_state += array('akismet' => array());
+  $form_state['akismet'] += array(
     // Only TRUE if the form is protected by text analysis.
-    'require_analysis' => $element['#mollom_form']['mode'] == MOLLOM_MODE_ANALYSIS,
+    'require_analysis' => $element['#akismet_form']['mode'] == AKISMET_MODE_ANALYSIS,
     // Becomes TRUE whenever a CAPTCHA needs to be solved.
-    'require_captcha' => $element['#mollom_form']['mode'] == MOLLOM_MODE_CAPTCHA,
+    'require_captcha' => $element['#akismet_form']['mode'] == AKISMET_MODE_CAPTCHA,
     // Becomes TRUE when the CAPTCHA has been solved.
     // Only applies to CAPTCHA-only protected forms. Not necessarily TRUE for
     // text analysis, even if a CAPTCHA has been solved previously.
@@ -1949,31 +1949,31 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     // Becomes TRUE if the form is protected by text analysis and the submitted
     // entity should be unpublished.
     'require_moderation' => FALSE,
-    // Internally used bag for last Mollom API responses.
+    // Internally used bag for last Akismet API responses.
     'response' => array(
     ),
   );
   // Add remaining information about the registered form.
-  $form_state['mollom'] += $element['#mollom_form'];
+  $form_state['akismet'] += $element['#akismet_form'];
 
   // By default, bad form submissions are discarded, unless the form was
   // configured to moderate bad posts. 'discard' may only be FALSE, if there is
   // a valid 'moderation callback'. Otherwise, it must be TRUE.
-  if (empty($form_state['mollom']['moderation callback']) || !function_exists($form_state['mollom']['moderation callback'])) {
-    $form_state['mollom']['discard'] = TRUE;
+  if (empty($form_state['akismet']['moderation callback']) || !function_exists($form_state['akismet']['moderation callback'])) {
+    $form_state['akismet']['discard'] = TRUE;
   }
 
   // Add the JavaScript.
-  $element['#attached']['js'][] = drupal_get_path('module', 'mollom') . '/mollom.js';
+  $element['#attached']['js'][] = drupal_get_path('module', 'akismet') . '/akismet.js';
 
-  // Add the Mollom session data elements.
-  // These elements resemble the {mollom} database schema. The form validation
-  // handlers will pollute them with values returned by Mollom. For entity
-  // forms, the submitted values will appear in a $entity->mollom property,
-  // which in turn represents the Mollom session data record to be stored.
+  // Add the Akismet session data elements.
+  // These elements resemble the {akismet} database schema. The form validation
+  // handlers will pollute them with values returned by Akismet. For entity
+  // forms, the submitted values will appear in a $entity->akismet property,
+  // which in turn represents the Akismet session data record to be stored.
   $element['entity'] = array(
     '#type' => 'value',
-    '#value' => isset($form_state['mollom']['entity']) ? $form_state['mollom']['entity'] : 'mollom_content',
+    '#value' => isset($form_state['akismet']['entity']) ? $form_state['akismet']['entity'] : 'akismet_content',
   );
   $element['id'] = array(
     '#type' => 'value',
@@ -1983,15 +1983,15 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
     '#type' => 'hidden',
     // There is no default value; Form API will always use the value that was
     // submitted last (including rebuild scenarios).
-    '#attributes' => array('class' => 'mollom-content-id'),
+    '#attributes' => array('class' => 'akismet-content-id'),
   );
   $element['captchaId'] = array(
     '#type' => 'hidden',
-    '#attributes' => array('class' => 'mollom-captcha-id'),
+    '#attributes' => array('class' => 'akismet-captcha-id'),
   );
   $element['form_id'] = array(
     '#type' => 'value',
-    '#value' => $form_state['mollom']['form_id'],
+    '#value' => $form_state['akismet']['form_id'],
   );
   $element['moderate'] = array(
     '#type' => 'value',
@@ -2026,23 +2026,23 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
 
   // Disable browser autocompletion, unless testing mode is enabled, in which
   // case autocompletion for 'correct' and 'incorrect' is handy.
-  if (!variable_get('mollom_testing_mode', 0)) {
+  if (!variable_get('akismet_testing_mode', 0)) {
     $element['captcha']['#attributes']['autocomplete'] = 'off';
   }
   // For CAPTCHA-only protected forms:
-  if (!$form_state['mollom']['require_analysis'] && $form_state['mollom']['require_captcha']) {
+  if (!$form_state['akismet']['require_analysis'] && $form_state['akismet']['require_captcha']) {
     // Retrieve and show an initial CAPTCHA.
     if (empty($form_state['process_input'])) {
       // Enable Form API caching, in order to track the state of the CAPTCHA.
       $form_state['cache'] = TRUE;
-      // mollom_form_add_captcha() adds the CAPTCHA and disables page caching.
-      mollom_form_add_captcha($element, $form_state);
+      // akismet_form_add_captcha() adds the CAPTCHA and disables page caching.
+      akismet_form_add_captcha($element, $form_state);
     }
     // If the CAPTCHA was solved in a previous submission already, resemble
-    // mollom_validate_captcha(). This case is only reached in case the form
+    // akismet_validate_captcha(). This case is only reached in case the form
     // 1) is not cached, 2) fully validated, 3) was submitted, and 4) is getting
     // rebuilt; e.g., "Preview" on comment and node forms.
-    if ($form_state['mollom']['passed_captcha']) {
+    if ($form_state['akismet']['passed_captcha']) {
       $element['captcha']['#solved'] = TRUE;
     }
   }
@@ -2073,25 +2073,25 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
   );
 
   // Add the form behavior analysis web tracking beacon field holder if enabled.
-  if (variable_get('mollom_fba_enabled', 0) && $form_state['mollom']['require_analysis']) {
+  if (variable_get('akismet_fba_enabled', 0) && $form_state['akismet']['require_analysis']) {
     $element['fba'] = array(
       '#type' => 'hidden',
     );
   }
 
-  // Make Mollom form and session information available to entirely different
+  // Make Akismet form and session information available to entirely different
   // functions.
-  // @see mollom_mail_alter()
-  $GLOBALS['mollom'] = &$form_state['mollom'];
+  // @see akismet_mail_alter()
+  $GLOBALS['akismet'] = &$form_state['akismet'];
 
   return $element;
 }
 
 /**
- * Adds a Mollom CAPTCHA to a Mollom-protected form.
+ * Adds a Akismet CAPTCHA to a Akismet-protected form.
  *
  * @param $element
- *   The form element structure contained in $form['mollom']. Passed by
+ *   The form element structure contained in $form['akismet']. Passed by
  *   reference.
  * @param $form_state
  *   The current state of the form. Passed by reference.
@@ -2099,28 +2099,28 @@ function mollom_process_mollom($element, &$form_state, $complete_form) {
  * @return bool
  *   TRUE if a CAPTCHA was added, FALSE if not.
  */
-function mollom_form_add_captcha(&$element, &$form_state) {
+function akismet_form_add_captcha(&$element, &$form_state) {
   // Prevent the page cache from storing a form containing a CAPTCHA element.
   drupal_page_is_cacheable(FALSE);
 
-  $captcha = mollom_get_captcha($form_state);
+  $captcha = akismet_get_captcha($form_state);
   // If we get a response, add the image CAPTCHA to the form element.
   if (!empty($captcha)) {
     $element['captcha']['#access'] = TRUE;
     $element['captcha']['#field_prefix'] = $captcha;
     $element['captcha']['#attributes'] = array('title' => t('Enter the characters from the verification above.'));
-    _mollom_attach_captcha_script($element['captcha']);
+    _akismet_attach_captcha_script($element['captcha']);
 
     // Ensure that the latest CAPTCHA ID is output as value.
-    $element['captchaId']['#value'] = $form_state['mollom']['response']['captcha']['id'];
-    $form_state['values']['mollom']['captchaId'] = $form_state['mollom']['response']['captcha']['id'];
+    $element['captchaId']['#value'] = $form_state['akismet']['response']['captcha']['id'];
+    $form_state['values']['akismet']['captchaId'] = $form_state['akismet']['response']['captcha']['id'];
     return TRUE;
   }
   // Otherwise, we have a communication or configuration error.
   else {
     $element['captcha']['#access'] = FALSE;
     // Trigger fallback mode.
-    _mollom_fallback();
+    _akismet_fallback();
     return FALSE;
   }
 }
@@ -2128,66 +2128,66 @@ function mollom_form_add_captcha(&$element, &$form_state) {
 /**
  * Form validation handler to perform textual analysis on submitted form values.
  */
-function mollom_validate_analysis(&$form, &$form_state) {
-  if (!$form_state['mollom']['require_analysis']) {
+function akismet_validate_analysis(&$form, &$form_state) {
+  if (!$form_state['akismet']['require_analysis']) {
     return;
   }
 
   // Perform textual analysis.
-  $all_data = mollom_form_get_values($form_state, $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
+  $all_data = akismet_form_get_values($form_state, $form_state['akismet']['enabled_fields'], $form_state['akismet']['mapping']);
   // Cancel processing upon invalid UTF-8 data.
   if ($all_data === FALSE) {
     return;
   }
   $data = $all_data;
-  // Remove postId property; only used by mollom_form_submit().
+  // Remove postId property; only used by akismet_form_submit().
   if (isset($data['postId'])) {
     unset($data['postId']);
   }
-  if (!empty($form_state['values']['mollom']['contentId'])) {
-    $data['id'] = $form_state['values']['mollom']['contentId'];
+  if (!empty($form_state['values']['akismet']['contentId'])) {
+    $data['id'] = $form_state['values']['akismet']['contentId'];
   }
-  $data['checks'] = $form_state['mollom']['checks'];
-  $data['strictness'] = $form_state['mollom']['strictness'];
-  if (isset($form_state['mollom']['type'])) {
-    $data['type'] = $form_state['mollom']['type'];
+  $data['checks'] = $form_state['akismet']['checks'];
+  $data['strictness'] = $form_state['akismet']['strictness'];
+  if (isset($form_state['akismet']['type'])) {
+    $data['type'] = $form_state['akismet']['type'];
   }
-  if (in_array('spam', $data['checks']) && $form_state['mollom']['unsure'] == 'binary') {
+  if (in_array('spam', $data['checks']) && $form_state['akismet']['unsure'] == 'binary') {
     $data['unsure'] = 0;
   }
   // Only pass the tracking id if this is the first textual evaluation.
-  if (isset($form_state['values']['mollom']['fba']) && empty($data['id'])) {
-    if (empty($form_state['values']['mollom']['fba'])) {
+  if (isset($form_state['values']['akismet']['fba']) && empty($data['id'])) {
+    if (empty($form_state['values']['akismet']['fba'])) {
       $data['trackingImageId'] = -1;
     }
     else {
-      $data['trackingImageId'] = $form_state['values']['mollom']['fba'];
+      $data['trackingImageId'] = $form_state['values']['akismet']['fba'];
     }
   }
   // Allow modules to alter data sent.
-  drupal_alter('mollom_content', $data);
-  $result = mollom()->checkContent($data);
+  drupal_alter('akismet_content', $data);
+  $result = akismet()->checkContent($data);
 
   // Use all available data properties for log messages below.
   $data += $all_data;
 
   // Trigger global fallback behavior if there is a unexpected result.
   if (!is_array($result) || !isset($result['id'])) {
-    return _mollom_fallback();
+    return _akismet_fallback();
   }
 
-  // Store the response returned by Mollom.
-  $form_state['mollom']['response']['content'] = $result;
+  // Store the response returned by Akismet.
+  $form_state['akismet']['response']['content'] = $result;
   // Set form values accordingly. Do not overwrite the entity ID.
   // @todo Rename 'id' to 'entity_id'.
   $result['contentId'] = $result['id'];
   unset($result['id']);
-  $form_state['values']['mollom'] = array_merge($form_state['values']['mollom'], $result);
+  $form_state['values']['akismet'] = array_merge($form_state['values']['akismet'], $result);
 
   // Ensure the latest content ID is output as value.
   // form_set_value() is effectless, as this is not a element-level but a
   // form-level validation handler.
-  $form['mollom']['contentId']['#value'] = $result['contentId'];
+  $form['akismet']['contentId']['#value'] = $result['contentId'];
 
   // Prepare watchdog message teaser text.
   $teaser = '--';
@@ -2200,82 +2200,82 @@ function mollom_validate_analysis(&$form, &$form_state) {
 
   // Handle the profanity check result.
   if (isset($result['profanityScore']) && $result['profanityScore'] >= 0.5) {
-    if ($form_state['mollom']['discard']) {
-      form_set_error('mollom', t('Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.'));
+    if ($form_state['akismet']['discard']) {
+      form_set_error('akismet', t('Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.'));
     }
     else {
-      $form_state['mollom']['require_moderation'] = TRUE;
+      $form_state['akismet']['require_moderation'] = TRUE;
     }
-    mollom_log(array(
+    akismet_log(array(
       'message' => 'Profanity: %teaser',
       'arguments' => array('%teaser' => $teaser),
     ));
   }
 
   // Handle the spam check result.
-  // The Mollom API takes over state tracking for each content ID/session. The
+  // The Akismet API takes over state tracking for each content ID/session. The
   // spamClassification will usually turn into 'ham' after solving a CAPTCHA.
   // It may also change to 'spam', if the user replaced the values with very
   // spammy content. In any case, we always do what we are told to do.
   // Note: The returned spamScore may diverge from the spamClassification.
-  $form_state['mollom']['require_captcha'] = FALSE;
-  $form['mollom']['captcha']['#access'] = FALSE;
+  $form_state['akismet']['require_captcha'] = FALSE;
+  $form['akismet']['captcha']['#access'] = FALSE;
 
   if (isset($result['spamClassification'])) {
     switch ($result['spamClassification']) {
       case 'ham':
-        mollom_log(array(
+        akismet_log(array(
           'message' => 'Ham: %teaser',
           'arguments' => array('%teaser' => $teaser),
         ), WATCHDOG_INFO);
         break;
 
       case 'spam':
-        if ($form_state['mollom']['discard']) {
-          form_set_error('mollom', t('Your submission has triggered the spam filter and will not be accepted.') . ' ' . _mollom_format_message_falsepositive($form_state, $data));
+        if ($form_state['akismet']['discard']) {
+          form_set_error('akismet', t('Your submission has triggered the spam filter and will not be accepted.') . ' ' . _akismet_format_message_falsepositive($form_state, $data));
         }
         else {
-          $form_state['mollom']['require_moderation'] = TRUE;
+          $form_state['akismet']['require_moderation'] = TRUE;
         }
-        mollom_log(array(
+        akismet_log(array(
           'message' => 'Spam: %teaser',
           'arguments' => array('%teaser' => $teaser),
         ));
         break;
 
       case 'unsure':
-        if ($form_state['mollom']['unsure'] == 'moderate') {
-          $form_state['mollom']['require_moderation'] = TRUE;
+        if ($form_state['akismet']['unsure'] == 'moderate') {
+          $form_state['akismet']['require_moderation'] = TRUE;
         }
         else {
-          $form_state['mollom']['require_captcha'] = TRUE;
-          $form_state['mollom']['passed_captcha'] = FALSE;
+          $form_state['akismet']['require_captcha'] = TRUE;
+          $form_state['akismet']['passed_captcha'] = FALSE;
 
           // Retrieve a new CAPTCHA and throw an error.
-          if (mollom_form_add_captcha($form['mollom'], $form_state)) {
-            $form['mollom']['captcha']['#access'] = TRUE;
+          if (akismet_form_add_captcha($form['akismet'], $form_state)) {
+            $form['akismet']['captcha']['#access'] = TRUE;
 
-            if (!empty($form_state['temporary']['mollom']['had_captcha'])) {
-              form_error($form['mollom']['captcha'], t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _mollom_format_message_falsepositive($form_state, $data));
+            if (!empty($form_state['temporary']['akismet']['had_captcha'])) {
+              form_error($form['akismet']['captcha'], t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _akismet_format_message_falsepositive($form_state, $data));
             }
             else {
-              form_error($form['mollom']['captcha'], t('To complete this form, please complete the word verification below.'));
+              form_error($form['akismet']['captcha'], t('To complete this form, please complete the word verification below.'));
             }
           }
         }
-        mollom_log(array(
+        akismet_log(array(
           'message' => 'Unsure: %teaser',
           'arguments' => array('%teaser' => $teaser),
         ), WATCHDOG_INFO);
         break;
 
-      case MOLLOM_ANALYSIS_UNKNOWN:
+      case AKISMET_ANALYSIS_UNKNOWN:
       default:
-        // If we end up here, Mollom responded with a unknown spamClassification.
+        // If we end up here, Akismet responded with a unknown spamClassification.
         // Normally, this should not happen, but if it does, log it. As there
         // could be multiple reasons for this, it is not safe to trigger the
         // fallback mode.
-        mollom_log(array(
+        akismet_log(array(
           'message' => 'Unknown: %teaser',
           'arguments' => array('%teaser' => $teaser),
         ), WATCHDOG_ERROR);
@@ -2288,69 +2288,69 @@ function mollom_validate_analysis(&$form, &$form_state) {
   // submission attempt might have been unsure. If this submit will pass
   // validation, then the rebuilt form will have no indication that it passed
   // analysis and will be auto-populated with values from $form_state['input'].
-  if (!$form_state['mollom']['require_captcha']) {
-    $form_state['input']['mollom']['captchaId'] = '';
+  if (!$form_state['akismet']['require_captcha']) {
+    $form_state['input']['akismet']['captchaId'] = '';
   }
 }
 
 /**
- * Form validation handler for Mollom's CAPTCHA form element.
+ * Form validation handler for Akismet's CAPTCHA form element.
  *
  * Validates whether a CAPTCHA was solved correctly. A form may contain a
  * CAPTCHA, if it was configured to be protected by a CAPTCHA only, or when the
  * text analysis result is "unsure".
  */
-function mollom_validate_captcha(&$form, &$form_state) {
-  if ($form_state['mollom']['require_analysis']) {
+function akismet_validate_captcha(&$form, &$form_state) {
+  if ($form_state['akismet']['require_analysis']) {
     // For text analysis, only validate the CAPTCHA if there is an ID. If the ID
     // is maliciously removed from the form values, text analysis will punish
     // the author's reputation and present a new CAPTCHA to solve.
-    if (empty($form_state['values']['mollom']['captchaId'])) {
+    if (empty($form_state['values']['akismet']['captchaId'])) {
       return;
     }
   }
   else {
     // Otherwise, this form is protected with a CAPTCHA only, unless disabled by
     // another module.
-    if (!$form_state['mollom']['require_captcha']) {
+    if (!$form_state['akismet']['require_captcha']) {
       return;
     }
     // If there is no CAPTCHA ID yet, retrieve one and throw an error.
-    if (empty($form_state['values']['mollom']['captchaId'])) {
-      if (mollom_form_add_captcha($form['mollom'], $form_state)) {
-        form_error($form['mollom']['captcha'], t('To complete this form, please complete the word verification below.'));
+    if (empty($form_state['values']['akismet']['captchaId'])) {
+      if (akismet_form_add_captcha($form['akismet'], $form_state)) {
+        form_error($form['akismet']['captcha'], t('To complete this form, please complete the word verification below.'));
       }
       return;
     }
   }
   // Inform text analysis validation that a CAPTCHA was validated, so the
   // appropriate error message can be output.
-  $form_state['temporary']['mollom']['had_captcha'] = TRUE;
+  $form_state['temporary']['akismet']['had_captcha'] = TRUE;
 
-  // $form_state['mollom']['passed_captcha'] may only ever be set by this
+  // $form_state['akismet']['passed_captcha'] may only ever be set by this
   // validation handler and must not be changed elsewhere.
   // This only becomes TRUE for CAPTCHA-only protected forms, for which the
   // CAPTCHA state is locally tracked in $form_state. For text analysis, the
   // primary 'require_captcha' condition will not be TRUE unless needed in the
   // first place.
-  if ($form_state['mollom']['passed_captcha']) {
-    $form['mollom']['captcha']['#access'] = FALSE;
-    $form['mollom']['captcha']['#solved'] = TRUE;
+  if ($form_state['akismet']['passed_captcha']) {
+    $form['akismet']['captcha']['#access'] = FALSE;
+    $form['akismet']['captcha']['#solved'] = TRUE;
     return;
   }
 
   // Check the CAPTCHA result.
-  // Next to the Mollom session id and captcha result, the Mollom back-end also
+  // Next to the Akismet session id and captcha result, the Akismet back-end also
   // takes into account the author's IP and local user id (if registered). Any
   // other values are ignored.
-  $all_data = mollom_form_get_values($form_state, $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
+  $all_data = akismet_form_get_values($form_state, $form_state['akismet']['enabled_fields'], $form_state['akismet']['mapping']);
   // Cancel processing upon invalid UTF-8 data.
   if ($all_data === FALSE) {
     return;
   }
   $data = array(
-    'id' => $form_state['values']['mollom']['captchaId'],
-    'solution' => $form_state['values']['mollom']['captcha'],
+    'id' => $form_state['values']['akismet']['captchaId'],
+    'solution' => $form_state['values']['akismet']['captcha'],
     'authorIp' => $all_data['authorIp'],
   );
   if (isset($all_data['authorId'])) {
@@ -2362,7 +2362,7 @@ function mollom_validate_captcha(&$form, &$form_state) {
   if (isset($all_data['honeypot'])) {
     $data['honeypot'] = $all_data['honeypot'];
   }
-  $result = mollom()->checkCaptcha($data);
+  $result = akismet()->checkCaptcha($data);
   // Use all available data properties for log messages below.
   $data += $all_data;
 
@@ -2370,56 +2370,56 @@ function mollom_validate_captcha(&$form, &$form_state) {
   if ($result !== FALSE) {
     // Trigger global fallback behavior if there is a unexpected result.
     if (!is_array($result) || !isset($result['id'])) {
-      return _mollom_fallback();
+      return _akismet_fallback();
     }
 
     // Store the response for #submit handlers.
-    $form_state['mollom']['response']['captcha'] = $result;
+    $form_state['akismet']['response']['captcha'] = $result;
     // Set form values accordingly. Do not overwrite the entity ID.
     // @todo Rename 'id' to 'entity_id'.
     $result['captchaId'] = $result['id'];
     unset($result['id']);
-    $form_state['values']['mollom'] = array_merge($form_state['values']['mollom'], $result);
+    $form_state['values']['akismet'] = array_merge($form_state['values']['akismet'], $result);
 
     // Ensure the latest CAPTCHA ID is output as value.
     // form_set_value() is effectless, as this is not a element-level but a
     // form-level validation handler.
-    $form['mollom']['captchaId']['#value'] = $result['captchaId'];
+    $form['akismet']['captchaId']['#value'] = $result['captchaId'];
   }
 
   if (!empty($result['solved'])) {
     // For text analysis, remove the CAPTCHA ID from the output if it was
     // solved, so this validation handler does not run again.
-    if ($form_state['mollom']['require_analysis']) {
-      $form['mollom']['captchaId']['#value'] = '';
+    if ($form_state['akismet']['require_analysis']) {
+      $form['akismet']['captchaId']['#value'] = '';
     }
-    $form_state['mollom']['passed_captcha'] = TRUE;
-    $form['mollom']['captcha']['#access'] = FALSE;
-    $form['mollom']['captcha']['#solved'] = TRUE;
+    $form_state['akismet']['passed_captcha'] = TRUE;
+    $form['akismet']['captcha']['#access'] = FALSE;
+    $form['akismet']['captcha']['#solved'] = TRUE;
 
-    mollom_log(array(
+    akismet_log(array(
       'message' => 'Correct CAPTCHA',
     ), WATCHDOG_INFO);
   }
   else {
-    form_set_error('mollom][captcha', t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _mollom_format_message_falsepositive($form_state, $data));
-    mollom_form_add_captcha($form['mollom'], $form_state);
+    form_set_error('akismet][captcha', t('The word verification was not completed correctly. Please complete this new word verification and try again.') . ' ' . _akismet_format_message_falsepositive($form_state, $data));
+    akismet_form_add_captcha($form['akismet'], $form_state);
     // The textual analysis result doesn't matter if the CAPTCHA failed.
-    $form_state['mollom']['require_analysis'] = '';
+    $form_state['akismet']['require_analysis'] = '';
 
-    mollom_log(array(
+    akismet_log(array(
       'message' => 'Incorrect CAPTCHA',
     ));
   }
 }
 
 /**
- * #pre_render callback for #type 'mollom'.
+ * #pre_render callback for #type 'akismet'.
  *
  * - Hides the CAPTCHA if it is not required or the solution was correct.
  * - Marks the CAPTCHA as required.
  */
-function mollom_pre_render_mollom($element) {
+function akismet_pre_render_akismet($element) {
   // If there is no CAPTCHA ID, then there is no CAPTCHA that can be displayed.
   // If a CAPTCHA was solved, then the widget makes no sense either.
   if (empty($element['captchaId']['#value']) || !empty($element['captcha']['#solved'])) {
@@ -2447,23 +2447,23 @@ function mollom_pre_render_mollom($element) {
 /**
  * Form validation handler to perform post-validation tasks.
  */
-function mollom_validate_post(&$form, &$form_state) {
+function akismet_validate_post(&$form, &$form_state) {
   // Retain a post instead of discarding it. If 'discard' is FALSE, then the
   // 'moderation callback' is responsible for altering $form_state in a way that
   // the post ends up in a moderation queue. Most callbacks will only want to
   // set or change a value in $form_state.
-  if ($form_state['mollom']['require_moderation']) {
-    $form_state['values']['mollom']['moderate'] = 1;
+  if ($form_state['akismet']['require_moderation']) {
+    $form_state['values']['akismet']['moderate'] = 1;
 
-    $function = $form_state['mollom']['moderation callback'];
+    $function = $form_state['akismet']['moderation callback'];
     $function($form, $form_state);
   }
 }
 
 /**
- * Form submit handler to flush Mollom session and form information from cache.
+ * Form submit handler to flush Akismet session and form information from cache.
  *
- * @todo Check whether this is still needed with mollom_entity_insert(). For
+ * @todo Check whether this is still needed with akismet_entity_insert(). For
  *   entity forms, this approach never really worked, since:
  *   - The primary submit handler fails to set the new ID of a newly stored
  *     entity in the submitted form values (which has been standardized in core,
@@ -2474,10 +2474,10 @@ function mollom_validate_post(&$form, &$form_state) {
  *     from submitted form values.
  *   - This submit handler is invoked too late; the primary submit handler might
  *     send out e-mails directly after saving the entity (e.g.,
- *     user_register_form_submit()), so mollom_mail_alter() is invoked before
- *     Mollom session data has been saved.
+ *     user_register_form_submit()), so akismet_mail_alter() is invoked before
+ *     Akismet session data has been saved.
  */
-function mollom_form_submit($form, &$form_state) {
+function akismet_form_submit($form, &$form_state) {
   // Some modules are implementing multi-step forms without separate form
   // submit handlers. In case we reach here and the form will be rebuilt, we
   // need to defer our submit handling until final submission.
@@ -2485,43 +2485,43 @@ function mollom_form_submit($form, &$form_state) {
     return;
   }
   // If an 'entity' and a 'post_id' mapping was provided via
-  // hook_mollom_form_info(), try to automatically store Mollom session data.
-  if (!empty($form_state['mollom']['entity']) && isset($form_state['mollom']['mapping']['post_id'])) {
+  // hook_akismet_form_info(), try to automatically store Akismet session data.
+  if (!empty($form_state['akismet']['entity']) && isset($form_state['akismet']['mapping']['post_id'])) {
     // For new entities, the entity's form submit handler will have added the
     // new entity id value into $form_state['values'], so we need to rebuild the
     // data mapping. We do not care for the actual fields, only for the value of
     // the mapped postId.
     // @todo Directly extract 'postId' from submitted form values.
-    $values = mollom_form_get_values($form_state, $form_state['mollom']['enabled_fields'], $form_state['mollom']['mapping']);
+    $values = akismet_form_get_values($form_state, $form_state['akismet']['enabled_fields'], $form_state['akismet']['mapping']);
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($values['postId'])) {
-      // Save the Mollom session data.
-      $data = (object) $form_state['values']['mollom'];
+      // Save the Akismet session data.
+      $data = (object) $form_state['values']['akismet'];
       $data->id = $values['postId'];
       // Set the moderation flag for forms accepting bad posts.
-      $data->moderate = $form_state['mollom']['require_moderation'];
-      $form_state['mollom']['data'] = mollom_data_save($data);
+      $data->moderate = $form_state['akismet']['require_moderation'];
+      $form_state['akismet']['data'] = akismet_data_save($data);
     }
   }
 }
 
 /**
- * Instantiates a new Mollom client.
+ * Instantiates a new Akismet client.
  *
  * @param $class
- *   (optional) The name of a Mollom client implementation class to instantiate.
- *   Overrides the 'mollom_class' configuration variable. Debug use only.
+ *   (optional) The name of a Akismet client implementation class to instantiate.
+ *   Overrides the 'akismet_class' configuration variable. Debug use only.
  * @param $force
  *   (optional) If true, then a new class is always instantiated.
  */
-function mollom($class = NULL, $force = FALSE) {
+function akismet($class = NULL, $force = FALSE) {
   $instances = &drupal_static(__FUNCTION__, array());
   if (!isset($class)) {
-    if (variable_get('mollom_testing_mode', 0)) {
-      $class = 'MollomDrupalTest';
+    if (variable_get('akismet_testing_mode', 0)) {
+      $class = 'AkismetDrupalTest';
     }
     else {
-      $class = variable_get('mollom_class', 'MollomDrupal');
+      $class = variable_get('akismet_class', 'AkismetDrupal');
     }
   }
   // If there is no instance yet or if it is not of the desired class, create a
@@ -2535,14 +2535,14 @@ function mollom($class = NULL, $force = FALSE) {
 /**
  * Adds a log entry to a global log (per-request).
  *
- * The Mollom client may perform multiple requests, and the client is able to
+ * The Akismet client may perform multiple requests, and the client is able to
  * recover from certain errors. The details of each request are important for
  * support and debugging, but individual log messages for each request are too
  * much and would confuse users, especially when (false-)errors appear in
  * between.
  *
- * Therefore, the Mollom module collects all messages generated by the module
- * integration code as well as by the Mollom client class within a single
+ * Therefore, the Akismet module collects all messages generated by the module
+ * integration code as well as by the Akismet client class within a single
  * request, and only logs a single message when the request ends.
  *
  * This collection expects that at least one entry is logged that contains the
@@ -2565,13 +2565,13 @@ function mollom($class = NULL, $force = FALSE) {
  *   An associative array containing the log:
  *   - message: The primary log message.
  *   - arguments: An array of placeholder token replacement values for
- *     _mollom_format_string().
+ *     _akismet_format_string().
  *   - severity: The severity of the primary log message.
  *   - entries: A list of all $entry items that have been passed in.
  *
- * @see mollom_exit()
+ * @see akismet_exit()
  */
-function mollom_log(array $entry = NULL, $severity = NULL, $reset = FALSE) {
+function akismet_log(array $entry = NULL, $severity = NULL, $reset = FALSE) {
   // Start with debug severity level.
   $log = &drupal_static(__FUNCTION__, array());
 
@@ -2599,7 +2599,7 @@ function mollom_log(array $entry = NULL, $severity = NULL, $reset = FALSE) {
     $log['severity'] = WATCHDOG_DEBUG;
   }
   // Update severity, if the entry is more severe than existing.
-  // Fail-over handling for requests is encapsulated in the Mollom class, which
+  // Fail-over handling for requests is encapsulated in the Akismet class, which
   // only passes the final severity already.
   if (isset($severity) && $severity < $log['severity']) {
     $log['severity'] = $severity;
@@ -2611,28 +2611,28 @@ function mollom_log(array $entry = NULL, $severity = NULL, $reset = FALSE) {
 }
 
 /**
- * Logs a single system message potentially containing multiple Mollom log entries.
+ * Logs a single system message potentially containing multiple Akismet log entries.
  *
- * @see mollom_log()
- * @see _mollom_format_log()
+ * @see akismet_log()
+ * @see _akismet_format_log()
  * @see watchdog()
  */
-function mollom_log_write() {
+function akismet_log_write() {
   // Retrieve the log and reset it.
-  $log = mollom_log(NULL, NULL, TRUE);
+  $log = akismet_log(NULL, NULL, TRUE);
   if (empty($log)) {
     return;
   }
   // Only log if severity if it meets configured minimum severity, or if testing
   // mode is enabled.
-  if (variable_get('mollom_testing_mode', 0) || $log['severity'] <= variable_get('mollom_log_minimum_severity', WATCHDOG_WARNING)) {
-    list($message, $arguments) = _mollom_format_log($log);
-    watchdog('mollom', $message, $arguments, $log['severity']);
+  if (variable_get('akismet_testing_mode', 0) || $log['severity'] <= variable_get('akismet_log_minimum_severity', WATCHDOG_WARNING)) {
+    list($message, $arguments) = _akismet_format_log($log);
+    watchdog('akismet', $message, $arguments, $log['severity']);
   }
 }
 
 /**
- * Log a Mollom system message.
+ * Log a Akismet system message.
  *
  * @param $log
  *   @todo A list of message parts. Each item is an associative array whose keys are
@@ -2642,7 +2642,7 @@ function mollom_log_write() {
  * In essence, this is a poor man's YAML implementation (give or take some
  * details, but note especially the indentation for array sub-elements).
  */
-function _mollom_format_log(array $log) {
+function _akismet_format_log(array $log) {
   $message = isset($log['message']) ? $log['message'] : '';
   $arguments = isset($log['arguments']) ? $log['arguments'] : array();
 
@@ -2661,7 +2661,7 @@ function _mollom_format_log(array $log) {
     if (isset($entry['message'])) {
       $message .= '<p>';
       if (!empty($entry['arguments'])) {
-        $message .= _mollom_format_string($entry['message'], $entry['arguments']);
+        $message .= _akismet_format_string($entry['message'], $entry['arguments']);
         unset($entry['arguments']);
       }
       else {
@@ -2779,7 +2779,7 @@ function _mollom_format_log(array $log) {
  * @see t()
  * @ingroup sanitization
  */
-function _mollom_format_string($string, array $args = array()) {
+function _akismet_format_string($string, array $args = array()) {
   // Transform arguments before inserting them.
   foreach ($args as $key => $value) {
     switch ($key[0]) {
@@ -2802,10 +2802,10 @@ function _mollom_format_string($string, array $args = array()) {
 }
 
 /**
- * Send feedback to Mollom.
+ * Send feedback to Akismet.
  *
  * @param $data
- *   A Mollom data record containing one or both of:
+ *   A Akismet data record containing one or both of:
  *   - contentId: The content ID to send feedback for.
  *   - captchaId: The CAPTCHA ID to send feedback for.
  * @param $reason
@@ -2818,7 +2818,7 @@ function _mollom_format_string($string, array $args = array()) {
  *   This is tracked along with the feedback to provide a more complete picture
  *   of how feedback is used and submitted on the site.
  */
-function _mollom_send_feedback($data, $reason = 'spam', $type = 'moderate', $source = NULL) {
+function _akismet_send_feedback($data, $reason = 'spam', $type = 'moderate', $source = NULL) {
   global $user;
   $params = array();
   if (!empty($data->captchaId)) {
@@ -2847,15 +2847,15 @@ function _mollom_send_feedback($data, $reason = 'spam', $type = 'moderate', $sou
   if ($user->uid > 0) {
     $params['authorId'] = $user->uid;
     // Passing the user rather than account object because only the uid property
-    // is used by _mollom_get_openid.
-    $authorOpenId = _mollom_get_openid($user);
+    // is used by _akismet_get_openid.
+    $authorOpenId = _akismet_get_openid($user);
     if (!empty($authorOpenId)) {
       $params['authorOpenId'] = $authorOpenId;
     }
   }
 
-  $result = mollom()->sendFeedback($params);
-  mollom_log(array(
+  $result = akismet()->sendFeedback($params);
+  akismet_log(array(
     'message' => 'Reported %feedback for @resource %id from %source - %type.',
     'arguments' => array(
       '%type' => $type,
@@ -2869,7 +2869,7 @@ function _mollom_send_feedback($data, $reason = 'spam', $type = 'moderate', $sou
 }
 
 /**
- * Fetch the site's Mollom statistics from the API.
+ * Fetch the site's Akismet statistics from the API.
  *
  * @param $refresh
  *   A boolean if TRUE, will force the statistics to be re-fetched and stored
@@ -2878,13 +2878,13 @@ function _mollom_send_feedback($data, $reason = 'spam', $type = 'moderate', $sou
  * @return array
  *   An array of statistics.
  */
-function mollom_get_statistics($refresh = FALSE) {
+function akismet_get_statistics($refresh = FALSE) {
   $statistics = FALSE;
-  $cache = cache_get('mollom:statistics');
+  $cache = cache_get('akismet:statistics');
 
   // Only fetch if $refresh is TRUE, the cache is empty, or the cache is expired.
   if ($refresh || !$cache || REQUEST_TIME >= $cache->expire) {
-    $status = _mollom_status();
+    $status = _akismet_status();
     if ($status['isVerified']) {
       $statistics = drupal_map_assoc(array(
         'total_days',
@@ -2897,12 +2897,12 @@ function mollom_get_statistics($refresh = FALSE) {
       ));
 
       foreach ($statistics as $statistic) {
-        $result = mollom()->getStatistics(array('type' => $statistic));
-        if ($result === Mollom::NETWORK_ERROR || $result === Mollom::AUTH_ERROR) {
+        $result = akismet()->getStatistics(array('type' => $statistic));
+        if ($result === Akismet::NETWORK_ERROR || $result === Akismet::AUTH_ERROR) {
           // If there was an error, stop fetching statistics and store FALSE
           // in the cache. This will help prevent from making unnecessary
-          // requests to Mollom if the service is down or the server cannot
-          // connect to the Mollom service.
+          // requests to Akismet if the service is down or the server cannot
+          // connect to the Akismet service.
           $statistics = FALSE;
           break;
         }
@@ -2913,7 +2913,7 @@ function mollom_get_statistics($refresh = FALSE) {
     }
 
     // Cache the statistics and set them to expire in one hour.
-    cache_set('mollom:statistics', $statistics, 'cache', REQUEST_TIME + 3600);
+    cache_set('akismet:statistics', $statistics, 'cache', REQUEST_TIME + 3600);
   }
   else {
     $statistics = $cache->data;
@@ -2925,12 +2925,12 @@ function mollom_get_statistics($refresh = FALSE) {
 /**
  * Implements hook_field_extra_fields().
  *
- * Allow users to re-order Mollom form additions through Field UI.
+ * Allow users to re-order Akismet form additions through Field UI.
  */
-function mollom_field_extra_fields() {
+function akismet_field_extra_fields() {
   $extras = array();
-  $forms = array_flip(db_query('SELECT form_id FROM {mollom_form}')->fetchCol());
-  foreach (mollom_form_list() as $form_id => $info) {
+  $forms = array_flip(db_query('SELECT form_id FROM {akismet_form}')->fetchCol());
+  foreach (akismet_form_list() as $form_id => $info) {
     // @todo Technically, an 'entity' does not need to be a Entity/Field API
     //   kind of entity. Ideally of course, developers should use fieldable
     //   entities, but contributed/custom code may not. It is not clear whether
@@ -2942,9 +2942,9 @@ function mollom_field_extra_fields() {
       $entity_type = $info['entity'];
       $bundle = (isset($info['bundle']) ? $info['bundle'] : $entity_type);
 
-      $extras[$entity_type][$bundle]['form']['mollom'] = array(
-        'label' => t('Mollom'),
-        'description' => t('Mollom CAPTCHA or privacy policy link'),
+      $extras[$entity_type][$bundle]['form']['akismet'] = array(
+        'label' => t('Akismet'),
+        'description' => t('Akismet CAPTCHA or privacy policy link'),
         'weight' => 99,
       );
     }
@@ -2953,7 +2953,7 @@ function mollom_field_extra_fields() {
 }
 
 /**
- * Get the HTML markup for a Mollom CAPTCHA.
+ * Get the HTML markup for a Akismet CAPTCHA.
  *
  * @param $form_state
  *   The current state of a form.
@@ -2961,40 +2961,40 @@ function mollom_field_extra_fields() {
  * @return string
  *   The markup of the CAPTCHA HTML.
  */
-function mollom_get_captcha(&$form_state) {
-  // @todo Re-use existing CAPTCHA URL when the Mollom server response for
+function akismet_get_captcha(&$form_state) {
+  // @todo Re-use existing CAPTCHA URL when the Akismet server response for
   //   verifying a CAPTCHA solution returns the existing URL.
   $data = array(
-    'type' => $form_state['mollom']['captcha_type'],
+    'type' => $form_state['akismet']['captcha_type'],
     'ssl' => (int) (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on'),
   );
-  if (!empty($form_state['values']['mollom']['contentId'])) {
-    $data['contentId'] = $form_state['values']['mollom']['contentId'];
+  if (!empty($form_state['values']['akismet']['contentId'])) {
+    $data['contentId'] = $form_state['values']['akismet']['contentId'];
   }
-  $result = mollom()->createCaptcha($data);
+  $result = akismet()->createCaptcha($data);
 
   // Add a log message to prevent the request log from appearing without a
   // message on CAPTCHA-only protected forms.
-  mollom_log(array(
+  akismet_log(array(
     'message' => 'Retrieved new CAPTCHA',
   ), WATCHDOG_INFO);
 
   if (is_array($result) && isset($result['url'])) {
     $url = $result['url'];
-    $form_state['mollom']['response']['captcha'] = $result;
+    $form_state['akismet']['response']['captcha'] = $result;
   }
   else {
     return '';
   }
   // Theme CAPTCHA output and return.
-  $audio_enabled = variable_get('mollom_audio_captcha_enabled', 1);
-  if ($audio_enabled && $form_state['mollom']['captcha_type'] == 'audio') {
-    return theme('mollom_captcha_audio', array(
+  $audio_enabled = variable_get('akismet_audio_captcha_enabled', 1);
+  if ($audio_enabled && $form_state['akismet']['captcha_type'] == 'audio') {
+    return theme('akismet_captcha_audio', array(
       'captcha_url' => $url,
     ));
   }
   else {
-    return theme('mollom_captcha_image', array(
+    return theme('akismet_captcha_image', array(
       'captcha_url' => $url,
       'audio_enabled' => $audio_enabled,
     ));
@@ -3010,7 +3010,7 @@ function mollom_get_captcha(&$form_state) {
  * @return bool
  *   True if the library can be found, false otherwise.
  */
-function _mollom_attach_captcha_script(&$element = NULL) {
+function _akismet_attach_captcha_script(&$element = NULL) {
   $libraries = &drupal_static(__FUNCTION__);
   if (empty($libraries['swfobject'])) {
     $lib = array(
@@ -3070,22 +3070,22 @@ function _mollom_attach_captcha_script(&$element = NULL) {
 /**
  * Implements hook_mail_alter().
  *
- * Adds a "report as inappropriate" link to e-mails sent after Mollom-protected
+ * Adds a "report as inappropriate" link to e-mails sent after Akismet-protected
  * form submissions.
  *
- * @see mollom_mail_add_report_link()
+ * @see akismet_mail_add_report_link()
  *
- * @todo With mollom_entity_insert(), $message['params'] might contain an array
- *   key that has a ::$mollom property holding the Mollom session data,
- *   potentially eliminating the need for $GLOBALS['mollom'].
+ * @todo With akismet_entity_insert(), $message['params'] might contain an array
+ *   key that has a ::$akismet property holding the Akismet session data,
+ *   potentially eliminating the need for $GLOBALS['akismet'].
  */
-function mollom_mail_alter(&$message) {
-  // Attaches the Mollom report link to any mails with IDs specified from the
-  // submitted form's hook_mollom_form_info(). This should ensure that the
+function akismet_mail_alter(&$message) {
+  // Attaches the Akismet report link to any mails with IDs specified from the
+  // submitted form's hook_akismet_form_info(). This should ensure that the
   // report link is added to mails sent by actual users and not any mails sent
   // by Drupal since they should never be reported as spam.
-  if (!empty($GLOBALS['mollom']['mail ids']) && in_array($message['id'], $GLOBALS['mollom']['mail ids'])) {
-    mollom_mail_add_report_link($message, $GLOBALS['mollom']);
+  if (!empty($GLOBALS['akismet']['mail ids']) && in_array($message['id'], $GLOBALS['akismet']['mail ids'])) {
+    akismet_mail_add_report_link($message, $GLOBALS['akismet']);
   }
 }
 
@@ -3094,49 +3094,49 @@ function mollom_mail_alter(&$message) {
  *
  * @param array $message
  *   The message to alter.
- * @param array $mollom
- *   The Mollom state for the mail; typically $form_state['mollom'], as set up
- *   by mollom_process_mollom().
+ * @param array $akismet
+ *   The Akismet state for the mail; typically $form_state['akismet'], as set up
+ *   by akismet_process_akismet().
  *
- * @see mollom_mail_alter()
+ * @see akismet_mail_alter()
  */
-function mollom_mail_add_report_link(array &$message, array $mollom) {
-  if (!empty($mollom['response']['content']['id']) || !empty($mollom['response']['captcha']['id'])) {
+function akismet_mail_add_report_link(array &$message, array $akismet) {
+  if (!empty($akismet['response']['content']['id']) || !empty($akismet['response']['captcha']['id'])) {
     // Check whether an entity was stored with the submission.
     $data = FALSE;
-    if (!empty($mollom['response']['content']['id'])) {
-      $data = mollom_content_load($mollom['response']['content']['id']);
+    if (!empty($akismet['response']['content']['id'])) {
+      $data = akismet_content_load($akismet['response']['content']['id']);
     }
-    elseif (!empty($mollom['response']['captcha']['id'])) {
-      $db_data = mollom_db_query_range('SELECT * FROM {mollom} WHERE captcha_id = :captchaId', 0, 1, array(':captchaId' => $mollom['response']['captcha']['id']))->fetchObject();
-      $data = _mollom_convert_db_names($db_data);
+    elseif (!empty($akismet['response']['captcha']['id'])) {
+      $db_data = akismet_db_query_range('SELECT * FROM {akismet} WHERE captcha_id = :captchaId', 0, 1, array(':captchaId' => $akismet['response']['captcha']['id']))->fetchObject();
+      $data = _akismet_convert_db_names($db_data);
     }
     if (!$data) {
-      // @todo Mollom session data should have been saved earlier already;
+      // @todo Akismet session data should have been saved earlier already;
       //   eliminate this.
-      $data = (object) $mollom['response'];
-      if (!empty($mollom['response']['content']['id'])) {
-        $data->entity = 'mollom_content';
+      $data = (object) $akismet['response'];
+      if (!empty($akismet['response']['content']['id'])) {
+        $data->entity = 'akismet_content';
         $data->id = $data->content['id'];
         $data->contentId = $data->content['id'];
       }
       else {
-        $data->entity = 'mollom_captcha';
+        $data->entity = 'akismet_captcha';
         $data->id = $data->captcha['id'];
         $data->captchaId = $data->captcha['id'];
       }
-      $data->form_id = $mollom['form_id'];
-      mollom_data_save($data);
+      $data->form_id = $akismet['form_id'];
+      akismet_data_save($data);
     }
     // Determine report URI.
-    $mollom_form = mollom_form_load($data->form_id);
-    if (isset($mollom_form['report path'])) {
-      $path = strtr($mollom_form['report path'], array(
+    $akismet_form = akismet_form_load($data->form_id);
+    if (isset($akismet_form['report path'])) {
+      $path = strtr($akismet_form['report path'], array(
         '%id' => $data->id,
       ));
     }
     else {
-      $path = "mollom/report/{$data->entity}/{$data->id}";
+      $path = "akismet/report/{$data->entity}/{$data->id}";
     }
     $report_link = t('Report as inappropriate: @link', array(
       '@link' => url($path, array('absolute' => TRUE)),
@@ -3148,19 +3148,19 @@ function mollom_mail_add_report_link(array &$message, array $mollom) {
 /**
  * Implements hook_entity_insert().
  */
-function mollom_entity_insert($entity, $type) {
+function akismet_entity_insert($entity, $type) {
   list($id) = entity_extract_ids($type, $entity);
-  if (!empty($entity->mollom) && !empty($id)) {
-    $entity->mollom['id'] = $id;
-    $data = (object) $entity->mollom;
-    mollom_data_save($data);
+  if (!empty($entity->akismet) && !empty($id)) {
+    $entity->akismet['id'] = $id;
+    $data = (object) $entity->akismet;
+    akismet_data_save($data);
   }
 }
 
 /**
  * Implements hook_entity_update().
  */
-function mollom_entity_update($entity, $type) {
+function akismet_entity_update($entity, $type) {
   // A user account's status transitions from 0 to 1 upon first login; do not
   // mark the account as moderated in that case.
   if ($type == 'user' && $entity->uid == $GLOBALS['user']->uid) {
@@ -3183,27 +3183,27 @@ function mollom_entity_update($entity, $type) {
   }
   if ($update) {
     list($id) = entity_extract_ids($type, $entity);
-    mollom_data_moderate($type, $id);
+    akismet_data_moderate($type, $id);
   }
 }
 
 /**
  * Implements hook_entity_delete().
  */
-function mollom_entity_delete($entity, $type) {
+function akismet_entity_delete($entity, $type) {
   list($id) = entity_extract_ids($type, $entity);
-  mollom_data_delete($type, $id);
+  akismet_data_delete($type, $id);
 }
 
 /**
- * @name mollom_moderation Mollom Moderation integration.
+ * @name akismet_moderation Akismet Moderation integration.
  * @{
  */
 
 /**
- * Implements hook_mollom_data_insert().
+ * Implements hook_akismet_data_insert().
  */
-function mollom_mollom_data_insert($data) {
+function akismet_akismet_data_insert($data) {
   // Only content can be updated.
   if (empty($data->contentId)) {
     return;
@@ -3215,7 +3215,7 @@ function mollom_mollom_data_insert($data) {
 
   // Get additional information for submissions that result in a locally stored
   // entity.
-  if ($data->entity != 'mollom_content' && $data->entity != 'mollom_captcha') {
+  if ($data->entity != 'akismet_content' && $data->entity != 'akismet_captcha') {
     // Add the URL of the posted content itself.
     $entity_info = entity_get_info();
     if (isset($entity_info[$data->entity])) {
@@ -3243,21 +3243,21 @@ function mollom_mollom_data_insert($data) {
     }
   }
 
-  $result = mollom()->checkContent($params);
+  $result = akismet()->checkContent($params);
 }
 /**
- * @} End of "name mollom_moderation".
+ * @} End of "name akismet_moderation".
  */
 
 /**
- * @name mollom_node Node module integration for Mollom.
+ * @name akismet_node Node module integration for Akismet.
  * @{
  */
 
 /**
- * Implements hook_mollom_form_list().
+ * Implements hook_akismet_form_list().
  */
-function node_mollom_form_list() {
+function node_akismet_form_list() {
   $forms = array();
   foreach (node_type_get_types() as $type) {
     $form_id = $type->type . '_node_form';
@@ -3270,16 +3270,16 @@ function node_mollom_form_list() {
         'name' => 'node.pages',
       ),
       'report access' => array('bypass node access', 'administer nodes'),
-      'entity report access callback' => 'node_mollom_entity_report_access',
+      'entity report access callback' => 'node_akismet_entity_report_access',
     );
   }
   return $forms;
 }
 
 /**
- * Implements hook_mollom_form_info().
+ * Implements hook_akismet_form_info().
  */
-function node_mollom_form_info($form_id) {
+function node_akismet_form_info($form_id) {
   // Retrieve internal type from $form_id.
   $nodetype = drupal_substr($form_id, 0, -10);
 
@@ -3290,8 +3290,8 @@ function node_mollom_form_info($form_id) {
     // @todo This is incompatible with node access.
     'bypass access' => array('bypass node access'),
     'bundle' => $type->type,
-    'moderation callback' => 'node_mollom_form_moderation',
-    'context created callback' => 'node_mollom_context_created',
+    'moderation callback' => 'node_akismet_form_moderation',
+    'context created callback' => 'node_akismet_context_created',
     'elements' => array(),
     'mapping' => array(
       'author_name' => 'name',
@@ -3308,44 +3308,44 @@ function node_mollom_form_info($form_id) {
     $form_info['elements']['title'] = check_plain($type->title_label);
     $form_info['mapping']['post_title'] = 'title';
   }
-  mollom_form_info_add_fields($form_info, 'node', $type->type);
+  akismet_form_info_add_fields($form_info, 'node', $type->type);
   return $form_info;
 }
 
 /**
- * Mollom form moderation callback for nodes.
+ * Akismet form moderation callback for nodes.
  */
-function node_mollom_form_moderation(&$form, &$form_state) {
+function node_akismet_form_moderation(&$form, &$form_state) {
   $form_state['values']['status'] = 0;
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_node_admin_content_alter(&$form, &$form_state) {
+function akismet_form_node_admin_content_alter(&$form, &$form_state) {
   // @see node_admin_content()
   if (isset($form_state['values']['operation']) && $form_state['values']['operation'] == 'delete') {
-    mollom_data_delete_form_alter($form, $form_state);
+    akismet_data_delete_form_alter($form, $form_state);
     // Report before deletion.
-    array_unshift($form['#submit'], 'mollom_form_node_multiple_delete_confirm_submit');
+    array_unshift($form['#submit'], 'akismet_form_node_multiple_delete_confirm_submit');
   }
   else {
-    module_load_include('inc', 'mollom', 'mollom.flag');
-    _mollom_table_add_flag_counts('node', $form['admin']['nodes']['#header'], $form['admin']['nodes']['#options']);
+    module_load_include('inc', 'akismet', 'akismet.flag');
+    _akismet_table_add_flag_counts('node', $form['admin']['nodes']['#header'], $form['admin']['nodes']['#options']);
   }
 }
 
 /**
  * Form submit handler for node_multiple_delete_confirm().
  */
-function mollom_form_node_multiple_delete_confirm_submit($form, &$form_state) {
+function akismet_form_node_multiple_delete_confirm_submit($form, &$form_state) {
   $nids = array_keys($form_state['values']['nodes']);
-  if (!empty($form_state['values']['mollom']['feedback'])) {
-    if (mollom_data_report_multiple('node', $nids, $form_state['values']['mollom']['feedback'])) {
+  if (!empty($form_state['values']['akismet']['feedback'])) {
+    if (akismet_data_report_multiple('node', $nids, $form_state['values']['akismet']['feedback'])) {
       drupal_set_message(t('The posts were successfully reported as inappropriate.'));
     }
   }
-  mollom_data_delete_multiple('node', $nids);
+  akismet_data_delete_multiple('node', $nids);
 }
 
 /**
@@ -3355,7 +3355,7 @@ function mollom_form_node_multiple_delete_confirm_submit($form, &$form_state) {
  * @param $entity
  *   Optional entity object to check access to a specific entity.
  */
-function node_mollom_entity_report_access($entity = NULL) {
+function node_akismet_entity_report_access($entity = NULL) {
   // All nodes can be reported as long as the user has access to view.
   if (!empty($entity) && isset($entity->nid)) {
     return node_access('view', $entity->nid);
@@ -3372,7 +3372,7 @@ function node_mollom_entity_report_access($entity = NULL) {
  * @param $id
  *   The id of the node.
  */
-function node_mollom_context_created($id = NULL) {
+function node_akismet_context_created($id = NULL) {
   if (empty($id)) {
     return FALSE;
   }
@@ -3384,18 +3384,18 @@ function node_mollom_context_created($id = NULL) {
 }
 
 /**
- * @} End of "name mollom_node".
+ * @} End of "name akismet_node".
  */
 
 /**
- * @name mollom_comment Comment module integration for Mollom.
+ * @name akismet_comment Comment module integration for Akismet.
  * @{
  */
 
 /**
- * Implements hook_mollom_form_list().
+ * Implements hook_akismet_form_list().
  */
-function comment_mollom_form_list() {
+function comment_akismet_form_list() {
   $forms = array();
   foreach (node_type_get_types() as $type) {
     $form_id = "comment_node_{$type->type}_form";
@@ -3409,21 +3409,21 @@ function comment_mollom_form_list() {
       ),
       'report access' => array('administer comments'),
       'entity delete multiple callback' => 'comment_delete_multiple',
-      'entity report access callback' => 'comment_mollom_entity_report_access',
+      'entity report access callback' => 'comment_akismet_entity_report_access',
     );
   }
   return $forms;
 }
 
 /**
- * Implements hook_mollom_form_info().
+ * Implements hook_akismet_form_info().
  */
-function comment_mollom_form_info($form_id) {
+function comment_akismet_form_info($form_id) {
   $form_info = array(
-    'mode' => MOLLOM_MODE_ANALYSIS,
+    'mode' => AKISMET_MODE_ANALYSIS,
     'bypass access' => array('administer comments'),
-    'moderation callback' => 'comment_mollom_form_moderation',
-    'context created callback' => 'node_mollom_context_created',
+    'moderation callback' => 'comment_akismet_form_moderation',
+    'context created callback' => 'node_akismet_context_created',
     'elements' => array(
       'subject' => t('Subject'),
     ),
@@ -3437,7 +3437,7 @@ function comment_mollom_form_info($form_id) {
   );
   // Retrieve internal type from $form_id.
   $comment_bundle = drupal_substr($form_id, 0, -5);
-  mollom_form_info_add_fields($form_info, 'comment', $comment_bundle);
+  akismet_form_info_add_fields($form_info, 'comment', $comment_bundle);
   return $form_info;
 }
 
@@ -3447,7 +3447,7 @@ function comment_mollom_form_info($form_id) {
  * @param $entity
  *   Optional entity object to check access to a specific entity.
  */
-function comment_mollom_entity_report_access($entity = NULL) {
+function comment_akismet_entity_report_access($entity = NULL) {
   // All comments can be reported as long as the user has access to view the
   // node and it's comments.
   if (!user_access('access comments')) {
@@ -3460,65 +3460,65 @@ function comment_mollom_entity_report_access($entity = NULL) {
 }
 
 /**
- * Mollom form moderation callback for comments.
+ * Akismet form moderation callback for comments.
  */
-function comment_mollom_form_moderation(&$form, &$form_state) {
+function comment_akismet_form_moderation(&$form, &$form_state) {
   $form_state['values']['status'] = COMMENT_NOT_PUBLISHED;
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_comment_multiple_delete_confirm_alter(&$form, &$form_state) {
-  mollom_data_delete_form_alter($form, $form_state);
+function akismet_form_comment_multiple_delete_confirm_alter(&$form, &$form_state) {
+  akismet_data_delete_form_alter($form, $form_state);
   // Report before deletion.
-  array_unshift($form['#submit'], 'mollom_form_comment_multiple_delete_confirm_submit');
+  array_unshift($form['#submit'], 'akismet_form_comment_multiple_delete_confirm_submit');
 }
 
 /**
  * Form submit handler for node_multiple_delete_confirm().
  */
-function mollom_form_comment_multiple_delete_confirm_submit($form, &$form_state) {
+function akismet_form_comment_multiple_delete_confirm_submit($form, &$form_state) {
   $cids = array_keys($form_state['values']['comments']);
-  if (!empty($form_state['values']['mollom']['feedback'])) {
-    if (mollom_data_report_multiple('comment', $cids, $form_state['values']['mollom']['feedback'])) {
+  if (!empty($form_state['values']['akismet']['feedback'])) {
+    if (akismet_data_report_multiple('comment', $cids, $form_state['values']['akismet']['feedback'])) {
       drupal_set_message(t('The posts were successfully reported as inappropriate.'));
     }
   }
-  mollom_data_delete_multiple('comment', $cids);
+  akismet_data_delete_multiple('comment', $cids);
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_comment_admin_overview_alter(&$form, &$form_state) {
-  module_load_include('inc', 'mollom', 'mollom.flag');
-  _mollom_table_add_flag_counts('comment', $form['comments']['#header'], $form['comments']['#options']);
+function akismet_form_comment_admin_overview_alter(&$form, &$form_state) {
+  module_load_include('inc', 'akismet', 'akismet.flag');
+  _akismet_table_add_flag_counts('comment', $form['comments']['#header'], $form['comments']['#options']);
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_node_form_alter(&$form, &$form_state, $form_id) {
-  module_load_include('inc', 'mollom', 'mollom.flag');
-  mollom_flag_node_form_alter($form, $form_state, $form_id);
+function akismet_form_node_form_alter(&$form, &$form_state, $form_id) {
+  module_load_include('inc', 'akismet', 'akismet.flag');
+  akismet_flag_node_form_alter($form, $form_state, $form_id);
 }
 
 /**
- * @} End of "name mollom_comment".
+ * @} End of "name akismet_comment".
  */
 
 /**
- * @name mollom_user User module integration for Mollom.
+ * @name akismet_user User module integration for Akismet.
  * @{
  */
 
 /**
- * Implements hook_mollom_form_list().
+ * Implements hook_akismet_form_list().
  */
-function user_mollom_form_list() {
+function user_akismet_form_list() {
   $forms['user_register_form'] = array(
-    'mode' => MOLLOM_MODE_CAPTCHA,
+    'mode' => AKISMET_MODE_CAPTCHA,
     'title' => t('User registration form'),
     'type' => 'user',
     'entity' => 'user',
@@ -3531,29 +3531,29 @@ function user_mollom_form_list() {
   $forms['user_profile_form']['title'] = t('User profile form');
 
   $forms['user_pass'] = array(
-    'mode' => MOLLOM_MODE_CAPTCHA,
+    'mode' => AKISMET_MODE_CAPTCHA,
     'title' => t('User password request form'),
   );
   return $forms;
 }
 
 /**
- * Implements hook_mollom_form_info().
+ * Implements hook_akismet_form_info().
  */
-function user_mollom_form_info($form_id) {
+function user_akismet_form_info($form_id) {
   switch ($form_id) {
     case 'user_register_form':
     case 'user_profile_form':
       $form_info = array(
         'bypass access' => array('administer users'),
-        'moderation callback' => 'user_mollom_form_moderation',
+        'moderation callback' => 'user_akismet_form_moderation',
         'mail ids' => array('user_register_pending_approval_admin'),
         'mapping' => array(
           'author_name' => 'name',
           'author_mail' => 'mail',
         ),
       );
-      mollom_form_info_add_fields($form_info, 'user', 'user');
+      akismet_form_info_add_fields($form_info, 'user', 'user');
       return $form_info;
 
     case 'user_pass':
@@ -3571,47 +3571,47 @@ function user_mollom_form_info($form_id) {
 }
 
 /**
- * Mollom form moderation callback for user accounts.
+ * Akismet form moderation callback for user accounts.
  */
-function user_mollom_form_moderation(&$form, &$form_state) {
+function user_akismet_form_moderation(&$form, &$form_state) {
   $form_state['values']['status'] = 0;
 }
 
 /**
  * Implements hook_form_FORMID_alter().
  */
-function mollom_form_user_multiple_cancel_confirm_alter(&$form, &$form_state) {
-  mollom_data_delete_form_alter($form, $form_state);
+function akismet_form_user_multiple_cancel_confirm_alter(&$form, &$form_state) {
+  akismet_data_delete_form_alter($form, $form_state);
   // Report before deletion.
-  array_unshift($form['#submit'], 'mollom_form_user_multiple_cancel_confirm_submit');
+  array_unshift($form['#submit'], 'akismet_form_user_multiple_cancel_confirm_submit');
 }
 
 /**
  * Form submit handler for node_multiple_delete_confirm().
  */
-function mollom_form_user_multiple_cancel_confirm_submit($form, &$form_state) {
+function akismet_form_user_multiple_cancel_confirm_submit($form, &$form_state) {
   $uids = array_keys($form_state['values']['accounts']);
-  if (!empty($form_state['values']['mollom']['feedback'])) {
-    if (mollom_data_report_multiple('user', $uids, $form_state['values']['mollom']['feedback'])) {
+  if (!empty($form_state['values']['akismet']['feedback'])) {
+    if (akismet_data_report_multiple('user', $uids, $form_state['values']['akismet']['feedback'])) {
       drupal_set_message(t('The users were successfully reported.'));
     }
   }
-  mollom_data_delete_multiple('user', $uids);
+  akismet_data_delete_multiple('user', $uids);
 }
 
 /**
- * @} End of "name mollom_user".
+ * @} End of "name akismet_user".
  */
 
 /**
- * @name mollom_contact Contact module integration for Mollom.
+ * @name akismet_contact Contact module integration for Akismet.
  * @{
  */
 
 /**
- * Implements hook_mollom_form_list().
+ * Implements hook_akismet_form_list().
  */
-function contact_mollom_form_list() {
+function contact_akismet_form_list() {
   $forms['contact_site_form'] = array(
     'title' => t('Site-wide contact form'),
   );
@@ -3622,13 +3622,13 @@ function contact_mollom_form_list() {
 }
 
 /**
- * Implements hook_mollom_form_info().
+ * Implements hook_akismet_form_info().
  */
-function contact_mollom_form_info($form_id) {
+function contact_akismet_form_info($form_id) {
   switch ($form_id) {
     case 'contact_site_form':
       $form_info = array(
-        'mode' => MOLLOM_MODE_ANALYSIS,
+        'mode' => AKISMET_MODE_ANALYSIS,
         'bypass access' => array('administer contact forms'),
         'mail ids' => array('contact_page_mail'),
         'elements' => array(
@@ -3645,7 +3645,7 @@ function contact_mollom_form_info($form_id) {
 
     case 'contact_personal_form':
       $form_info = array(
-        'mode' => MOLLOM_MODE_ANALYSIS,
+        'mode' => AKISMET_MODE_ANALYSIS,
         'bypass access' => array('administer users'),
         'mail ids' => array('contact_user_mail'),
         'elements' => array(
@@ -3663,20 +3663,20 @@ function contact_mollom_form_info($form_id) {
 }
 
 /**
- * @} End of "name mollom_contact".
+ * @} End of "name akismet_contact".
  */
 
 /**
- * @name mollom_profile Profile module integration for Mollom.
+ * @name akismet_profile Profile module integration for Akismet.
  * @{
  */
 
 /**
- * Implements hook_mollom_form_info_alter().
+ * Implements hook_akismet_form_info_alter().
  *
  * Adds profile fields exposed on the user registration form.
  */
-function profile_mollom_form_info_alter(&$form_info, $form_id) {
+function profile_akismet_form_info_alter(&$form_info, $form_id) {
   if ($form_id != 'user_register_form') {
     return;
   }
@@ -3690,22 +3690,22 @@ function profile_mollom_form_info_alter(&$form_info, $form_id) {
 }
 
 /**
- * @} End of "name mollom_profile".
+ * @} End of "name akismet_profile".
  */
 
 /**
- * @name mollom_action Actions module integration for Mollom.
+ * @name akismet_action Actions module integration for Akismet.
  * @{
  */
 
 /**
  * Implements hook_action_info().
  */
-function mollom_action_info() {
+function akismet_action_info() {
   return array(
     // Unpublish comment action.
-    'mollom_action_unpublish_comment' => array(
-      'label' => t('Report comment to Mollom as spam and unpublish'),
+    'akismet_action_unpublish_comment' => array(
+      'label' => t('Report comment to Akismet as spam and unpublish'),
       'type' => 'comment',
       'configurable' => FALSE,
       'triggers' => array(
@@ -3715,8 +3715,8 @@ function mollom_action_info() {
       'aggregate' => TRUE,
     ),
     // Unpublish node action.
-    'mollom_action_unpublish_node' => array(
-      'label' => t('Report node to Mollom as spam and unpublish'),
+    'akismet_action_unpublish_node' => array(
+      'label' => t('Report node to Akismet as spam and unpublish'),
       'type' => 'node',
       'configurable' => FALSE,
       'triggers' => array(
@@ -3729,40 +3729,40 @@ function mollom_action_info() {
 }
 
 /**
- * Action callback to report a comment to mollom and unpublish.
+ * Action callback to report a comment to akismet and unpublish.
  */
-function mollom_action_unpublish_comment($comments, $context = array()) {
-  _mollom_action_unpublish('comment', $comments);
+function akismet_action_unpublish_comment($comments, $context = array()) {
+  _akismet_action_unpublish('comment', $comments);
 }
 
 /**
- * Action callback to report a node to mollom and unpublish.
+ * Action callback to report a node to akismet and unpublish.
  */
-function mollom_action_unpublish_node($nodes, $context = array()) {
-  _mollom_action_unpublish('node', $nodes);
+function akismet_action_unpublish_node($nodes, $context = array()) {
+  _akismet_action_unpublish('node', $nodes);
 }
 
 /**
- * Unpublish content and report to Mollom as spam.
+ * Unpublish content and report to Akismet as spam.
  *
  * @param $entity_type
  *   The type of entity; one of "comment" or "node".
  * @param $entities
  *   An array of entities to perform the action upon.
  */
-function _mollom_action_unpublish($entity_type, $entities) {
+function _akismet_action_unpublish($entity_type, $entities) {
   // Make sure this is a supported entity type.
   if (!in_array($entity_type, array('node', 'comment'))) {
-    watchdog('Mollom', 'Called unpublish action for an unsupported entity type: @type', array('@type' => $entity_type), WATCHDOG_ERROR);
+    watchdog('Akismet', 'Called unpublish action for an unsupported entity type: @type', array('@type' => $entity_type), WATCHDOG_ERROR);
     return;
   }
 
   // Determine the entities for which moderation is allowed.
-  list($allowed, $nids, $cids) = _mollom_actions_access_callbacks($entity_type, $entities);
+  list($allowed, $nids, $cids) = _akismet_actions_access_callbacks($entity_type, $entities);
 
-  // Send feedback to Mollom.
+  // Send feedback to Akismet.
   $ids = $entity_type === 'comment' ? $cids : $nids;
-  mollom_data_report_multiple($entity_type, $ids, 'spam', 'moderate', "mollom_action_unpublish_{$entity_type}");
+  akismet_data_report_multiple($entity_type, $ids, 'spam', 'moderate', "akismet_action_unpublish_{$entity_type}");
 
   if ($entity_type === 'comment') {
     // Unpublish the comment.
@@ -3798,7 +3798,7 @@ function _mollom_action_unpublish($entity_type, $entities) {
  *   - 1 An array of node ids
  *   - 2 An array of comment ids (if entity_type is comment).
  */
-function _mollom_actions_access_callbacks($entity_type, $entities) {
+function _akismet_actions_access_callbacks($entity_type, $entities) {
   $cids = array();
   $nids = array();
 
@@ -3808,7 +3808,7 @@ function _mollom_actions_access_callbacks($entity_type, $entities) {
   $entity_access_callbacks = array();
 
   $allowed = array();
-  foreach (mollom_form_list() as $form_id => $info) {
+  foreach (akismet_form_list() as $form_id => $info) {
     if (!isset($info['entity']) || $info['entity'] != $entity_type) {
       continue;
     }
@@ -3869,5 +3869,5 @@ function _mollom_actions_access_callbacks($entity_type, $entities) {
 }
 
 /**
- * @} End of "name mollom_action".
+ * @} End of "name akismet_action".
  */

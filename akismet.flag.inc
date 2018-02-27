@@ -2,7 +2,7 @@
 
 /**
  * @file
- * Flag as inappropriate page callbacks for Mollom module.
+ * Flag as inappropriate page callbacks for Akismet module.
  */
 
 /**
@@ -10,7 +10,7 @@
  * PHP does not allow defining these as a constant but at least
  * they can be defined once for code maintenance purposes.
  */
-function _mollom_flag_reasons() {
+function _akismet_flag_reasons() {
   return array(
     'spam' => t('Spam, unsolicited advertising'),
     'profanity' => t('Obscene, abusive, profane language'),
@@ -27,9 +27,9 @@ function _mollom_flag_reasons() {
  *   The id of the entity to retrieve counts for.
  *
  */
-function _mollom_flag_entity_count($entity, $id) {
+function _akismet_flag_entity_count($entity, $id) {
   // Get the data for this entity.
-  $data = mollom_data_load($entity, $id);
+  $data = akismet_data_load($entity, $id);
 
   // default values
   $totals = array(
@@ -53,49 +53,49 @@ function _mollom_flag_entity_count($entity, $id) {
 }
 
 /**
- * Adds Mollom's flag as inappropriate links to entities.
+ * Adds Akismet's flag as inappropriate links to entities.
  * Called from hook_entity_view().
  */
-function mollom_flag_entity_view($entity, $type, $view_mode, $langcode) {
-  if (!_mollom_flag_access($type, $entity)) {
+function akismet_flag_entity_view($entity, $type, $view_mode, $langcode) {
+  if (!_akismet_flag_access($type, $entity)) {
     return;
   }
 
   // Define the internal source for feedback.
-  $source = 'mollom_flag_entity_view_' . $type . '_' . $view_mode;
+  $source = 'akismet_flag_entity_view_' . $type . '_' . $view_mode;
 
   list($id, $vid, $bundle) = entity_extract_ids($type, $entity);
 
-  $dialog = mollom_flag_dialog_check();
+  $dialog = akismet_flag_dialog_check();
   if (isset($dialog['link prepare callback'])) {
     $function = $dialog['link prepare callback'];
     $link_attributes = $function();
   }
   else {
-    // Add Mollom reporting link to the existing comment link structure.
-    $entity->content['#pre_render'][] = 'mollom_flag_entity_view_prerender';
-    $link_attributes = array('class' => array('use-ajax', 'mollom-flag'));
+    // Add Akismet reporting link to the existing comment link structure.
+    $entity->content['#pre_render'][] = 'akismet_flag_entity_view_prerender';
+    $link_attributes = array('class' => array('use-ajax', 'akismet-flag'));
     $attached = array(
       'library' => array(
-        array('mollom', 'flag'),
+        array('akismet', 'flag'),
       ),
     );
   }
 
   $link_attributes += array(
-    'id' => "mollom_$type$id",
+    'id' => "akismet_$type$id",
   );
 
   $links = array(
-    'mollom-flag' => array(
+    'akismet-flag' => array(
       'title' => t('report'),
-      'href' => "mollom/flag/nojs/$type/$id/$source",
+      'href' => "akismet/flag/nojs/$type/$id/$source",
       'html' => TRUE,
       'attributes' => $link_attributes,
     ),
   );
-  $entity->content['links']['mollom'] = array(
-    '#theme' => 'links__comment__mollom',
+  $entity->content['links']['akismet'] = array(
+    '#theme' => 'links__comment__akismet',
     '#links' => $links,
     '#attributes' => array('class' => array('links', 'inline')),
   );
@@ -108,7 +108,7 @@ function mollom_flag_entity_view($entity, $type, $view_mode, $langcode) {
 /**
  * Pre-render callback for entities that can be flagged as inappropriate.
  */
-function mollom_flag_entity_view_prerender($element) {
+function akismet_flag_entity_view_prerender($element) {
   if (!isset($element['#prefix'])) {
     $element['#prefix'] = '';
   }
@@ -116,7 +116,7 @@ function mollom_flag_entity_view_prerender($element) {
     $element['#suffix'] = '';
   }
   // Add a wrapping element that can be targeted by the Ajax framework.
-  $element['#prefix'] .= '<div class="mollom-flag-content mollom-flag-content-' . $element['#entity_type'] . '">';
+  $element['#prefix'] .= '<div class="akismet-flag-content akismet-flag-content-' . $element['#entity_type'] . '">';
   $element['#suffix'] .= '</div>';
 
   return $element;
@@ -136,28 +136,28 @@ function mollom_flag_entity_view_prerender($element) {
  * @param $source
  *   The optional internal source to be submitted along with feedback.
  */
-function _mollom_flag($type, $entity, $id, $source = NULL) {
+function _akismet_flag($type, $entity, $id, $source = NULL) {
   $detail = FALSE;
   if ($type === 'nojs' || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     $detail = TRUE;
   }
-  $form = drupal_get_form('mollom_flag_reason_form', $entity, $id, $detail, $source);
+  $form = drupal_get_form('akismet_flag_reason_form', $entity, $id, $detail, $source);
 
   // If not submitted via Ajax post, then return a plain Drupal form page.
   if ($detail) {
     return $form;
   }
 
-  $dialog = mollom_flag_dialog_check();
+  $dialog = akismet_flag_dialog_check();
   if (isset($dialog['display form callback'])) {
     $function = $dialog['display form callback'];
     return $function($form, t('Report'));
   }
 
-  // Deliver via custom Mollom dialog.
+  // Deliver via custom Akismet dialog.
   $commands = array();
-  $formHtml = '<div class="mollom-flag-container" role="dialog" aria-label="' . t('Report') . '">' . render($form) . '</div>';
-  $commands[] = ajax_command_prepend(".mollom-flag-content-$entity:has(#mollom_$entity$id)",$formHtml);
+  $formHtml = '<div class="akismet-flag-container" role="dialog" aria-label="' . t('Report') . '">' . render($form) . '</div>';
+  $commands[] = ajax_command_prepend(".akismet-flag-content-$entity:has(#akismet_$entity$id)",$formHtml);
   $page = array('#type' => 'ajax', '#commands' => $commands);
   ajax_deliver($page);
 }
@@ -176,15 +176,15 @@ function _mollom_flag($type, $entity, $id, $source = NULL) {
  * @param $source
  *   The internal source to be submitted along with feedback.
  */
-function mollom_flag_reason_form($form, &$form_state, $entity, $id, $detail, $source = NULL) {
-  $form['#prefix'] = "<div id=\"mollom-flag-$entity-$id\" class=\"mollom-flag-reasons\">";
+function akismet_flag_reason_form($form, &$form_state, $entity, $id, $detail, $source = NULL) {
+  $form['#prefix'] = "<div id=\"akismet-flag-$entity-$id\" class=\"akismet-flag-reasons\">";
   $form['#suffix'] = '</div>';
 
   // If the user is able to moderate content, then inform them that this will not
   // delete the content as they might expect from standard moderation.
-  if (mollom_report_access($entity, $id)) {
+  if (akismet_report_access($entity, $id)) {
     $form['moderation_notice'] = array(
-      '#markup' => '<p>' . t('Admin mode enabled: feedback will be sent to Mollom.') . '<br />' . t('You will still need to remove content through standard means.') . '</p>',
+      '#markup' => '<p>' . t('Admin mode enabled: feedback will be sent to Akismet.') . '<br />' . t('You will still need to remove content through standard means.') . '</p>',
     );
     $form['feedback_type'] = array(
       '#type' => 'value',
@@ -213,14 +213,14 @@ function mollom_flag_reason_form($form, &$form_state, $entity, $id, $detail, $so
       '#tree' => TRUE,
     );
     $form['detailset']['detail'] = array(
-      '#markup' => '<div class="mollom-report-content">' . filter_xss($entity_subject) . '</div>',
+      '#markup' => '<div class="akismet-report-content">' . filter_xss($entity_subject) . '</div>',
     );
   }
 
   $form['reason'] = array(
     '#type' => 'radios',
     '#title' => t('Why are you reporting this content?'),
-    '#options' => _mollom_flag_reasons(),
+    '#options' => _akismet_flag_reasons(),
     '#default_value' => 'spam',
     '#required' => TRUE,
   );
@@ -248,8 +248,8 @@ function mollom_flag_reason_form($form, &$form_state, $entity, $id, $detail, $so
     '#type' => 'submit',
     '#value' => t('Submit report'),
     '#ajax' => array(
-      'callback' => 'mollom_flag_reason_form_submit_ajax',
-      'wrapper' => "mollom-flag-$entity-$id",
+      'callback' => 'akismet_flag_reason_form_submit_ajax',
+      'wrapper' => "akismet-flag-$entity-$id",
     ),
   );
 
@@ -257,10 +257,10 @@ function mollom_flag_reason_form($form, &$form_state, $entity, $id, $detail, $so
   $form['actions']['cancel'] = array(
     '#type'   => 'submit',
     '#value'  => t('Cancel'),
-    '#submit' => array('mollom_flag_reason_form_cancel'),
+    '#submit' => array('akismet_flag_reason_form_cancel'),
     '#ajax'   => array(
-      'callback' => 'mollom_flag_reason_form_cancel_ajax',
-      'wrapper' => "mollom-flag-$entity-$id",
+      'callback' => 'akismet_flag_reason_form_cancel_ajax',
+      'wrapper' => "akismet-flag-$entity-$id",
     ),
   );
 
@@ -268,9 +268,9 @@ function mollom_flag_reason_form($form, &$form_state, $entity, $id, $detail, $so
 }
 
 /**
- * Form submit handler for mollom_flag_reason_form().
+ * Form submit handler for akismet_flag_reason_form().
  */
-function mollom_flag_reason_form_submit($form, &$form_state) {
+function akismet_flag_reason_form_submit($form, &$form_state) {
   $entity = $form_state['values']['entity'];
   $id = $form_state['values']['id'];
   $feedback_type = $form_state['values']['feedback_type'];
@@ -278,12 +278,12 @@ function mollom_flag_reason_form_submit($form, &$form_state) {
   $source = $form_state['values']['source'];
   $count_field = 'flags_' . $reason;
 
-  $data = mollom_data_load($entity, $id);
-  // We can only send data to Mollom that has been processed.
+  $data = akismet_data_load($entity, $id);
+  // We can only send data to Akismet that has been processed.
   if (!empty($data)) {
-    _mollom_send_feedback($data, $reason, $feedback_type, $source);
+    _akismet_send_feedback($data, $reason, $feedback_type, $source);
     $data->$count_field += 1;
-    mollom_data_save($data);
+    akismet_data_save($data);
   }
   else {
     // Save the minimum entity data to be able to track reporting counts.
@@ -291,7 +291,7 @@ function mollom_flag_reason_form_submit($form, &$form_state) {
     $data->entity = $entity;
     $data->id = $id;
     $data->$count_field = 1;
-    mollom_data_save($data);
+    akismet_data_save($data);
   }
   // If the form was shown on its own page with detail then display a standard
   // Drupal message style.  Forms shown in a dialog handle confirmation
@@ -302,48 +302,48 @@ function mollom_flag_reason_form_submit($form, &$form_state) {
 }
 
 /**
- * Form cancellation handler for mollom_flag_reason_form().
+ * Form cancellation handler for akismet_flag_reason_form().
  */
-function mollom_flag_reason_form_cancel($form, &$form_state) {
+function akismet_flag_reason_form_cancel($form, &$form_state) {
   $url = isset($form_state['values']['destination']) ? $form_state['values']['destination'] : '';
   $form_state['redirect'] = $url;
 }
 
 /**
- * Form ajax callback handler for mollom_flag_reason_form().
+ * Form ajax callback handler for akismet_flag_reason_form().
  */
-function mollom_flag_reason_form_submit_ajax($form, &$form_state) {
-  $dialog = mollom_flag_dialog_check();
+function akismet_flag_reason_form_submit_ajax($form, &$form_state) {
+  $dialog = akismet_flag_dialog_check();
   if (isset($dialog['submit form callback'])) {
     $function = $dialog['submit form callback'];
     return $function($form, $form_state);
   }
-  // Custom Mollom dialog submission handler.
+  // Custom Akismet dialog submission handler.
   $entity = $form_state['values']['entity'];
   $id = $form_state['values']['id'];
   // JavaScript behaviors handle closing this window so no need to provide
   // a close link/button.
   $commands = array();
-  $confirmHtml = '<span class="mollom-flag-confirm">' . t('Thank you for your feedback.') . '</span>';
-  $commands[] = ajax_command_replace("#mollom-flag-$entity-$id form",$confirmHtml);
+  $confirmHtml = '<span class="akismet-flag-confirm">' . t('Thank you for your feedback.') . '</span>';
+  $commands[] = ajax_command_replace("#akismet-flag-$entity-$id form",$confirmHtml);
   return array('#type' => 'ajax', '#commands' => $commands);
 }
 
 /**
- * Form cancellation ajax callback handler for mollom_flag_reason_form().
+ * Form cancellation ajax callback handler for akismet_flag_reason_form().
  */
-function mollom_flag_reason_form_cancel_ajax($form, &$form_state) {
-  $dialog = mollom_flag_dialog_check();
+function akismet_flag_reason_form_cancel_ajax($form, &$form_state) {
+  $dialog = akismet_flag_dialog_check();
   if (isset($dialog['close callback'])) {
     $function = $dialog['close callback'];
     return $function();
   }
-  // Custom Mollom dialog cancellation handler.
+  // Custom Akismet dialog cancellation handler.
   $entity = $form_state['values']['entity'];
   $id = $form_state['values']['id'];
 
   $commands = array();
-  $commands[] = ajax_command_remove(".mollom-flag-container:has(#mollom-flag-$entity-$id)");
+  $commands[] = ajax_command_remove(".akismet-flag-container:has(#akismet-flag-$entity-$id)");
   return array('#type' => 'ajax', '#commands' => $commands);
 }
 
@@ -358,11 +358,11 @@ function mollom_flag_reason_form_cancel_ajax($form, &$form_state) {
  * @param $rows
  *   A reference to the row associate array
  *
- * @see mollom_form_node_admin_content_alter
- * @see mollom_form_comment_admin_overview_alter
+ * @see akismet_form_node_admin_content_alter
+ * @see akismet_form_comment_admin_overview_alter
  */
-function _mollom_table_add_flag_counts($type, &$headers, &$rows) {
-  if (!mollom_flag_entity_type_access($type)) {
+function _akismet_table_add_flag_counts($type, &$headers, &$rows) {
+  if (!akismet_flag_entity_type_access($type)) {
     return;
   }
 
@@ -373,7 +373,7 @@ function _mollom_table_add_flag_counts($type, &$headers, &$rows) {
   );
 
   // Add the flag data to each row
-  $flags = mollom_entity_type_load($type);
+  $flags = akismet_entity_type_load($type);
   foreach($rows as $id => $data) {
     $count = 0;
     if (isset($flags[$id])) {
@@ -386,8 +386,8 @@ function _mollom_table_add_flag_counts($type, &$headers, &$rows) {
           '#title' => $count,
           '#href' => "$type/$id/edit",
           '#options' => array(
-            'query' => array('mollom_flag_details' => 1),
-            'fragment' => 'mollom-flag-details',
+            'query' => array('akismet_flag_details' => 1),
+            'fragment' => 'akismet-flag-details',
           ),
         ),
         'sort' => $count,
@@ -401,27 +401,27 @@ function _mollom_table_add_flag_counts($type, &$headers, &$rows) {
   $q = drupal_get_query_parameters();
   if (isset($q['order']) && $q['order'] == 'Flagged') {
     if (isset($q['sort']) && $q['sort'] === 'desc') {
-      uasort($rows, '_mollom_compare_flag_count_desc');
+      uasort($rows, '_akismet_compare_flag_count_desc');
     }
     else {
-      uasort($rows, '_mollom_compare_flag_count');
+      uasort($rows, '_akismet_compare_flag_count');
     }
   }
 }
 
 /**
  * Helper comparison function to sort data by flag count ascending.
- * @see _mollom_table_add_flag_counts
+ * @see _akismet_table_add_flag_counts
  */
-function _mollom_compare_flag_count($a, $b) {
+function _akismet_compare_flag_count($a, $b) {
   return $a['flagged']['sort'] - $b['flagged']['sort'];
 }
 
 /**
  * Helper comparison function to sort data by flag count descending.
- * @see _mollom_table_add_flag_counts
+ * @see _akismet_table_add_flag_counts
  */
-function _mollom_compare_flag_count_desc($a, $b) {
+function _akismet_compare_flag_count_desc($a, $b) {
   return $b['flagged']['sort'] - $a['flagged']['sort'];
 }
 
@@ -429,7 +429,7 @@ function _mollom_compare_flag_count_desc($a, $b) {
  * Adds flag data to comment edit form for administrators.
  * Called from hook_form_FORMID_alter().
  */
-function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
+function akismet_flag_comment_form_alter(&$form, &$form_state, $form_id) {
   // Make sure we are editing a comment.
   $comment = $form_state['comment'];
   if (empty($comment) || empty($form_state['comment']->cid)) {
@@ -439,13 +439,13 @@ function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
   if (!user_access('administer comments')) {
     return;
   }
-  // Make sure this form is protected by Mollom.
-  $forms = mollom_form_cache();
+  // Make sure this form is protected by Akismet.
+  $forms = akismet_form_cache();
   if (!isset($forms['protected'][$form_id])) {
     return;
   }
   // Find out if flag as inappropriate is enabled for this entity.
-  $forms = mollom_form_list();
+  $forms = akismet_form_list();
   $info = $forms[$form_id];
   if (!empty($info) && isset($info['entity report access callback'])) {
     $function = $info['entity report access callback'];
@@ -458,12 +458,12 @@ function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
   }
 
   // Get the flag counts for this comment.
-  $totals = _mollom_flag_entity_count('comment', $comment->cid);
+  $totals = _akismet_flag_entity_count('comment', $comment->cid);
 
   $output = array();
   $markup = $totals['total'] . ' ' . t('total');
   if ($totals['total'] > 0) {
-    $reasons = _mollom_flag_reasons();
+    $reasons = _akismet_flag_reasons();
     foreach($totals as $reason=>$total) {
       if ($total > 0 && $reason !== 'total') {
         $output[] = $total . ': ' . $reasons[$reason];
@@ -476,7 +476,7 @@ function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
     );
   }
 
-  $form['author']['mollom_flags'] = array(
+  $form['author']['akismet_flags'] = array(
     '#type' => 'item',
     '#title' => t('User flags'),
     '#markup' => $markup,
@@ -484,7 +484,7 @@ function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
 
   // Expand the admin fieldset if requested.
   $params = drupal_get_query_parameters();
-  if (!empty($params['mollom_flag_details'])) {
+  if (!empty($params['akismet_flag_details'])) {
     $form['author']['#collapsed'] = FALSE;
   }
 }
@@ -492,9 +492,9 @@ function mollom_flag_comment_form_alter(&$form, &$form_state, $form_id) {
 /**
  * Add flag details to a node edit form.
  *
- * @see mollom_form_node_form_alter
+ * @see akismet_form_node_form_alter
  */
-function mollom_flag_node_form_alter(&$form, &$form_state, $form_id) {
+function akismet_flag_node_form_alter(&$form, &$form_state, $form_id) {
   $node = $form_state['node'];
   // Make sure this is a node edit form.
   if (!isset($node->nid) || isset($node->is_new)) {
@@ -504,36 +504,36 @@ function mollom_flag_node_form_alter(&$form, &$form_state, $form_id) {
   $params = drupal_get_query_parameters();
 
   // Node options for administrators
-  $form['mollom_flags'] = array(
+  $form['akismet_flags'] = array(
     '#type' => 'fieldset',
-    '#access' => user_access('administer mollom') && mollom_flag_entity_type_access('node'),
+    '#access' => user_access('administer akismet') && akismet_flag_entity_type_access('node'),
     '#title' => t('User flags'),
     '#collapsible' => TRUE,
-    '#collapsed' => empty($params['mollom_flag_details']) ? TRUE : FALSE,
+    '#collapsed' => empty($params['akismet_flag_details']) ? TRUE : FALSE,
     '#group' => 'additional_settings',
     '#weight' => 100,
   );
   
-  $totals = _mollom_flag_entity_count('node', $node->nid);
+  $totals = _akismet_flag_entity_count('node', $node->nid);
   if ($totals['total'] == 0) {
-    $form['mollom_flags']['details'] = array(
+    $form['akismet_flags']['details'] = array(
       '#markup' => t('This content has not been flagged by users as inappropriate.'),
     );
   }
   else {
-    $reasons = _mollom_flag_reasons();
+    $reasons = _akismet_flag_reasons();
     $output = array();
     foreach($totals as $reason=>$flag_count) {
       if ($flag_count > 0 && $reason !== 'total') {
         $output[] = $flag_count . ': ' . $reasons[$reason];
       }
     }
-    $form['mollom_flags']['details'] = array(
+    $form['akismet_flags']['details'] = array(
       '#title' => format_plural($totals['total'], 'Flagged by users 1 time.', 'Flagged by users @count times.'),
       '#items' => $output,
       '#theme' => 'item_list',
       '#type' => 'ul',
-      '#attributes' => array('id' => 'mollom-flag-details'),
+      '#attributes' => array('id' => 'akismet-flag-details'),
     );
   }
 }
@@ -548,7 +548,7 @@ function mollom_flag_node_form_alter(&$form, &$form_state, $form_id) {
  * @param $id
  *   The id for the entity to show details for.
  */
-function mollom_flag_details($type, $entity, $id) {
+function akismet_flag_details($type, $entity, $id) {
   $detail = FALSE;
   if ($type === 'nojs' || $_SERVER['REQUEST_METHOD'] !== 'POST') {
     $links = array();
@@ -560,7 +560,7 @@ function mollom_flag_details($type, $entity, $id) {
     $detail = TRUE;
   }
   // Get the flag counts for this entity.
-  $totals = _mollom_flag_entity_count($entity, $id);
+  $totals = _akismet_flag_entity_count($entity, $id);
  
   $list_data = array();
   foreach($totals as $reason => $flag_count) {
@@ -602,7 +602,7 @@ function mollom_flag_details($type, $entity, $id) {
  * A dialog implementation may provide one or more of the callbacks in order to
  * affect the dialog output.  The hooks needed will vary by dialog
  * implementation.  If a callback is not found for a particular step in the
- * process, the default Mollom functionality will be used.
+ * process, the default Akismet functionality will be used.
  *
  * The following information can be set:
  * - title: (required) the title of the dialog solution that is displayed
@@ -615,18 +615,18 @@ function mollom_flag_details($type, $entity, $id) {
  * - close callback: callback to close the dialog window
  *
  * The site administrator can select to use one of the following in the
- * Mollom advanced settings if the module is installed and enabled for their
+ * Akismet advanced settings if the module is installed and enabled for their
  * site.
  *
  * @todo: Move this into a hook implementation to allow others to extend.
  */
-function mollom_flag_dialog_info() {
+function akismet_flag_dialog_info() {
   $modules = array(
     'ctools' => array(
       'title' => 'CTools (used by CTools Automodal and Modal Forms)',
-      'link prepare callback' => 'mollom_ctools_link_prepare',
-      'display form callback' => 'mollom_ctools_display_form',
-      'close callback' => 'mollom_ctools_close',
+      'link prepare callback' => 'akismet_ctools_link_prepare',
+      'display form callback' => 'akismet_ctools_display_form',
+      'close callback' => 'akismet_ctools_close',
     )
   );
   return $modules;
@@ -637,15 +637,15 @@ function mollom_flag_dialog_info() {
  *
  * @return mixed
  *   Returns an array of dialog information for the selected dialog or FALSE
- *   if the Mollom custom dialog should be used.
+ *   if the Akismet custom dialog should be used.
  *
- * @see mollom_flag_dialog_info()
+ * @see akismet_flag_dialog_info()
  */
-function mollom_flag_dialog_check() {
+function akismet_flag_dialog_check() {
   // Return dialog information for dialog selected in settings if it is
   // still enabled.
-  $modules = mollom_flag_dialog_info();
-  $configured_dialog = variable_get('mollom_fai_dialog', '');
+  $modules = akismet_flag_dialog_info();
+  $configured_dialog = variable_get('akismet_fai_dialog', '');
   if (isset($modules[$configured_dialog]) && module_exists($configured_dialog)) {
     return $modules[$configured_dialog];
   }
@@ -655,7 +655,7 @@ function mollom_flag_dialog_check() {
 /**
  * Callback handler for setting up links to use ctools.
  */
-function mollom_ctools_link_prepare() {
+function akismet_ctools_link_prepare() {
   module_load_include('module', 'ctools', 'ctools');
   ctools_include('modal');
   ctools_modal_add_js();
@@ -674,7 +674,7 @@ function mollom_ctools_link_prepare() {
  * @param $title
  *   The title of the dialog window.
  */
-function mollom_ctools_display_form($form, $title) {
+function akismet_ctools_display_form($form, $title) {
   // Utilize existing ctools constructs.
   module_load_include('module', 'ctools', 'ctools');
   ctools_include('modal');
@@ -692,9 +692,9 @@ function mollom_ctools_display_form($form, $title) {
 
 /**
  * Ctools enabled form cancellation ajax callback handler for
- * mollom_flag_reason_form().
+ * akismet_flag_reason_form().
  */
-function mollom_ctools_close() {
+function akismet_ctools_close() {
   module_load_include('module', 'ctools', 'ctools');
   ctools_include('modal');
 

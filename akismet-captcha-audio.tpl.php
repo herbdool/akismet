@@ -19,16 +19,16 @@ $flash_url = url($flash_fallback_player, array(
   'external' => TRUE,
 ));
 $switch_verify = t('Switch to image verification.');
-$instructions = t('Enter only the first letter of each word you hear.  If you are having trouble listening in your browser, you can <a href="@captcha-url" id="mollom_captcha_download" class="swfNext-mollom_captcha_verify">download the audio</a> to listen on your device.', array(
+$instructions = t('Enter only the first letter of each word you hear.  If you are having trouble listening in your browser, you can <a href="@captcha-url" id="akismet_captcha_download" class="swfNext-akismet_captcha_verify">download the audio</a> to listen on your device.', array(
   '@captcha-url' => $captcha_url,
 ));
-$unsupported = t('Your system does not support our audio playback verification.  Please <a href="@captcha-url" id="mollom_captcha_download" class="swfNext-mollom_captcha_verify">download this verification</a> to listen on your device.', array(
+$unsupported = t('Your system does not support our audio playback verification.  Please <a href="@captcha-url" id="akismet_captcha_download" class="swfNext-akismet_captcha_verify">download this verification</a> to listen on your device.', array(
   '@captcha-url' => $captcha_url,
 ));
 $refresh_alt = t('Refresh');
 
 $refresh_image_output = theme('image', array(
-  'path' => drupal_get_path('module', 'mollom') . '/images/refresh.png',
+  'path' => drupal_get_path('module', 'akismet') . '/images/refresh.png',
   'alt' => $refresh_alt,
   'getsize' => FALSE,
 ));
@@ -36,9 +36,9 @@ $refresh_image_output = theme('image', array(
 
 <script type="text/javascript">
   function embedFallbackPlayer() {
-    var embedDiv = document.getElementById("mollom_captcha_fallback_player");
-    var audioDiv = document.getElementById("mollom_captcha_audio");
-    var unsupportedDiv = document.getElementById("mollom_captcha_unsupported");
+    var embedDiv = document.getElementById("akismet_captcha_fallback_player");
+    var audioDiv = document.getElementById("akismet_captcha_audio");
+    var unsupportedDiv = document.getElementById("akismet_captcha_unsupported");
     var movie = '<?php print $flash_url; ?>';
 
     function embedComplete(e) {
@@ -54,14 +54,14 @@ $refresh_image_output = theme('image', array(
         wmode:  "opaque"
       },
       attributes = {
-        "class": "swfPrev-mollom_captcha_download swfNext-mollom_captcha_verify mollom_captcha_flash_player",
+        "class": "swfPrev-akismet_captcha_download swfNext-akismet_captcha_verify akismet_captcha_flash_player",
       },
       playerWidth = 110,
       playerHeight = 50;
     if (typeof swfobject !== 'undefined') {
       swfobject.embedSWF(movie, embedDiv, playerWidth, playerHeight, "10.0", null, flashvars, params, attributes, embedComplete);
     } else {
-      var embed = '<object id="mollom_captcha_fallback_player" name="mollom_captcha_fallback_player" ';
+      var embed = '<object id="akismet_captcha_fallback_player" name="akismet_captcha_fallback_player" ';
       embed += 'classid="clsid:D27CDB6E-AE6D-11cf-96B8-444553540000" ';
       embed += 'type="application/x-shockwave-flash" ';
       embed += 'data="' + movie + '" '
@@ -94,27 +94,27 @@ $refresh_image_output = theme('image', array(
       embed += '/>';
       embed += '</object>';
       jQuery(embedDiv).replaceWith(embed);
-      jQuery("#mollom_captcha_fallback_player").focus();
+      jQuery("#akismet_captcha_fallback_player").focus();
     }
     jQuery(audioDiv).hide();
   }
 </script>
 
-<span class="mollom-captcha-container">
-  <a href="javascript:void(0);" class="mollom-refresh-captcha mollom-refresh-audio"><?php print $refresh_image_output; ?></a>
-  <span class="mollom-captcha-content mollom-audio-captcha">
-    <span class="mollom-audio-catcha-instructions"><?php print $instructions; ?></span>
+<span class="akismet-captcha-container">
+  <a href="javascript:void(0);" class="akismet-refresh-captcha akismet-refresh-audio"><?php print $refresh_image_output; ?></a>
+  <span class="akismet-captcha-content akismet-audio-captcha">
+    <span class="akismet-audio-catcha-instructions"><?php print $instructions; ?></span>
 
     <!--- HTML5 Audio playback -->
-    <audio id="mollom_captcha_audio" controls tabindex="0">
+    <audio id="akismet_captcha_audio" controls tabindex="0">
       <source src="<?php print $captcha_url; ?>" type="audio/mpeg" />
       <!-- Displays if HTML5 audio is unsupported and JavaScript player embed is unsupported -->
       <p><?php print $unsupported; ?></p>
     </audio>
 
     <!-- Fallback for browsers not supporting HTML5 audio or not MP3 format -->
-    <span id="mollom_captcha_fallback">
-      <span id="mollom_captcha_fallback_player"></span>
+    <span id="akismet_captcha_fallback">
+      <span id="akismet_captcha_fallback_player"></span>
       <script>
         var audioTest = document.createElement('audio');
         if (!audioTest.canPlayType || !audioTest.canPlayType('audio/mpeg')) {
@@ -124,10 +124,10 @@ $refresh_image_output = theme('image', array(
     </span>
 
     <!-- Text to show when neither HTML5 audio or SWFs are supported -->
-    <span id="mollom_captcha_unsupported" class="element-hidden">
+    <span id="akismet_captcha_unsupported" class="element-hidden">
       <p><?php print $unsupported; ?></p>
     </span>
 
-    <span class="mollom-audio-captcha-switch"><a href="#" class="mollom-switch-captcha mollom-image-captcha swfPrev-mollom_captcha_download" id="mollom_captcha_verify"><?php print $switch_verify; ?></a></span>
+    <span class="akismet-audio-captcha-switch"><a href="#" class="akismet-switch-captcha akismet-image-captcha swfPrev-akismet_captcha_download" id="akismet_captcha_verify"><?php print $switch_verify; ?></a></span>
   </span>
 </span>

@@ -3,28 +3,28 @@
 /**
  * Filters blacklist entries.
  */
-Drupal.behaviors.mollomBlacklistFilter = {
+Drupal.behaviors.akismetBlacklistFilter = {
   attach: function (context) {
     var self = this;
-    $('#mollom-blacklist', context).once('mollom-blacklist-filter', function () {
+    $('#akismet-blacklist', context).once('akismet-blacklist-filter', function () {
       // Prepare a list of all entries to optimize performance. Each key is a
       // blacklisted value and each value is an object containing the
       // corresponding table row, context, and match.
       self.entries = {};
-      $(this).find('tr:has(.mollom-blacklist-value)').each(function () {
+      $(this).find('tr:has(.akismet-blacklist-value)').each(function () {
         var $row = $(this), entry = {
-          value: $row.find('.mollom-blacklist-value').text(),
-          context: $row.children('.mollom-blacklist-context').attr('class').match(/value-(\w+)/)[1],
-          match: $row.children('.mollom-blacklist-match').attr('class').match(/value-(\w+)/)[1],
+          value: $row.find('.akismet-blacklist-value').text(),
+          context: $row.children('.akismet-blacklist-context').attr('class').match(/value-(\w+)/)[1],
+          match: $row.children('.akismet-blacklist-match').attr('class').match(/value-(\w+)/)[1],
           row: this
         };
         self.entries[entry.context + '-' + entry.match + '-' + entry.value] = entry;
       });
 
       // Attach the instant text filtering behavior.
-      var $filterText = $('#mollom-blacklist-filter-value', context);
-      var $filterContext = $('#mollom-blacklist-filter-context', context);
-      var $filterMatch = $('#mollom-blacklist-filter-match', context);
+      var $filterText = $('#akismet-blacklist-filter-value', context);
+      var $filterContext = $('#akismet-blacklist-filter-context', context);
+      var $filterMatch = $('#akismet-blacklist-filter-match', context);
 
       self.lastSearch = {};
       var filterRows = function () {
