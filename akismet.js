@@ -87,7 +87,7 @@ Drupal.akismet.getAkismetCaptcha = function (captchaType, context) {
         return;
       }
       // Inject new CAPTCHA.
-      $('.akismet-captcha-content', context).parent().replaceWith(data.content);
+      $('.akismet-captcha-content', context).parent().html(data.content);
       // Update CAPTCHA ID.
       $('input.akismet-captcha-id', context).val(data.captchaId);
       // Add an onclick-event handler for the new link.

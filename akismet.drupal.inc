@@ -16,8 +16,8 @@ class AkismetDrupal extends Akismet {
    * @see Akismet::__construct().
    */
   public function __construct() {
-    // Set any configured endpoint that may be different from the default.
     parent::__construct();
+    // Set any configured endpoint that may be different from the default.
     $configured_server = $this->loadConfiguration('server');
     if (!empty($configured_server)) {
       $this->server = $configured_server;
@@ -161,6 +161,36 @@ class AkismetDrupal extends Akismet {
       'body' => $dhr->data,
     );
     return $response;
+  }
+
+  /**
+   * Ping the Akismet API.
+   *
+   * Drupal may want to ping with a set of keys that
+   * are not yet saved in the configuration.  This function handles setting and
+   * resetting the private key after pinging in order to maintain this state.
+   *
+   * @param $publicKey
+   *   (Optional) the public key to use.  If not provided, the class's own
+   *   publicKey is used.
+   * @param $privateKey
+   *   (Optional) the private key to use.  If not provided, the class's own
+   *   privateKey is used.
+   * @param string $callback
+   *   A callback path to receive the "pong" response from Akismet.  The path
+   *   defaults to 'akismet/pong'.
+   */
+  public function pingAPI($publicKey = NULL, $privateKey = NULL, $callback = 'akismet/pong') {
+    // Handle setting the private key for authorization purposes.
+    $currentPrivateKey = $this->loadConfiguration('privateKey');
+    if (!empty($privateKey)) {
+      $this->privateKey = $privateKey;
+    }
+    // Update the callback to an absolute URL.
+    $callback = url($callback, array('absolute' => TRUE));
+    $result = $this->ping($callback, $publicKey);
+    $this->saveConfiguration('privateKey', $currentPrivateKey);
+    return $result;
   }
 
   /**
@@ -351,9 +381,6 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
     list(, $server) = explode('://', $GLOBALS['base_url'], 2);
     $this->server = $server . '/akismet-test/rest';
 
-    // Do not destroy production server variables when testing mode is enabled.
-    $this->configuration_map['server'] = 'akismet_test_local_api_endpoint';
-
     parent::__construct();
   }
 
@@ -428,11 +455,11 @@ class AkismetDrupalTestInvalid extends AkismetDrupalTest {
    * Overrides AkismetDrupalTest::__construct().
    */
   function __construct() {
-    parent::__construct();
     $this->originalServer = $this->server;
     $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';
+    parent::__construct();
+
     $this->saveConfiguration('server', 'fake-host');
-    $this->server = 'fake-host';
   }
 
   /**

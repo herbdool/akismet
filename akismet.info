@@ -1,5 +1,5 @@
 name = Akismet
-description = Automatically moderates user-submitted content and protects your site from spam and profanity.
+description = Protects your site from spam by sending user-submitted content to the Akismet anti-spam service.
 core = 7.x
 configure = admin/config/content/akismet
 
@@ -11,3 +11,4 @@ files[] = includes/akismet.class.inc
 files[] = akismet.drupal.inc
 files[] = tests/akismet.test
 files[] = tests/akismet.class.test
+

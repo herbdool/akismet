@@ -302,7 +302,7 @@ function akismet_schema() {
         'default' => 1,
       ),
       'moderation' => array(
-        'description' => 'Whether to integrate with Akismet moderation - DEPRECATED',
+        'description' => 'Whether to integrate with Akismet moderation.',
         'type' => 'int',
         'size' => 'tiny',
         'not null' => TRUE,
@@ -1302,28 +1302,4 @@ function akismet_update_7213() {
       'not null' => FALSE,
     ));
   }
-}
-
-/**
- * Restrict access to the Akismet Content Moderation Platform to current users.
- */
-function akismet_update_7214() {
-  $uses_cmp = FALSE;
-  $result = db_query('SELECT moderation FROM {akismet_form}')->fetchCol();
-  foreach ($result as $moderation) {
-    if (!empty($moderation)) {
-      $uses_cmp = TRUE;
-      break;
-    }
-  }
-  if ($uses_cmp) {
-    variable_set('akismet_cmp_enabled', TRUE);
-  }
-}
-
-/**
- * Remove Akismet Content Moderation Platform variables.
- */
-function akismet_update_7215() {
-  variable_del('akismet_cmp_enabled');
 }

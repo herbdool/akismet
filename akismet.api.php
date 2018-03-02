@@ -452,20 +452,5 @@ function hook_akismet_form_info_alter(&$form_info, $form_id) {
 }
 
 /**
- * Alter textual analysis submission before it is sent to Akismet's checkContent.
- *
- * @param &$content
- *   An associative array of data being prepared for Akismet. The parameters at
- *   https://docs.acquia.com/akismet/api/rest/list#content-create are the array
- *   keys, like $data['postBody'].
- */
-function hook_akismet_content_alter(&$content) {
-  // https://docs.acquia.com/ does not have spam, do not examine its URLs.
-  if (isset($content['postBody'])) {
-    $data['postBody'] = preg_replace('#https?://docs\.acquia\.com#', '', $content['postBody']);
-  }
-}
-
-/**
  * @} End of "defgroup module_group".
  */

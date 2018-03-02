@@ -383,36 +383,19 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
         ),
       );
 
-      $form['akismet']['strictness'] = array(
-        '#type' => 'radios',
-        '#title' => t('Text analysis strictness'),
-        '#options' => array(
-          'normal' => t('!option <em>(!recommended)</em>', array(
-            '!option' => t('Normal'),
-            '!recommended' => $recommended,
-          )),
-          'strict' => t('Strict: Posts are more likely classified as spam'),
-          'relaxed' => t('Relaxed: Posts are more likely classified as ham'),
-        ),
-        '#default_value' => $akismet_form['strictness'],
-        '#states' => array(
-          'visible' => array(
-            ':input[name="akismet[mode]"]' => array('value' => (string) AKISMET_MODE_ANALYSIS),
-          ),
-        ),
-      );
-
       $form['akismet']['unsure'] = array(
         '#type' => 'radios',
-        '#title' => t('When text analysis is unsure'),
+        // TODO: Rework this UI to better fit Akismet's wording: https://blog.akismet.com/2014/04/23/theres-a-ninja-in-your-akismet/
+        '#title' => t('When Akismet thinks a post is spam, but is\'nt sure'),
         '#default_value' => $akismet_form['unsure'],
         '#options' => array(
-          'captcha' => t('!option <em>(!recommended)</em>', array(
-            '!option' => t('Show a CAPTCHA'),
-            '!recommended' => $recommended,
-          )),
+//          'captcha' => t('!option <em>(!recommended)</em>', array(
+//            '!option' => t('Show a CAPTCHA'),
+//            '!recommended' => $recommended,
+//          )),
           'moderate' => t('Retain the post for manual moderation'),
-          'binary' => t('Accept the post'),
+          'accept' => t('Accept the post'),
+          'discard' => t('Disallow the post'),
         ),
         '#required' => $akismet_form['mode'] == AKISMET_MODE_ANALYSIS,
         // Only possible for forms protected via text analysis.
@@ -451,6 +434,39 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
           ),
         ),
       );
+
+      // CMP integration requires Clean URLs to be enabled, in order for the
+      // local moderation callback endpoints to work.
+      $has_clean_urls = variable_get('clean_url', FALSE);
+
+      $form['akismet']['moderation'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Allow content to be moderated from the <a href="@moderation-url">@moderation-product</a>', array(
+          '@moderation-url' => 'https://akismet.com/moderation',
+          '@moderation-product' => 'Akismet Content Moderation Platform',
+        )),
+        '#default_value' => (string) (int) ($akismet_form['moderation'] && $has_clean_urls),
+        '#disabled' => !$has_clean_urls,
+        // Only possible for forms which result in a locally stored entity.
+        '#access' => !empty($akismet_form['entity']),
+        // Only possible for forms protected via text analysis.
+        '#states' => array(
+          'visible' => array(
+            ':input[name="akismet[mode]"]' => array('value' => (string) AKISMET_MODE_ANALYSIS),
+          ),
+        ),
+        '#description' => t('Provides a unified moderation interface supporting multiple sites, moderation teams, and detailed analytics.'),
+      );
+      if (!$has_clean_urls) {
+        $form['akismet']['moderation']['#description'] .= '<br />' . t('Requires <a href="@clean-urls">Clean URLs</a> to be enabled.', array(
+          '@clean-urls' => url('admin/config/search/clean-urls'),
+        ));
+      }
+      else {
+        $form['akismet']['moderation']['#description'] .= '<br />' . t('Note: All content that was created while this option was disabled cannot be moderated from the @moderation-product; only new content will appear.', array(
+          '@moderation-product' => 'Akismet Content Moderation Platform',
+        ));
+      }
 
       $form['actions']['submit'] = array(
         '#type' => 'submit',
@@ -828,8 +844,8 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'fieldset',
     '#title' => t('Akismet API keys'),
     '#description' => t('To obtain API keys, <a href="@signup-url">sign up</a> or log in to your <a href="@site-manager-url">Site manager</a>, register this site, and copy the keys into the fields below.', array(
-      '@signup-url' => 'https://www.akismet.com/pricing',
-      '@site-manager-url' => 'https://www.akismet.com/site-manager',
+      '@signup-url' => 'https://akismet.com/pricing',
+      '@site-manager-url' => 'https://akismet.com/site-manager',
     )),
     '#collapsible' => TRUE,
     // Only show key configuration fields if they are not configured or invalid.
@@ -851,6 +867,46 @@ function akismet_admin_settings($form, &$form_state) {
     '#element_validate' => array('akismet_admin_settings_validate_key'),
     '#description' => t('Used for authentication. Similar to a password, the private key should not be shared with anyone.'),
   );
+  $form['access-keys']['ping_holder'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Test connection'),
+    '#title_display' => 'invisible',
+    '#states' => array(
+      'visible' => array(
+        ':input[name="akismet_public_key"]' => array('!value' => ''),
+        ':input[name="akismet_private_key"]' => array('!value' => ''),
+      ),
+    ),
+    'ping_action' => array(
+      '#type' => 'button',
+      '#value' => t('Ping Akismet'),
+      '#submit' => array('akismet_admin_ping_submit'),
+      '#ajax' => array(
+        'callback' => 'akismet_admin_ping_ajax_callback',
+        'wrapper' => 'akismet-ping-response',
+        'method' => 'replace',
+        'effect' => 'fade',
+      ),
+    ),
+    'help' => array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'class' => array('description'),
+      ),
+      'helptext' => array(
+        '#markup' => t('Be sure that you have checked "Log all Akismet messages" in the "Advanced" configuration in order to review full API responses.'),
+      ),
+    ),
+    'akismet_ping_replace' => array(
+      '#type' => 'container',
+      '#attributes' => array(
+        'id' => 'akismet-ping-response',
+      ),
+      'response' => array(
+        '#markup' => isset($form_state['storage']['akismet_ping']) ? $form_state['storage']['akismet_ping'] : '',
+      ),
+    )
+  );
   $form['akismet_fallback'] = array(
     '#type' => 'radios',
     '#title' => t('When the Akismet service is unavailable'),
@@ -860,7 +916,7 @@ function akismet_admin_settings($form, &$form_state) {
       AKISMET_FALLBACK_BLOCK => t('Block all form submissions'),
     ),
     '#description' => t('Akismet offers a <a href="@pricing-url">high-availability</a> infrastructure for users on paid plans to reduce potential downtime.', array(
-      '@pricing-url' => 'https://www.akismet.com/pricing',
+      '@pricing-url' => 'https://akismet.com/pricing',
     )),
   );
 
@@ -939,7 +995,7 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'checkbox',
     '#title' => t('Enable audio CAPTCHAs.'),
     '#description' => t('Allows users to switch to an audio verification using the <a href="!faq-url">NATO alphabet</a>.  This may not be appropriate for non-English language sites.', array(
-      '!faq-url' => 'https://www.akismet.com/faq/akismet-audible-captcha-language',
+      '!faq-url' => 'https://akismet.com/faq/akismet-audible-captcha-language',
     )),
     '#default_value' => variable_get('akismet_audio_captcha_enabled', 1),
   );
@@ -956,7 +1012,7 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'checkbox',
     '#title' => t('Enable form behavior analysis (beta).'),
     '#description' => t('This will place a small tracking image from Akismet on each form protected by textural analysis to help Akismet determine if the form is filled out by a bot.  <a href="!fba-url">Learn more</a>.', array(
-      '!fba-url' => 'https://www.akismet.com/faq/form-behavior-analysis',
+      '!fba-url' => 'https://akismet.com/faq/form-behavior-analysis',
     )),
     '#default_value' => variable_get('akismet_fba_enabled', 0),
   );
@@ -975,7 +1031,7 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'checkboxes',
     '#title' => t('Allow users to  "Flag as Inappropriate" for the following:'),
     '#description' => t('"Flag as inappropriate" will only appear on protected forms for users who have permission to the content type and have the permission to "Report to Akismet".  <a href="!fai-url">Learn more</a>.', array(
-      '!fai-url' => 'https://www.akismet.com/faq/flag-as-inappropriate',
+      '!fai-url' => 'https://akismet.com/faq/flag-as-inappropriate',
     )),
     '#options' => drupal_map_assoc($options),
     '#default_value' => variable_get('akismet_fai_entity_types', array('comment' => 'comment')),
@@ -1049,11 +1105,55 @@ function akismet_admin_settings_submit($form, &$form_state) {
 }
 
 /**
+ * Form submit handler for the ping button.
+ */
+function akismet_admin_ping_ajax_callback($form, &$form_state) {
+  $akismet = akismet();
+  $response = $akismet->pingAPI($form_state['values']['akismet_public_key'], $form_state['values']['akismet_private_key']);
+  $code = isset($response['code']) ? $response['code'] : $response;
+  if (drupal_strlen($code)) {
+    $log_message = t('Akismet API response status: @response.  Please check your <a href="!log_url">Recent log messages</a> for details.', array(
+      '@response' => $code,
+      '!log_url' => url('admin/reports/dblog'),
+    ));
+  }
+  else {
+    $log_message = t('Ping request succeeded.  Please check your <a href="!log_url">Recent log messages</a> for pong callback.', array(
+      '!log_url' => url('admin/reports/dblog'),
+    ));
+  }
+  $form_state['storage']['akismet_ping'] = $form['access-keys']['ping_holder']['akismet_ping_replace']['response']['#markup'] = $log_message;
+  return $form['access-keys']['ping_holder']['akismet_ping_replace'];
+}
+
+/**
+ * Callback for Akismet API pong return.
+ *
+ * NOTE:  This function does not have any access restrictions due to the nature
+ * of an API callback.  Therefore, no additional work should be performed here.
+ */
+function akismet_admin_pong_callback() {
+  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+    akismet_log(array(
+      'message' => 'Akismet API pong called using invalid request method',
+    ), WATCHDOG_ERROR);
+    return MENU_NOT_FOUND;
+  }
+  akismet_log(array(
+    'message' => 'Akismet API: pong',
+  ), WATCHDOG_INFO);
+  // Return empty content so that Akismet receives an appropriate HTTP status
+  // code.
+  return array();
+}
+
+
+/**
  * Menu callback; Displays the administrative reports page.
  */
 function akismet_reports_page($form, &$form_state) {
   $embed_attributes = array(
-    'src' => 'https://www.akismet.com/statistics.swf?key=' . check_plain(variable_get('akismet_public_key', '')),
+    'src' => 'https://akismet.com/statistics.swf?key=' . check_plain(variable_get('akismet_public_key', '')),
     'quality' => 'high',
     'width' => '100%',
     'height' => '430',

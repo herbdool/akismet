@@ -978,6 +978,27 @@ abstract class Akismet {
   }
 
   /**
+   * Pings the Akismet API to validate keys and connectivity.
+   *
+   * @param string $callback
+   *   A callback URL to receive the "pong" response from Akismet.
+   * @param string publicKey
+   *   (Optional) A public key to use.  If not provided, the current class's
+   *   publicKey will be used.
+   *
+   * @return int
+   *   The status code returned from the server.
+   */
+  public function ping($callback, $publicKey = NULL) {
+    if (!isset($publicKey)) {
+      $publicKey = $this->publicKey;
+    }
+    $publicKey = rawurlencode($publicKey);
+    $result = $this->query('POST', 'site/' . $publicKey . '/ping', array('url' => $callback));
+    return $result;
+  }
+
+  /**
    * Retrieves a list of sites accessible to this client.
    *
    * Used by Akismet resellers only.

@@ -1,7 +1,7 @@
 
 -- SUMMARY --
 
-Integrates with the Akismet service: https://www.akismet.com
+Integrates with the Akismet content moderation service: https://akismet.com
 
 For a full description of the module, visit the project page:
   http://drupal.org/project/akismet
@@ -10,10 +10,8 @@ To submit bug reports and feature suggestions, or to track changes:
   http://drupal.org/project/issues/akismet
 
 For issues pertaining to the Akismet service, contact Akismet Support:
-  https://www.akismet.com/contact
+  https://akismet.com/contact
   - e.g., inappropriately blocked posts, spam posts getting through, etc.
-  - Ensure to include the Akismet session/content IDs of affected posts; find
-    them in Drupal's Recent log messages by filtering by the "akismet" category.
 
 
 -- REQUIREMENTS --
@@ -26,11 +24,11 @@ None.
 * Install as usual:
   http://drupal.org/documentation/install/modules-themes/modules-7
 
-* Go to https://www.akismet.com,
+* Go to https://akismet.com,
 
   - sign up or log in with your account
-  - go to your Site manager ("Manage sites" link in the upper right)
-  - create a site (API keys) for this Drupal installation.
+  - go to your Account Overview
+  - Find your Akismet API key at the top of the page.
 
 * Enter your API keys on Administration » Configuration » Content authoring
   » Akismet » Settings.
@@ -98,7 +96,7 @@ To test Akismet:
 
 Q: Akismet does not stop any spam on my form?
 
-A: Do you see Akismet's privacy policy link on the protected form?  If not, you
+A: Do you see the Akismet privacy policy link on the protected form?  If not, you
    most likely did not protect the form (but a different one instead).
 
    Note: The privacy policy link can be toggled in the global module settings.
@@ -114,27 +112,25 @@ A: Out of the box, the Akismet module allows to protect Drupal core forms only.
    is extensively documented in akismet.api.php in this directory.
 
    To protect a custom form, you need to integrate with the Akismet module API.
-   However, if you have a completely custom form (not even using Drupal's Form
-   API), you may also protect that, by following Akismet's general guide and
-   example for PHP client implementations:
+   If you have a completely custom form (not even using Drupal's Form API), see
+   the Akismet developer documentation:
 
-   - https://github.com/Akismet/guide
-   - https://github.com/Akismet/guide/tree/master/examples/php52
-
-Q: What happened to the Akismet Content Moderation Platform?
-
-A: On Thursday, 1 October 2015, Acquia is ending support for the Content
-   Moderation Platform (CMP) feature of Akismet, which was originally added as a
-   feature in 2013.  Users who activated their CMP accounts before June 1, 2015
-   will have access until that time.
-
-   - https://docs.acquia.com/akismet/faq/platform
+   - https://akismet.com/development/api/
 
 
 -- CONTACT --
 
-For questions pertaining to the Akismet service go to https://www.akismet.com/support
+For questions pertaining to the Akismet service go to https://akismet.com/support
 
 Current maintainers:
-* Lisa Backer (eshta) - https://www.drupal.org/u/eshta
-* Nick Veenhof (Nick_vh) - https://www.drupal.org/u/nick_vh
+* Katherine Senzee (ksenzee) - http://drupal.org/u/ksenzee
+
+Co-maintainers wanted.
+
+
+-- MOLLOM --
+
+This module is a fork of the Mollom module. The Mollom spam-control service was
+discontinued in 2018. This module attempts to serve as a drop-in replacement
+for sites that were previously using Mollom and want to switch to Akismet. It
+makes as few changes to the original Mollom module code as possible.
