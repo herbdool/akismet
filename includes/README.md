@@ -60,7 +60,7 @@ To submit bug reports and feature suggestions, or to track changes:
     }
     
     // Check the final spam classification.
-    switch ($result['spamClassification']) {
+    switch ($result['spam_classification']) {
       case 'ham':
         // Do nothing. (Accept content.)
         break;
@@ -74,7 +74,7 @@ To submit bug reports and feature suggestions, or to track changes:
       case 'unsure':
         // Require to solve a CAPTCHA to get the post submitted.
         $captcha = $akismet->createCaptcha(array(
-          'contentId' => $result['id'],
+          'content_id' => $result['id'],
           'type' => 'image',
         ));
         if (!is_array($captcha) || !isset($captcha['id'])) {
@@ -90,7 +90,7 @@ To submit bug reports and feature suggestions, or to track changes:
         break;
     
       default:
-        // If we end up here, Akismet responded with a unknown spamClassification.
+        // If we end up here, Akismet responded with a unknown spam_classification.
         // Normally, this should not happen.
         break;
     }

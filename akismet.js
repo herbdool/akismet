@@ -89,7 +89,7 @@ Drupal.akismet.getAkismetCaptcha = function (captchaType, context) {
       // Inject new CAPTCHA.
       $('.akismet-captcha-content', context).parent().html(data.content);
       // Update CAPTCHA ID.
-      $('input.akismet-captcha-id', context).val(data.captchaId);
+      $('input.akismet-captcha-id', context).val(data.captcha_id);
       // Add an onclick-event handler for the new link.
       Drupal.attachBehaviors(context);
       // Focus on the CAPTCHA input.

@@ -262,7 +262,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * redirected), then we will get a new session_id.
    *
    * @param $type
-   *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
+   *   The type of ID to assert; e.g., 'content_id', 'captcha_id'.
    * @param $id
    *   The ID of $type in the last request, as returned from Akismet.
    * @param $new_expected
@@ -288,7 +288,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * Reset the statically cached Akismet session id.
    *
    * @param $type
-   *   The type of ID to reset; e.g., 'contentId', 'captchaId'.
+   *   The type of ID to reset; e.g., 'content_id', 'captcha_id'.
    */
   protected function resetResponseID($type = NULL) {
     if (isset($type)) {
@@ -316,7 +316,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *   to verify that the proper session id was stored in the database.
    *
    * @param $type
-   *   The type of ID to assert; e.g., 'contentId', 'captchaId'.
+   *   The type of ID to assert; e.g., 'content_id', 'captcha_id'.
    * @param $new_expected
    *   (optional) Boolean indicating whether a new ID is expected; e.g., after
    *   incorrectly solving a CAPTCHA.
@@ -517,7 +517,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * @param $id
    *   The entity id to search for in {akismet}.
    * @param $response_type
-   *   (optional) The type of ID to assert; e.g., 'contentId', 'captchaId'.
+   *   (optional) The type of ID to assert; e.g., 'content_id', 'captcha_id'.
    * @param $response_id
    *   (optional) The ID of $type to assert additionally.
    */
@@ -1488,74 +1488,74 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     $data['postBody'] = 'ham';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'ham');
+    $this->assertSame('spam_score', $result['spam_score'], 0.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
     $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
     $data['postBody'] = 'spam';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'spam');
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
     $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Ensure proper response for 'unsure' submissions, re-using session_id.
     $data['postBody'] = 'unsure';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.5);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'unsure');
+    $this->assertSame('spam_score', $result['spam_score'], 0.5);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
     $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Additionally enable profanity checking.
     $data['postBody'] = 'spam profanity';
     $data['checks'] = array('spam', 'quality', 'profanity');
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'spam');
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
     $this->assertSame('qualityScore', $result['qualityScore'], 0.0);
     $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Change the string to contain profanity only.
     $data['postBody'] = 'profanity';
     $data['checks'] = array('spam', 'quality', 'profanity');
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.5);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'unsure');
+    $this->assertSame('spam_score', $result['spam_score'], 0.5);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
     $this->assertSame('qualityScore', $result['qualityScore'], 0.0);
     $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Disable spam checking, only do profanity checking.
     $data['postBody'] = 'spam profanity';
     $data['checks'] = array('profanity');
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!isset($result['spamScore']), 'spam not returned.');
-    $this->assertTrue(!isset($result['spamClassification']), 'spamClassification not returned.');
+    $this->assertTrue(!isset($result['spam_score']), 'spam not returned.');
+    $this->assertTrue(!isset($result['spam_classification']), 'spam_classification not returned.');
     $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Pass arbitrary string to profanity checking.
     $data['postBody'] = $this->randomString(12);
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!isset($result['spamScore']), 'spam not returned.');
-    $this->assertTrue(!isset($result['spamClassification']), 'spamClassification not returned.');
+    $this->assertTrue(!isset($result['spam_score']), 'spam not returned.');
+    $this->assertTrue(!isset($result['spam_classification']), 'spam_classification not returned.');
     $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
     $this->assertSame('profanityScore', $result['profanityScore'], 0.0);
-    $data['id'] = $this->assertResponseID('contentId', $result['id']);
+    $data['id'] = $this->assertResponseID('content_id', $result['id']);
   }
 
   /**
@@ -1574,30 +1574,30 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     // - Post unsure content
     // - Solve CAPTCHA
     // - Post spam content
-    // - Expect spamClassification 'spam' (spam always trumps)
+    // - Expect spam_classification 'spam' (spam always trumps)
     $this->resetResponseID();
     $content_data = $base_data;
     $content_data['postBody'] = 'unsure';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.5);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'unsure');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
-    $content_data['id'] = &$contentId;
+    $this->assertSame('spam_score', $result['spam_score'], 0.5);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
+    $content_data['id'] = &$content_id;
 
     $captcha_data = array(
       'type' => 'image',
-      'contentId' => &$contentId,
+      'content_id' => &$content_id,
       'authorIp' => $base_data['authorIp'],
     );
     $result = $akismet->createCaptcha($captcha_data);
     $this->assertAkismetWatchdogMessages();
-    $captchaId = $this->assertResponseID('captchaId', $result['id']);
-    $content_data['captchaId'] = &$captchaId;
+    $captcha_id = $this->assertResponseID('captcha_id', $result['id']);
+    $content_data['captcha_id'] = &$captcha_id;
 
     $captcha_data = array(
-      'id' => &$captchaId,
-      'contentId' => &$contentId,
+      'id' => &$captcha_id,
+      'content_id' => &$content_id,
       'authorIp' => $base_data['authorIp'],
       'authorId' => $base_data['authorId'],
       'solution' => 'correct',
@@ -1609,9 +1609,9 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     $content_data['postBody'] = 'spam';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'spam');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
 
     // @todo Enable following sequence after fixing Testing API.
     return;
@@ -1620,34 +1620,34 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     // - Post unsure content
     // - Solve CAPTCHA
     // - Post unsure content
-    // - Expect spamClassification 'ham'
+    // - Expect spam_classification 'ham'
     // - Post ham content
-    // - Expect spamClassification 'ham'
+    // - Expect spam_classification 'ham'
     // - Post unsure content
-    // - Expect spamClassification 'ham'
+    // - Expect spam_classification 'ham'
     $this->resetResponseID();
     $content_data = $base_data;
     $content_data['postBody'] = 'unsure';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.5);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'unsure');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
-    $content_data['id'] = &$contentId;
+    $this->assertSame('spam_score', $result['spam_score'], 0.5);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
+    $content_data['id'] = &$content_id;
 
     $captcha_data = array(
       'type' => 'image',
-      'contentId' => &$contentId,
+      'content_id' => &$content_id,
       'authorIp' => $base_data['authorIp'],
     );
     $result = $akismet->createCaptcha($captcha_data);
     $this->assertAkismetWatchdogMessages();
-    $captchaId = $this->assertResponseID('captchaId', $result['id']);
-    $content_data['captchaId'] = &$captchaId;
+    $captcha_id = $this->assertResponseID('captcha_id', $result['id']);
+    $content_data['captcha_id'] = &$captcha_id;
 
     $captcha_data = array(
-      'id' => &$captchaId,
-      'contentId' => &$contentId,
+      'id' => &$captcha_id,
+      'content_id' => &$content_id,
       'authorIp' => $base_data['authorIp'],
       'authorId' => $base_data['authorId'],
       'solution' => 'correct',
@@ -1659,23 +1659,23 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     $content_data['postBody'] = 'unsure';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spamScore', $result['spamScore'], 0.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'ham');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
+    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
 
     $content_data['postBody'] = 'ham';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spamScore', $result['spamScore'], 0.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'ham');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
+    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
 
     $content_data['postBody'] = 'unsure';
     $result = $akismet->checkContent($content_data);
     $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spamScore', $result['spamScore'], 0.0);
-    $this->assertSame('spamClassification', $result['spamClassification'], 'ham');
-    $contentId = $this->assertResponseID('contentId', $result['id']);
+    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
+    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
+    $content_id = $this->assertResponseID('content_id', $result['id']);
   }
 
   /**
@@ -1747,7 +1747,7 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     );
     $result = $akismet->createCaptcha($data);
     $this->assertAkismetWatchdogMessages();
-    $data['id'] = $this->assertResponseID('captchaId', $result['id']);
+    $data['id'] = $this->assertResponseID('captcha_id', $result['id']);
 
     $data += array(
       'solution' => 'correct',
@@ -2167,29 +2167,29 @@ class AkismetBlacklistTestCase extends AkismetWebTestCase {
       'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
     ));
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Exact URL match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Exact URL match was blocked.'));
 
     $result = akismet()->checkContent(array(
       'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
     ));
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Partial URL match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Partial URL match was blocked.'));
 
     $result = akismet()->checkContent(array(
       'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
     ));
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('URL with www-prefix was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('URL with www-prefix was blocked.'));
 
     $result = akismet()->checkContent(array(
       'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
     ));
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('URL with different schema was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('URL with different schema was blocked.'));
 
     $result = $akismet->deleteBlacklistEntry($entry['id']);
     $this->assertAkismetWatchdogMessages();
@@ -2213,24 +2213,24 @@ class AkismetBlacklistTestCase extends AkismetWebTestCase {
     );
     $result = akismet()->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Identical match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Identical match was blocked.'));
 
     $data = array(
       'postBody' => "When the term is present, the post should get blocked: " . $term,
     );
     $result = akismet()->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Exact match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
     );
     $result = akismet()->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Partial match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Partial match was blocked.'));
 
     // Update the blacklist entry to match the term only exactly.
     $entry = $akismet->saveBlacklistEntry(array(
@@ -2248,16 +2248,16 @@ class AkismetBlacklistTestCase extends AkismetWebTestCase {
     );
     $result = akismet()->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 1.0);
-    $this->assertEqual($result['spamClassification'], 'spam', t('Exact match was blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 1.0);
+    $this->assertEqual($result['spam_classification'], 'spam', t('Exact match was blocked.'));
 
     $data = array(
       'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
     );
     $result = akismet()->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spamScore', $result['spamScore'], 0.5);
-    $this->assertEqual($result['spamClassification'], 'unsure', t('Partial match was not blocked.'));
+    $this->assertSame('spam_score', $result['spam_score'], 0.5);
+    $this->assertEqual($result['spam_classification'], 'unsure', t('Partial match was not blocked.'));
 
     $result = $akismet->deleteBlacklistEntry($entry['id']);
     $this->assertAkismetWatchdogMessages();
@@ -2420,14 +2420,14 @@ class AkismetProfanityTestCase extends AkismetWebTestCase {
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertText($this->profanity_message);
     $this->assertNoText('Successful form submission.');
-    $contentId = $this->assertResponseIDInForm('contentId');
+    $content_id = $this->assertResponseIDInForm('content_id');
 
     $edit['body'] = 'not profane ham';
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertNoText($this->profanity_message);
     $this->assertText('Successful form submission.');
     $mid = $this->getFieldValueByName('mid');
-    $this->assertAkismetData('akismet_test', $mid, 'contentId', $contentId);
+    $this->assertAkismetData('akismet_test', $mid, 'content_id', $content_id);
 
     // Sequence: Post unsure spam (not profanity), post profanity along with
     // correct CAPTCHA, and expect that to be discarded.
@@ -2447,8 +2447,8 @@ class AkismetProfanityTestCase extends AkismetWebTestCase {
     $this->assertCaptchaField();
     $this->assertNoText($this->profanity_message);
     $this->assertNoText('Successful form submission.');
-    $contentId = $this->assertResponseIDInForm('contentId');
-    $captchaId = $this->assertResponseIDInForm('captchaId');
+    $content_id = $this->assertResponseIDInForm('content_id');
+    $captcha_id = $this->assertResponseIDInForm('captcha_id');
 
     $edit['body'] = 'unsure profanity';
     $this->postCorrectCaptcha(NULL, $edit, 'Submit');
@@ -3118,7 +3118,7 @@ class AkismetNodeFormTestCase extends AkismetWebTestCase {
     // Login and submit a node.
     $this->drupalLogin($this->web_user);
     $this->drupalGet('node/add/article');
-    $captchaId = $this->assertResponseIDInForm('captchaId');
+    $captcha_id = $this->assertResponseIDInForm('captcha_id');
     $edit = array(
       'title' => 'spam',
       'akismet[captcha]' => 'correct',
@@ -3126,7 +3126,7 @@ class AkismetNodeFormTestCase extends AkismetWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->node = $this->drupalGetNodeByTitle($edit['title']);
     $this->assertUrl('node/' . $this->node->nid);
-    $this->assertAkismetData('node', $this->node->nid, 'captchaId', $captchaId);
+    $this->assertAkismetData('node', $this->node->nid, 'captcha_id', $captcha_id);
   }
 
   /**
@@ -3273,21 +3273,21 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     $this->drupalLogin($this->web_user);
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $this->assertResponseIDInForm('captchaId');
+    $this->assertResponseIDInForm('captcha_id');
     $this->assertNoPrivacyLink();
 
     // Try to submit an incorrect answer for the CAPTCHA, without value for
     // required field.
     $this->postIncorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertNoPrivacyLink();
 
     // Try to submit a correct answer for the CAPTCHA, still without required
     // field value.
     $this->postCorrectCaptcha(NULL, array(), t('Preview'));
     $this->assertText(t('Comment field is required.'));
-    $captchaId = $this->assertResponseIDInForm('captchaId', TRUE);
+    $captcha_id = $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertNoPrivacyLink();
 
     // Finally, we should be able to submit a comment.
@@ -3295,14 +3295,14 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     $this->assertText(t('Your comment has been posted.'));
     $this->assertRaw('<p>spam</p>', t('Spam comment could be posted with correct CAPTCHA.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => 'spam'))->fetchField();
-    $this->assertAkismetData('comment', $cid, 'captchaId', $captchaId);
+    $this->assertAkismetData('comment', $cid, 'captcha_id', $captcha_id);
 
     // Verify we can solve the CAPTCHA directly.
     $this->resetResponseID();
     $value = 'some more spam';
     $this->drupalGet('comment/reply/' . $this->node->nid);
     $this->assertCaptchaField();
-    $captchaId = $this->assertResponseIDInForm('captchaId');
+    $captcha_id = $this->assertResponseIDInForm('captcha_id');
     $edit = array(
       'comment_body[und][0][value]' => $value,
       'akismet[captcha]' => 'correct',
@@ -3310,7 +3310,7 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertText(t('Your comment has been posted.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $value))->fetchField();
-    $this->assertAkismetData('comment', $cid, 'captchaId', $captchaId);
+    $this->assertAkismetData('comment', $cid, 'captcha_id', $captcha_id);
   }
 
   /**
@@ -3334,7 +3334,7 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     );
     $this->drupalPost(NULL, $edit, t('Save'));
     $this->assertCaptchaField();
-    $contentId = $this->assertResponseIDInForm('contentId');
+    $content_id = $this->assertResponseIDInForm('content_id');
     $this->assertPrivacyLink();
 
     // Try to submit the form by solving the CAPTCHA incorrectly. At this point,
@@ -3342,14 +3342,14 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     // the comment is still neither ham or spam.
     $this->postIncorrectCaptcha(NULL, array(), t('Save'));
     $this->assertCaptchaField();
-    $captchaId = $this->assertResponseIDInForm('captchaId');
+    $captcha_id = $this->assertResponseIDInForm('captcha_id');
     $this->assertPrivacyLink();
 
     // Correctly solving the CAPTCHA should accept the form submission.
     $this->postCorrectCaptcha(NULL, array(), t('Save'));
     $this->assertRaw('<p>' . $edit['comment_body[und][0][value]'] . '</p>', t('A comment that may contain spam was found.'));
     $cid = db_query('SELECT cid FROM {comment} WHERE subject = :subject ORDER BY created DESC', array(':subject' => $edit['comment_body[und][0][value]']))->fetchField();
-    $this->assertAkismetData('comment', $cid, 'contentId', $contentId);
+    $this->assertAkismetData('comment', $cid, 'content_id', $content_id);
 
     // Try to save a new 'spam' comment; it should be discarded, with no CAPTCHA
     // appearing on the page.
@@ -3358,13 +3358,13 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $contentId = $this->assertResponseIDInForm('contentId');
+    $content_id = $this->assertResponseIDInForm('content_id');
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
     // Try to save again; it should be discarded, with no CAPTCHA.
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
-    $contentId = $this->assertResponseIDInForm('contentId');
+    $content_id = $this->assertResponseIDInForm('content_id');
     $this->assertCommentCount($this->node->nid, $original_number_of_comments);
     $this->assertPrivacyLink();
 
@@ -3465,11 +3465,11 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
   function testCommentActions() {
     // Load the comment entity objects.
     $cids = array();
-    $contentIds = array();
+    $content_ids = array();
     foreach($this->comments as $comment) {
       $cids[] = $comment->cid;
       $data = akismet_data_load('comment', $comment->cid);
-      $contentIds[] = $data->contentId;
+      $content_ids[] = $data->content_id;
     }
     $comment_entities = entity_load('comment', $cids);
 
@@ -3487,7 +3487,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     // Verify that all comments have been marked as spam.
     foreach ($cids as $cid) {
       $server = $this->getServerRecord('feedback');
-      $this->assertTrue(in_array($server['contentId'], $contentIds));
+      $this->assertTrue(in_array($server['content_id'], $content_ids));
       $this->assertEqual($server['source'], 'akismet_action_unpublish_comment');
       $this->assertEqual($server['reason'], 'spam');
       $this->assertEqual($server['type'], 'moderate');
@@ -3501,11 +3501,11 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
   function testNodeActions() {
     // Load the comment entity objects.
     $nids = array();
-    $contentIds = array();
+    $content_ids = array();
     foreach($this->nodes as $node) {
       $nids[] = $node->nid;
       $data = akismet_data_load('node', $node->nid);
-      $contentIds[] = $data->contentId;
+      $content_ids[] = $data->content_id;
     }
     $node_entities = entity_load('node', $nids);
 
@@ -3523,7 +3523,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     // Verify that all nodes have been marked as spam.
     foreach ($nids as $nid) {
       $server = $this->getServerRecord('feedback');
-      $this->assertTrue(in_array($server['contentId'], $contentIds));
+      $this->assertTrue(in_array($server['content_id'], $content_ids));
       $this->assertEqual($server['source'], 'akismet_action_unpublish_node');
       $this->assertEqual($server['reason'], 'spam');
       $this->assertEqual($server['type'], 'moderate');
@@ -4211,16 +4211,16 @@ class AkismetDataTestCase extends AkismetWebTestCase {
     $edit['title'] = 'unsure';
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertCaptchaField();
-    $contentId = $this->assertResponseIDInForm('contentId');
-    $captchaId = $this->assertResponseIDInForm('captchaId');
+    $content_id = $this->assertResponseIDInForm('content_id');
+    $captcha_id = $this->assertResponseIDInForm('captcha_id');
     $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
     $new_data = $this->assertAkismetData('akismet_test', $mid);
 
     // Verify that only session data was updated.
     $this->assertSame('entity', $data->entity, $new_data->entity);
     $this->assertSame('id', $data->id, $new_data->id);
-    $this->assertNotSame('contentId', $data->contentId, $new_data->contentId);
-    $this->assertNotSame('captchaId', $data->captchaId, $new_data->captchaId);
+    $this->assertNotSame('content_id', $data->content_id, $new_data->content_id);
+    $this->assertNotSame('captcha_id', $data->captcha_id, $new_data->captcha_id);
     $this->assertSame('form_id', $data->form_id, $new_data->form_id);
     $this->assertSame('qualityScore', $data->qualityScore, $new_data->qualityScore);
     $count = db_query("SELECT COUNT(1) FROM {akismet}")->fetchField();
@@ -4273,28 +4273,28 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
       'entity' => 'type1',
       'id' => 123,
       'form_id' => 'type1_form',
-      'contentId' => 1,
+      'content_id' => 1,
     );
     akismet_data_save($data1);
-    $this->assertAkismetData($data1->entity, $data1->id, 'contentId', $data1->contentId);
+    $this->assertAkismetData($data1->entity, $data1->id, 'content_id', $data1->content_id);
 
     // Create a second data record; same ID, different entity type.
     $data2 = (object) array(
       'entity' => 'type2',
       'id' => 123,
       'form_id' => 'type2_form',
-      'contentId' => 2,
+      'content_id' => 2,
     );
     akismet_data_save($data2);
-    $this->assertAkismetData($data2->entity, $data2->id, 'contentId', $data2->contentId);
+    $this->assertAkismetData($data2->entity, $data2->id, 'content_id', $data2->content_id);
 
     // Update the first data record.
-    $data1->contentId = 3;
+    $data1->content_id = 3;
     akismet_data_save($data1);
 
     // Verify that both records are correct.
-    $this->assertAkismetData($data1->entity, $data1->id, 'contentId', $data1->contentId);
-    $this->assertAkismetData($data2->entity, $data2->id, 'contentId', $data2->contentId);
+    $this->assertAkismetData($data1->entity, $data1->id, 'content_id', $data1->content_id);
+    $this->assertAkismetData($data2->entity, $data2->id, 'content_id', $data2->content_id);
   }
 
   /**
@@ -4306,7 +4306,7 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
       'entity' => 'type1',
       'id' => 123,
       'form_id' => 'type1_form',
-      'contentId' => 1,
+      'content_id' => 1,
     );
     akismet_data_save($data1);
 
@@ -4315,20 +4315,20 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
       'entity' => 'type2',
       'id' => 123,
       'form_id' => 'type2_form',
-      'contentId' => 2,
+      'content_id' => 2,
     );
     akismet_data_save($data2);
 
     // Verify that both records exist.
-    $this->assertAkismetData($data1->entity, $data1->id, 'contentId', $data1->contentId);
-    $this->assertAkismetData($data2->entity, $data2->id, 'contentId', $data2->contentId);
+    $this->assertAkismetData($data1->entity, $data1->id, 'content_id', $data1->content_id);
+    $this->assertAkismetData($data2->entity, $data2->id, 'content_id', $data2->content_id);
 
     // Delete the first data record.
     akismet_data_delete($data1->entity, $data1->id);
 
     // Verify that only the second record remained and was not changed.
     $this->assertNoAkismetData($data1->entity, $data1->id);
-    $this->assertAkismetData($data2->entity, $data2->id, 'contentId', $data2->contentId);
+    $this->assertAkismetData($data2->entity, $data2->id, 'content_id', $data2->content_id);
   }
 }
 
@@ -4378,8 +4378,8 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'title' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId', TRUE);
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('content_id', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertCaptchaField();
 
     $edit = array(
@@ -4404,21 +4404,21 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'title' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId', TRUE);
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('content_id', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertCaptchaField();
 
     $edit = array();
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
-//    $this->assertResponseIDInForm('captchaId');
+    $this->assertResponseIDInForm('content_id');
+//    $this->assertResponseIDInForm('captcha_id');
     $this->assertCaptchaField();
     $edit = array(
       'akismet[captcha]' => 'incorrect',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
-//    $this->assertResponseIDInForm('captchaId');
+    $this->assertResponseIDInForm('content_id');
+//    $this->assertResponseIDInForm('captcha_id');
     $this->assertCaptchaField();
 
     $edit = array(
@@ -4442,21 +4442,21 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'body' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId', TRUE);
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('content_id', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertCaptchaField();
     $edit = array(
       'body' => 'unsure unsure',
       'akismet[captcha]' => 'correct',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
     $edit = array(
       'body' => 'unsure unsure unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
     $edit = array(
       'title' => 'unsure',
@@ -4478,8 +4478,8 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'body' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId', TRUE);
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('content_id', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertCaptchaField();
     // Turn the post into ham.
     $edit = array(
@@ -4487,14 +4487,14 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'akismet[captcha]' => 'correct',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
     // Turn the post back into unsure.
     $edit = array(
       'body' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
 
     $edit = array(
@@ -4518,15 +4518,15 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'body' => 'unsure',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId', TRUE);
-    $this->assertResponseIDInForm('captchaId', TRUE);
+    $this->assertResponseIDInForm('content_id', TRUE);
+    $this->assertResponseIDInForm('captcha_id', TRUE);
     $this->assertCaptchaField();
 
     $edit = array(
       'akismet[captcha]' => 'correct',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
 
     // Turn the post into spam.
@@ -4534,7 +4534,7 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
       'title' => 'spam',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertResponseIDInForm('contentId');
+    $this->assertResponseIDInForm('content_id');
     $this->assertNoCaptchaField();
     $this->assertText($this->spam_message);
     $this->assertNoText('Successful form submission.');
@@ -4700,8 +4700,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 1, t('Published test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 0);
-    $this->assertSame('spamClassification', $data->spamClassification, 'ham');
+    $this->assertSame('spam_score', $data->spam_score, 0);
+    $this->assertSame('spam_classification', $data->spam_classification, 'ham');
     $this->assertSame('moderate', $data->moderate, 0);
 
     // Verify that a ham post is accepted.
@@ -4714,8 +4714,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 1, t('Published test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 0);
-    $this->assertSame('spamClassification', $data->spamClassification, 'ham');
+    $this->assertSame('spam_score', $data->spam_score, 0);
+    $this->assertSame('spam_classification', $data->spam_classification, 'ham');
     $this->assertSame('moderate', $data->moderate, 0);
 
     // Verify that a spam post is blocked.
@@ -4753,8 +4753,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 0.5);
-    $this->assertSame('spamClassification', $data->spamClassification, 'unsure');
+    $this->assertSame('spam_score', $data->spam_score, 0.5);
+    $this->assertSame('spam_classification', $data->spam_classification, 'unsure');
     $this->assertSame('moderate', $data->moderate, 1);
 
     // Verify that editing the post does neither change the session data, nor
@@ -4768,8 +4768,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 0.5);
-    $this->assertSame('spamClassification', $data->spamClassification, 'unsure');
+    $this->assertSame('spam_score', $data->spam_score, 0.5);
+    $this->assertSame('spam_classification', $data->spam_classification, 'unsure');
     $this->assertSame('moderate', $data->moderate, 1);
 
     // Verify that publishing the post changes the session data accordingly.
@@ -4782,8 +4782,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 1, t('Published test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 0.5);
-    $this->assertSame('spamClassification', $data->spamClassification, 'unsure');
+    $this->assertSame('spam_score', $data->spam_score, 0.5);
+    $this->assertSame('spam_classification', $data->spam_classification, 'unsure');
     $this->assertSame('moderate', $data->moderate, 0);
   }
 
@@ -4815,8 +4815,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 1.0);
-    $this->assertSame('spamClassification', $data->spamClassification, 'spam');
+    $this->assertSame('spam_score', $data->spam_score, 1.0);
+    $this->assertSame('spam_classification', $data->spam_classification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -4831,8 +4831,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 0, t('Unpublished test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 1.0);
-    $this->assertSame('spamClassification', $data->spamClassification, 'spam');
+    $this->assertSame('spam_score', $data->spam_score, 1.0);
+    $this->assertSame('spam_classification', $data->spam_classification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 1);
 
@@ -4846,8 +4846,8 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
     $this->assertEqual($record->status, 1, t('Published test post found.'));
-    $this->assertSame('spamScore', $data->spamScore, 1.0);
-    $this->assertSame('spamClassification', $data->spamClassification, 'spam');
+    $this->assertSame('spam_score', $data->spam_score, 1.0);
+    $this->assertSame('spam_classification', $data->spam_classification, 'spam');
     $this->assertSame('profanityScore', $data->profanityScore, 1);
     $this->assertSame('moderate', $data->moderate, 0);
 
@@ -4855,9 +4855,9 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     // marked for moderation.
     $this->drupalLogout();
     $expectations = array(
-      'ham' => array('spamScore' => 0.0, 'spamClassification' => 'ham', 'profanityScore' => 0),
-      'unsure' => array('spamScore' => 0.0, 'spamClassification' => 'unsure', 'profanityScore' => 0),
-      $this->randomString() => array('spamScore' => 0.0, 'spamClassification' => 'unsure', 'profanityScore' => 0),
+      'ham' => array('spam_score' => 0.0, 'spam_classification' => 'ham', 'profanityScore' => 0),
+      'unsure' => array('spam_score' => 0.0, 'spam_classification' => 'unsure', 'profanityScore' => 0),
+      $this->randomString() => array('spam_score' => 0.0, 'spam_classification' => 'unsure', 'profanityScore' => 0),
     );
     foreach ($expectations as $body => $expected) {
       $edit = array(
@@ -4865,16 +4865,16 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
         'body' => $body,
       );
       $this->drupalPost('akismet-test/form', $edit, 'Submit');
-      if ($expected['spamClassification'] == 'unsure') {
+      if ($expected['spam_classification'] == 'unsure') {
         $this->postCorrectCaptcha(NULL, array(), 'Submit');
-        $expected['spamClassification'] = 'ham';
+        $expected['spam_classification'] = 'ham';
       }
       $mid = $this->assertTestSubmitData();
       $data = $this->assertAkismetData('akismet_test', $mid);
       $record = akismet_test_load($mid);
       $this->assertEqual($record->status, 1, t('Published test post %body found.', array('%body' => $body)));
-      $this->assertSame('spamScore', $data->spamScore, $expected['spamScore']);
-      $this->assertSame('spamClassification', $data->spamClassification, $expected['spamClassification']);
+      $this->assertSame('spam_score', $data->spam_score, $expected['spam_score']);
+      $this->assertSame('spam_classification', $data->spam_classification, $expected['spam_classification']);
       $this->assertSame('profanityScore', $data->profanityScore, $expected['profanityScore']);
       $this->assertSame('moderate', $data->moderate, 0);
     }
@@ -5083,7 +5083,7 @@ class AkismetCaptchaTestCase extends AkismetWebTestCase {
    */
   function subtestCAPTCHASwitchCallback() {
     // Verify that the CAPTCHA can be switched on a CAPTCHA-only protected form.
-    // (without having a contentId)
+    // (without having a content_id)
     $this->drupalGet('akismet-test/form');
     $form_build_id = $this->getFieldValueByName('form_build_id');
 
@@ -5102,7 +5102,7 @@ class AkismetCaptchaTestCase extends AkismetWebTestCase {
     $this->assertResponse(200);
     $this->assertText('akismet-captcha-player.swf');
     $response = drupal_json_decode($out);
-    $this->assertTrue($response['captchaId']);
+    $this->assertTrue($response['captcha_id']);
   }
 
   /**
@@ -5647,7 +5647,7 @@ class AkismetModerationIntegrationTestCase extends AkismetModerationBaseTestCase
    */
   function testAuthorization() {
     $data = $this->drupalCreateTestPost();
-    $path = 'akismet/moderate/' . $data->contentId . '/spam';
+    $path = 'akismet/moderate/' . $data->content_id . '/spam';
 
     // Test no Akismet moderation access with disabled integration.
     $this->drupalLogin($this->admin_user);
@@ -5735,7 +5735,7 @@ class AkismetModerationIntegrationTestCase extends AkismetModerationBaseTestCase
       $data = $this->drupalCreateTestPost();
 
       // Send a moderation request for the post.
-      $path = 'akismet/moderate/' . $data->contentId . '/' . $action;
+      $path = 'akismet/moderate/' . $data->content_id . '/' . $action;
       $this->akismetRequest('POST', $path);
 
       $record = akismet_test_load($data->id);
@@ -5815,7 +5815,7 @@ class AkismetModerationIntegrationTestCase extends AkismetModerationBaseTestCase
       $posts[$node->nid] = $node;
 
       // Send a moderation request for the user.
-      $path = 'akismet/moderate/' . $data->contentId . '/' . $action;
+      $path = 'akismet/moderate/' . $data->content_id . '/' . $action;
       $this->akismetRequest('POST', $path);
 
       $account = user_load($data->id, TRUE);
@@ -5962,7 +5962,7 @@ class AkismetModerationEntityTestCase extends AkismetModerationBaseTestCase {
     $this->assertSame('contextTitle', $record['contextTitle'], $node->title);
 
     // Moderate the second comment.
-    $this->akismetRequest('POST', 'akismet/moderate/' . $comment2_data->contentId . '/delete');
+    $this->akismetRequest('POST', 'akismet/moderate/' . $comment2_data->content_id . '/delete');
     $this->assertResponse(200);
     $this->assertAkismetWatchdogMessages();
     $this->assertFalse(comment_load($comment2->cid));
@@ -5970,7 +5970,7 @@ class AkismetModerationEntityTestCase extends AkismetModerationBaseTestCase {
     $this->assertSame('stored', $record['stored'], 0);
 
     // Moderate the node (which should also delete the first comment).
-    $this->akismetRequest('POST', 'akismet/moderate/' . $node_data->contentId . '/delete');
+    $this->akismetRequest('POST', 'akismet/moderate/' . $node_data->content_id . '/delete');
     $this->assertResponse(200);
     $this->assertAkismetWatchdogMessages();
     $this->assertFalse(node_load($node->nid, NULL, TRUE));
@@ -5979,7 +5979,7 @@ class AkismetModerationEntityTestCase extends AkismetModerationBaseTestCase {
     $this->assertSame('stored', $record['stored'], 0);
 
     // Moderate the user.
-    $this->akismetRequest('POST', 'akismet/moderate/' . $account_data->contentId . '/delete');
+    $this->akismetRequest('POST', 'akismet/moderate/' . $account_data->content_id . '/delete');
     $this->assertResponse(200);
     $this->assertAkismetWatchdogMessages();
     $this->assertFalse(user_load($account->uid, TRUE));

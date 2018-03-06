@@ -6,67 +6,6 @@
  */
 
 /**
- * AJAX callback to retrieve a CAPTCHA.
- *
- * @param $type
- *   The new CAPTCHA type to retrieve, e.g. 'image' or 'audio'.
- * @param $form_build_id
- *   The internal form build id of the form to update the CAPTCHA for.
- * @param $contentId
- *   (optional) The associated content ID in the form.
- *
- * @return
- *   A JSON array containing:
- *   - content: The HTML markup for the new CAPTCHA.
- *   - captchaId: The ID for the new CAPTCHA.
- *
- * @todo Add error handling.
- */
-function akismet_captcha_js($type, $form_build_id, $contentId = NULL) {
-  // Deny GET requests to make automated security audit tools not complain
-  // about a JSON Hijacking possibility.
-  // @see http://capec.mitre.org/data/definitions/111.html
-  // @see http://haacked.com/archive/2009/06/24/json-hijacking.aspx
-  if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header($_SERVER['SERVER_PROTOCOL'] . ' 405 Method Not Allowed');
-    // A HTTP 405 response MUST specify allowed methods.
-    header('Allow: POST');
-    drupal_exit();
-  }
-
-  // Load $form_state from cache or create a dummy state.
-  $cid = 'form_state_' . $form_build_id;
-  if ($cache = cache_get($cid, 'cache_form')) {
-    $form_state = $cache->data;
-  }
-  else {
-    $form_state['akismet'] = array();
-    if (isset($contentId)) {
-      $form_state['values']['akismet']['contentId'] = $contentId;
-    }
-  }
-  $form_state['akismet']['captcha_type'] = $type;
-  $captcha = akismet_get_captcha($form_state);
-
-  if (!empty($form_state['akismet']['response']['captcha']['id'])) {
-    // Update the CAPTCHA ID in the cached $form_state, since it might have
-    // changed.
-    // @todo Replace the entire CAPTCHA switch/refresh with new AJAX framework
-    //   functionality.
-    if ($cache) {
-      cache_set($cid, $form_state, 'cache_form', REQUEST_TIME + 21600);
-    }
-    // Return new content and CAPTCHA ID via JSON.
-    $data = array(
-      'content' => $captcha,
-      'captchaId' => $form_state['akismet']['response']['captcha']['id'],
-    );
-    drupal_json_output($data);
-  }
-  drupal_exit();
-}
-
-/**
  * Form builder for report to Akismet form.
  *
  * @param $entity
@@ -112,7 +51,7 @@ function akismet_report_form_submit($form, &$form_state) {
     $data = akismet_data_load($entity, $id);
 
     // Send feedback to Akismet, if we have session data.
-    if ((!empty($data->contentId) || !empty($data->captchaId)) && !empty($form_state['values']['akismet']['feedback'])) {
+    if ((!empty($data->content_id) || !empty($data->captcha_id)) && !empty($form_state['values']['akismet']['feedback'])) {
       if (_akismet_send_feedback($data, $form_state['values']['akismet']['feedback'], 'moderate', 'akismet_report_form_submit')) {
         drupal_set_message(t('The content was successfully reported as inappropriate.'));
       }

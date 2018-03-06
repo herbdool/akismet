@@ -155,7 +155,7 @@ function akismet_menu() {
 
   $items['admin/config/content/akismet'] = array(
     'title' => 'Akismet content moderation',
-    'description' => 'Configure how the Akismet service moderates user-submitted content such as spam.',
+    'description' => 'Configure how the Akismet service moderates user-submitted content.',
     'page callback' => 'akismet_admin_form_list',
     'access arguments' => array('administer akismet'),
     'file' => 'akismet.admin.inc',
@@ -232,15 +232,6 @@ function akismet_menu() {
     'file' => 'akismet.admin.inc',
   );
 
-  // AJAX callback to request new CAPTCHA.
-  $items['akismet/captcha/%/%'] = array(
-    'page callback' => 'akismet_captcha_js',
-    'page arguments' => array(2, 3),
-    'access callback' => '_akismet_access',
-    'file' => 'akismet.pages.inc',
-    'type' => MENU_CALLBACK,
-  );
-
   // Report as inappropriate.
   $items['akismet/flag/%/%/%/%'] = array(
     'page callback' => '_akismet_flag',
@@ -275,16 +266,6 @@ function _akismet_access($permission = FALSE) {
 /**
  * Menu access callback; Determine access to report to Akismet.
  *
- * There are two special $entity types "akismet_content" and "akismet_captcha",
- * which do not map to actual entity types in the Drupal system. They are
- * primarily used for mails, messages, and posts, which pertain to forms
- * protected by Akismet that do no result in stored entities after submission.
- * For example, Contact module's contact form. They can be reported by anyone
- * having the link. $id is expected to be either a {akismet}.content_id or
- * {akismet}.captcha_id respectively.
- *
- * @see akismet_mail_add_report_link()
- *
  * @param $entity
  *   The entity type of the data to report.
  * @param $id
@@ -293,10 +274,6 @@ function _akismet_access($permission = FALSE) {
  * @todo Revamp this based on new {akismet}.form_id info.
  */
 function akismet_report_access($entity, $id) {
-  // The special entity types can be reported by anyone.
-  if ($entity == 'akismet_content' || $entity == 'akismet_captcha') {
-    return !empty($id) ? TRUE : FALSE;
-  }
   // Retrieve information about all protectable forms. We use the first valid
   // definition, because we assume that multiple form definitions just denote
   // variations of the same entity (e.g. node content types).
@@ -370,61 +347,6 @@ function akismet_cron() {
 }
 
 /**
- * Helper function to convert database column names to variable names.
- *
- * Database column names are separated by underscore, while some variable names
- * are camelcased for backwards compatibility.
- *
- * @param stdClass $db_result
- *   The database result object to convert.
- * @param bool $reverse
- *   True if the conversion should be run in reverse, from variable names to
- *   database names.
- * @return stdClass
- *   The updated object with converted field names.
- */
-function _akismet_convert_db_names($db_result, $reverse = FALSE) {
-  if (!is_object($db_result)) {
-    return $db_result;
-  }
-  $replace = array(
-    'content_id' => 'contentId',
-    'captcha_id' => 'captchaId',
-    'spam_score' => 'spamScore',
-    'spam_classification' => 'spamClassification',
-    'quality_score' => 'qualityScore',
-    'profanity_score' => 'profanityScore',
-  );
-  if ($reverse) {
-    $replace = array_flip($replace);
-  }
-
-  // Don't update the original data object but return a new converted clone.
-  $clone = new stdClass();
-  foreach($db_result as $prop => $value) {
-    if (array_key_exists($prop, $replace)) {
-      $clone->{$replace[$prop]} = $value;
-    }
-    else {
-      $clone->{$prop} = $value;
-    }
-  }
-  return $clone;
-}
-
-
-/**
- * Load a Akismet data record by contentId.
- *
- * @param $contentId
- *   The contentId to retrieve data for.
- */
-function akismet_content_load($contentId) {
-  $data = akismet_db_query_range('SELECT * FROM {akismet} WHERE content_id = :contentId', 0, 1, array(':contentId' => $contentId))->fetchObject();
-  return _akismet_convert_db_names($data);
-}
-
-/**
  * Load a Akismet data record from the database.
  *
  * @param $entity
@@ -433,8 +355,8 @@ function akismet_content_load($contentId) {
  *   The entity id to retrieve data for.
  */
 function akismet_data_load($entity, $id) {
-  $data = akismet_db_query_range('SELECT * FROM {akismet} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
-  return _akismet_convert_db_names($data);
+  $data = db_query_range('SELECT * FROM {akismet} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
+  return $data;
 }
 
 /**
@@ -447,56 +369,8 @@ function akismet_data_load($entity, $id) {
  *   The matching Akismet data as an array keyed by entity id.
  */
 function akismet_entity_type_load($type) {
-  $data = akismet_db_query('SELECT * FROM {akismet} WHERE entity = :entity', array(':entity' => $type))->fetchAllAssoc('id');
-  return _akismet_convert_db_names($data);
-}
-
-/**
- * Executes database queries with natural letter casing.
- *
- * Drupal core enforces lowercase column names in PDO statements for no
- * particular reason.
- *
- * @see http://drupal.org/node/1171866
- */
-function akismet_db_query($query, array $args = array(), array $options = array()) {
-  if (empty($options['target'])) {
-    $options['target'] = 'default';
-  }
-
-  $connection = Database::getConnection($options['target']);
-  // Backup PDO::ATTR_CASE to restore it afterwards, sticks on the connection.
-  $backup = $connection->getAttribute(PDO::ATTR_CASE);
-
-  $connection->setAttribute(PDO::ATTR_CASE, PDO::CASE_NATURAL);
-  $result = $connection->query($query, $args, $options);
-  $connection->setAttribute(PDO::ATTR_CASE, $backup);
-
-  return $result;
-}
-
-/**
- * Fetches a database record with natural letter casing.
- *
- * Drupal core enforces lowercase column names in PDO statements for no
- * particular reason.
- *
- * @see http://drupal.org/node/1171866
- */
-function akismet_db_query_range($query, $from, $count, array $args = array(), array $options = array()) {
-  if (empty($options['target'])) {
-    $options['target'] = 'default';
-  }
-
-  $connection = Database::getConnection($options['target']);
-  // Backup PDO::ATTR_CASE to restore it afterwards, sticks on the connection.
-  $backup = $connection->getAttribute(PDO::ATTR_CASE);
-
-  $connection->setAttribute(PDO::ATTR_CASE, PDO::CASE_NATURAL);
-  $result = $connection->queryRange($query, $from, $count, $args, $options);
-  $connection->setAttribute(PDO::ATTR_CASE, $backup);
-
-  return $result;
+  $data = db_query('SELECT * FROM {akismet} WHERE entity = :entity', array(':entity' => $type))->fetchAllAssoc('id');
+  return $data;
 }
 
 /**
@@ -519,18 +393,10 @@ function akismet_db_query_range($query, $from, $count, array $args = array(), ar
  *   - session_id: The session ID returned by Akismet.
  *   And optionally:
  *   - spam: A spam check result double returned by Akismet.
- *   - spamClassification: A final spam classification result string; 'ham',
+ *   - spam_classification: A final spam classification result string; 'ham',
  *     'spam', or 'unsure'.
- *   - quality: A rating of the content's quality, in the range of 0 and 1.0.
- *   - profanity: A profanity check rating returned by Akismet, in the range of
- *     0 and 1.0.
- *   - languages: An array containing language codes the content might be
- *     written in.
  *   - flags_spam: Total count of spam feedback reports.
  *   - flags_ham: Total count of ham feedback reports.
- *   - flags_profanity: Total count of profanity feedback reports.
- *   - flags_quality: Total count of low quality feedback reports.
- *   - flags_unwanted: Total count of unwanted feedback reports.
  */
 function akismet_data_save($data) {
   $data->changed = REQUEST_TIME;
@@ -544,14 +410,11 @@ function akismet_data_save($data) {
     $data->languages = implode(',', $languages);
   }
 
-  // Convert mixed case variable names to lower-case _ separated database names.
-  $converted = _akismet_convert_db_names($data, TRUE);
-
   $update = db_query_range("SELECT 'id' FROM {akismet} WHERE entity = :entity AND id = :id", 0, 1, array(
     ':entity' => $data->entity,
     ':id' => $data->id,
   ))->fetchField();
-  drupal_write_record('akismet', $converted, $update ? array('entity', $update) : array());
+  drupal_write_record('akismet', $data, $update ? array('entity', $update) : array());
 
   // Pass unconverted data to other modules for backwards compatibility.
   if (!$update) {
@@ -651,7 +514,7 @@ function akismet_data_delete_form_submit($form, &$form_state) {
   $data = akismet_form_get_values($form_state, $akismet_form['enabled_fields'], $akismet_form['mapping']);
 
   $entity = $akismet_form['entity'];
-  $id = $data['postId'];
+  $id = $data['post_id'];
 
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report($entity, $id, $form_state['values']['akismet']['feedback'], 'moderate', 'akismet_data_delete_form_submit')) {
@@ -705,7 +568,7 @@ function akismet_data_report_multiple($entity, array $ids, $feedback, $type = 'm
     // Load the Akismet session data.
     $data = akismet_data_load($entity, $id);
     // Send feedback, if we have session data.
-    if (!empty($data->contentId) || !empty($data->captchaId)) {
+    if (!empty($data->content_id) || !empty($data->captcha_id)) {
       $result = _akismet_send_feedback($data, $feedback, $type, $source);
       $return = $return && $result;
     }
@@ -957,7 +820,7 @@ function akismet_form_list() {
  *   The module name $form_id belongs to.
  * @param array $form_list
  *   (optional) The return value of hook_akismet_form_list() of $module, if
- *   already kown. Primarily used by akismet_form_load().
+ *   already known. Primarily used by akismet_form_load().
  */
 function akismet_form_info($form_id, $module, $form_list = NULL) {
   // Default properties.
@@ -972,8 +835,7 @@ function akismet_form_info($form_id, $module, $form_list = NULL) {
     'mode' => NULL,
     'checks' => array(),
     'enabled_fields' => array(),
-    'strictness' => 'normal',
-    'unsure' => 'captcha',
+    'unsure' => 'moderate',
     'discard' => 1,
     'moderation' => 0,
     // Meta information.
@@ -1185,7 +1047,7 @@ function akismet_form_delete($form_id) {
 function akismet_form_get_values(&$form_state, $fields, $mapping) {
   global $user;
 
-  // @todo Unless akismet_form_submit() directly attempts to retrieve 'postId'
+  // @todo Unless akismet_form_submit() directly attempts to retrieve 'post_id'
   //   from $form_state['values'], the resulting content properties of this
   //   function cannot be cached.
 
@@ -1275,7 +1137,7 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
   // Post id; not sent to Akismet.
   // @see akismet_form_submit()
   if (!empty($mapping['post_id'])) {
-    $data['postId'] = $mapping['post_id'];
+    $data['post_id'] = $mapping['post_id'];
   }
   // Post title if included in enabled fields for the form.
   if (!empty($mapping['post_title'])) {
@@ -1609,7 +1471,6 @@ function akismet_element_info() {
       '#process' => array(
         'akismet_process_akismet',
       ),
-      '#pre_render' => array('akismet_pre_render_akismet'),
     ),
   );
 }
@@ -1735,8 +1596,8 @@ function akismet_form_comment_form_alter(&$form, &$form_state, $form_id) {
  * - For text analysis, the state of a post is essentially tracked by the Akismet
  *   API/backend:
  *   - Every form submission attempt (re-)sends the post data to Akismet, and the
- *     API ensures to return the correct spamClassification each time.
- *   - The client-side logic fully relies on the returned spamClassification
+ *     API ensures to return the correct spam_classification each time.
+ *   - The client-side logic fully relies on the returned spam_classification
  *     value to trigger the corresponding actions and does not track the state
  *     of the form submission attempt locally.
  *   - For example, when Akismet is "unsure" and the user solved the CAPTCHA,
@@ -1761,29 +1622,18 @@ function akismet_form_comment_form_alter(&$form, &$form_state, $form_id) {
  *
  * @see akismet_form_alter()
  * @see akismet_element_info()
- * @see akismet_pre_render_akismet()
  */
-// TODO: Test to see whether we can do without this since there's no CAPTCHA.
-function __akismet_process_akismet($element, &$form_state, $complete_form) {
+// TODO: Figure out how much more of this we can do without.
+function akismet_process_akismet($element, &$form_state, $complete_form) {
   // Setup initial Akismet session and form information.
   $form_state += array('akismet' => array());
   $form_state['akismet'] += array(
     // Only TRUE if the form is protected by text analysis.
     'require_analysis' => $element['#akismet_form']['mode'] == AKISMET_MODE_ANALYSIS,
-    // Becomes TRUE whenever a CAPTCHA needs to be solved.
-    'require_captcha' => $element['#akismet_form']['mode'] == AKISMET_MODE_CAPTCHA,
-    // Becomes TRUE when the CAPTCHA has been solved.
-    // Only applies to CAPTCHA-only protected forms. Not necessarily TRUE for
-    // text analysis, even if a CAPTCHA has been solved previously.
-    'passed_captcha' => FALSE,
-    // The type of CAPTCHA to show; 'image' or 'audio'.
-    'captcha_type' => 'image',
-    // Becomes TRUE if the form is protected by text analysis and the submitted
-    // entity should be unpublished.
+    // Becomes TRUE if the submitted entity should be unpublished.
     'require_moderation' => FALSE,
     // Internally used bag for last Akismet API responses.
-    'response' => array(
-    ),
+    'response' => array(),
   );
   // Add remaining information about the registered form.
   $form_state['akismet'] += $element['#akismet_form'];
@@ -1795,9 +1645,7 @@ function __akismet_process_akismet($element, &$form_state, $complete_form) {
     $form_state['akismet']['discard'] = TRUE;
   }
 
-  // Add the JavaScript.
-  $element['#attached']['js'][] = drupal_get_path('module', 'akismet') . '/akismet.js';
-
+  // TODO: How much of this is needed?
   // Add the Akismet session data elements.
   // These elements resemble the {akismet} database schema. The form validation
   // handlers will pollute them with values returned by Akismet. For entity
@@ -1811,16 +1659,6 @@ function __akismet_process_akismet($element, &$form_state, $complete_form) {
     '#type' => 'value',
     '#value' => NULL,
   );
-  $element['contentId'] = array(
-    '#type' => 'hidden',
-    // There is no default value; Form API will always use the value that was
-    // submitted last (including rebuild scenarios).
-    '#attributes' => array('class' => 'akismet-content-id'),
-  );
-  $element['captchaId'] = array(
-    '#type' => 'hidden',
-    '#attributes' => array('class' => 'akismet-captcha-id'),
-  );
   $element['form_id'] = array(
     '#type' => 'value',
     '#value' => $form_state['akismet']['form_id'],
@@ -1829,51 +1667,10 @@ function __akismet_process_akismet($element, &$form_state, $complete_form) {
     '#type' => 'value',
     '#value' => 0,
   );
-  $data_spec = array(
+  $element['spam_classification'] = array(
     '#type' => 'value',
     '#value' => NULL,
   );
-  $element['spamScore'] = $data_spec;
-  $element['spamClassification'] = $data_spec;
-  $element['qualityScore'] = $data_spec;
-  $element['profanityScore'] = $data_spec;
-  $element['languages'] = $data_spec;
-  $element['reason'] = $data_spec;
-  $element['solved'] = $data_spec;
-
-  // Add a spambot trap. Purposively use 'homepage' as field name.
-  // This form input element is only supposed to be visible for robots. It has
-  // - no label, since some screen-readers do not notice that the label is
-  //   attached to an input that is hidden.
-  // - no 'title' attribute, since some JavaScript libraries that are trying to
-  //   mimic HTML5 placeholders are injecting the 'title' into the input's value
-  //   and fail to clean up and remove the placeholder value upon form submission,
-  //   causing false-positive spam classifications.
-  $element['homepage'] = array(
-    '#type' => 'textfield',
-    // Wrap the entire honeypot form element markup into a hidden container, so
-    // robots cannot simply check for a style attribute, but instead have to
-    // implement advanced DOM processing to figure out whether they are dealing
-    // with a honeypot field.
-    '#prefix' => '<div style="display: none;">',
-    '#suffix' => '</div>',
-    '#attributes' => array(
-      // Disable browser autocompletion.
-      'autocomplete' => 'off',
-    ),
-  );
-
-  // Add the form behavior analysis web tracking beacon field holder if enabled.
-  if (variable_get('akismet_fba_enabled', 0) && $form_state['akismet']['require_analysis']) {
-    $element['fba'] = array(
-      '#type' => 'hidden',
-    );
-  }
-
-  // Make Akismet form and session information available to entirely different
-  // functions.
-  // @see akismet_mail_alter()
-  $GLOBALS['akismet'] = &$form_state['akismet'];
 
   return $element;
 }
@@ -1893,12 +1690,12 @@ function akismet_validate_analysis(&$form, &$form_state) {
     return;
   }
   $data = $all_data;
-  // Remove postId property; only used by akismet_form_submit().
-  if (isset($data['postId'])) {
-    unset($data['postId']);
+  // Remove post_id property; only used by akismet_form_submit().
+  if (isset($data['post_id'])) {
+    unset($data['post_id']);
   }
-  if (!empty($form_state['values']['akismet']['contentId'])) {
-    $data['id'] = $form_state['values']['akismet']['contentId'];
+  if (!empty($form_state['values']['akismet']['content_id'])) {
+    $data['id'] = $form_state['values']['akismet']['content_id'];
   }
   if (isset($form_state['akismet']['type'])) {
     $data['type'] = $form_state['akismet']['type'];
@@ -1918,14 +1715,14 @@ function akismet_validate_analysis(&$form, &$form_state) {
   $form_state['akismet']['response']['content'] = $result;
   // Set form values accordingly. Do not overwrite the entity ID.
   // @todo Rename 'id' to 'entity_id'.
-  $result['contentId'] = $result['id'];
+  $result['content_id'] = $result['id'];
   unset($result['id']);
   $form_state['values']['akismet'] = array_merge($form_state['values']['akismet'], $result);
 
   // Ensure the latest content ID is output as value.
   // form_set_value() is effectless, as this is not a element-level but a
   // form-level validation handler.
-  $form['akismet']['contentId']['#value'] = $result['contentId'];
+  $form['akismet']['content_id']['#value'] = $result['content_id'];
 
   // Prepare watchdog message teaser text.
   $teaser = '--';
@@ -1937,8 +1734,8 @@ function akismet_validate_analysis(&$form, &$form_state) {
   }
 
   // Handle the spam check result.
-  if (isset($result['spamClassification'])) {
-    switch ($result['spamClassification']) {
+  if (isset($result['spam_classification'])) {
+    switch ($result['spam_classification']) {
       case 'ham':
         akismet_log(array(
           'message' => 'Ham: %teaser',
@@ -1999,10 +1796,10 @@ function akismet_validate_post(&$form, &$form_state) {
  *   entity forms, this approach never really worked, since:
  *   - The primary submit handler fails to set the new ID of a newly stored
  *     entity in the submitted form values (which has been standardized in core,
- *     but is not enforced anywhere), so the postId cannot be extracted from
+ *     but is not enforced anywhere), so the post_id cannot be extracted from
  *     submitted form values.
  *   - This submit handler is invoked too early, before the primary submit
- *     handler processed and saved the entity, so the postId cannot be extracted
+ *     handler processed and saved the entity, so the post_id cannot be extracted
  *     from submitted form values.
  *   - This submit handler is invoked too late; the primary submit handler might
  *     send out e-mails directly after saving the entity (e.g.,
@@ -2022,14 +1819,14 @@ function akismet_form_submit($form, &$form_state) {
     // For new entities, the entity's form submit handler will have added the
     // new entity id value into $form_state['values'], so we need to rebuild the
     // data mapping. We do not care for the actual fields, only for the value of
-    // the mapped postId.
-    // @todo Directly extract 'postId' from submitted form values.
+    // the mapped post_id.
+    // @todo Directly extract 'post_id' from submitted form values.
     $values = akismet_form_get_values($form_state, $form_state['akismet']['enabled_fields'], $form_state['akismet']['mapping']);
     // We only consider non-empty and non-zero values as valid entity ids.
-    if (!empty($values['postId'])) {
+    if (!empty($values['post_id'])) {
       // Save the Akismet session data.
       $data = (object) $form_state['values']['akismet'];
-      $data->id = $values['postId'];
+      $data->id = $values['post_id'];
       // Set the moderation flag for forms accepting bad posts.
       $data->moderate = $form_state['akismet']['require_moderation'];
       $form_state['akismet']['data'] = akismet_data_save($data);
@@ -2045,6 +1842,8 @@ function akismet_form_submit($form, &$form_state) {
  *   Overrides the 'akismet_class' configuration variable. Debug use only.
  * @param $force
  *   (optional) If true, then a new class is always instantiated.
+ *
+ * @return Akismet
  */
 function akismet($class = NULL, $force = FALSE) {
   $instances = &drupal_static(__FUNCTION__, array());
@@ -2338,8 +2137,8 @@ function _akismet_format_string($string, array $args = array()) {
  *
  * @param $data
  *   A Akismet data record containing one or both of:
- *   - contentId: The content ID to send feedback for.
- *   - captchaId: The CAPTCHA ID to send feedback for.
+ *   - content_id: The content ID to send feedback for.
+ *   - captcha_id: The CAPTCHA ID to send feedback for.
  * @param $reason
  *   The feedback to send, one of 'spam', 'profanity', 'quality', 'unwanted',
  *   'approve'.
@@ -2353,17 +2152,17 @@ function _akismet_format_string($string, array $args = array()) {
 function _akismet_send_feedback($data, $reason = 'spam', $type = 'moderate', $source = NULL) {
   global $user;
   $params = array();
-  if (!empty($data->captchaId)) {
-    $params['captchaId'] = $data->captchaId;
+  if (!empty($data->captcha_id)) {
+    $params['captcha_id'] = $data->captcha_id;
     $resource = 'CAPTCHA';
-    $id = $data->captchaId;
+    $id = $data->captcha_id;
   }
-  // In case we also have a contentId, also pass that, and override $resource
+  // In case we also have a content_id, also pass that, and override $resource
   // and $id for the log message.
-  if (!empty($data->contentId)) {
-    $params['contentId'] = $data->contentId;
+  if (!empty($data->content_id)) {
+    $params['content_id'] = $data->content_id;
     $resource = 'content';
-    $id = $data->contentId;
+    $id = $data->content_id;
   }
   if (!isset($id)) {
     return FALSE;
@@ -2476,205 +2275,12 @@ function akismet_field_extra_fields() {
 
       $extras[$entity_type][$bundle]['form']['akismet'] = array(
         'label' => t('Akismet'),
-        'description' => t('Akismet CAPTCHA or privacy policy link'),
+        'description' => t('Akismet privacy policy link'),
         'weight' => 99,
       );
     }
   }
   return $extras;
-}
-
-/**
- * Get the HTML markup for a Akismet CAPTCHA.
- *
- * @param $form_state
- *   The current state of a form.
- *
- * @return string
- *   The markup of the CAPTCHA HTML.
- */
-function akismet_get_captcha(&$form_state) {
-  // @todo Re-use existing CAPTCHA URL when the Akismet server response for
-  //   verifying a CAPTCHA solution returns the existing URL.
-  $data = array(
-    'type' => $form_state['akismet']['captcha_type'],
-    'ssl' => (int) (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on'),
-  );
-  if (!empty($form_state['values']['akismet']['contentId'])) {
-    $data['contentId'] = $form_state['values']['akismet']['contentId'];
-  }
-  $result = akismet()->createCaptcha($data);
-
-  // Add a log message to prevent the request log from appearing without a
-  // message on CAPTCHA-only protected forms.
-  akismet_log(array(
-    'message' => 'Retrieved new CAPTCHA',
-  ), WATCHDOG_INFO);
-
-  if (is_array($result) && isset($result['url'])) {
-    $url = $result['url'];
-    $form_state['akismet']['response']['captcha'] = $result;
-  }
-  else {
-    return '';
-  }
-  // Theme CAPTCHA output and return.
-  $audio_enabled = variable_get('akismet_audio_captcha_enabled', 1);
-  if ($audio_enabled && $form_state['akismet']['captcha_type'] == 'audio') {
-    return theme('akismet_captcha_audio', array(
-      'captcha_url' => $url,
-    ));
-  }
-  else {
-    return theme('akismet_captcha_image', array(
-      'captcha_url' => $url,
-      'audio_enabled' => $audio_enabled,
-    ));
-  }
-}
-
-/**
- * Attach SWFObject script to render element when available.
- *
- * @param $element
- *   A render element to attach the script to.
- *
- * @return bool
- *   True if the library can be found, false otherwise.
- */
-function _akismet_attach_captcha_script(&$element = NULL) {
-  $libraries = &drupal_static(__FUNCTION__);
-  if (empty($libraries['swfobject'])) {
-    $lib = array(
-      'found' => FALSE,
-    );
-
-    // Try to load via libraries module if enabled.
-    if (module_exists('libraries') && function_exists('libraries_detect ')) {
-      if (($library = libraries_detect('swfobject')) && !empty($library['installed'])) {
-        $lib = array(
-          'found' => TRUE,
-          'libraries' => TRUE,
-        );
-      }
-    }
-    if (!$lib['found']) {
-      // Check for SWFObject in standard library locations.
-      $profile = drupal_get_path('profile', drupal_get_profile());
-      $config = conf_path();
-      $search = array(
-        'libraries',
-        "$profile/libraries",
-        "sites/all/libraries",
-        "$config/libraries",
-      );
-      foreach ($search as $dir) {
-        if (is_dir($dir) && (
-          file_exists("$dir/swfobject.js") || file_exists("$dir/swfobject/swfobject.js")
-          )) {
-          $lib = array(
-            'found' => TRUE,
-            'libraries' => FALSE,
-            'path' => file_exists("$dir/swfobject.js") ? "$dir/swfobject.js" : "$dir/swfobject/swfobject.js",
-          );
-          break;
-        }
-      }
-    }
-    $libraries['swfobject'] = $lib;
-  }
-  if ($libraries['swfobject']['found']) {
-    if (isset($element)) {
-      if ($libraries['swfobject']['libraries']) {
-        $element['#attached']['libraries_load'][] = array('swfobject');
-      }
-      else {
-        $element['#attached'] = array(
-          'js' => array($libraries['swfobject']['path']),
-        );
-      }
-    }
-    return TRUE;
-  }
-  return FALSE;
-}
-
-/**
- * Implements hook_mail_alter().
- *
- * Adds a "report as inappropriate" link to e-mails sent after Akismet-protected
- * form submissions.
- *
- * @see akismet_mail_add_report_link()
- *
- * @todo With akismet_entity_insert(), $message['params'] might contain an array
- *   key that has a ::$akismet property holding the Akismet session data,
- *   potentially eliminating the need for $GLOBALS['akismet'].
- */
-function akismet_mail_alter(&$message) {
-  // Attaches the Akismet report link to any mails with IDs specified from the
-  // submitted form's hook_akismet_form_info(). This should ensure that the
-  // report link is added to mails sent by actual users and not any mails sent
-  // by Drupal since they should never be reported as spam.
-  if (!empty($GLOBALS['akismet']['mail ids']) && in_array($message['id'], $GLOBALS['akismet']['mail ids'])) {
-    akismet_mail_add_report_link($message, $GLOBALS['akismet']);
-  }
-}
-
-/**
- * Add the 'Report as inappropriate' link to an e-mail message.
- *
- * @param array $message
- *   The message to alter.
- * @param array $akismet
- *   The Akismet state for the mail; typically $form_state['akismet'], as set up
- *   by akismet_process_akismet().
- *
- * @see akismet_mail_alter()
- */
-function akismet_mail_add_report_link(array &$message, array $akismet) {
-  if (!empty($akismet['response']['content']['id']) || !empty($akismet['response']['captcha']['id'])) {
-    // Check whether an entity was stored with the submission.
-    $data = FALSE;
-    if (!empty($akismet['response']['content']['id'])) {
-      $data = akismet_content_load($akismet['response']['content']['id']);
-    }
-    elseif (!empty($akismet['response']['captcha']['id'])) {
-      $db_data = akismet_db_query_range('SELECT * FROM {akismet} WHERE captcha_id = :captchaId', 0, 1, array(':captchaId' => $akismet['response']['captcha']['id']))->fetchObject();
-      $data = _akismet_convert_db_names($db_data);
-    }
-    if (!$data) {
-      // @todo Akismet session data should have been saved earlier already;
-      //   eliminate this.
-      $data = (object) $akismet['response'];
-      if (!empty($akismet['response']['content']['id'])) {
-        $data->entity = 'akismet_content';
-        $data->id = $data->content['id'];
-        $data->contentId = $data->content['id'];
-      }
-      else {
-        $data->entity = 'akismet_captcha';
-        $data->id = $data->captcha['id'];
-        $data->captchaId = $data->captcha['id'];
-      }
-      $data->form_id = $akismet['form_id'];
-      akismet_data_save($data);
-    }
-    // Determine report URI.
-    $akismet_form = akismet_form_load($data->form_id);
-    if (isset($akismet_form['report path'])) {
-      $path = strtr($akismet_form['report path'], array(
-        '%id' => $data->id,
-      ));
-    }
-    else {
-      $path = "akismet/report/{$data->entity}/{$data->id}";
-    }
-    $report_link = t('Report as inappropriate: @link', array(
-      '@link' => url($path, array('absolute' => TRUE)),
-    ));
-    $message['body'][] = $report_link;
-  }
 }
 
 /**
@@ -2726,421 +2332,6 @@ function akismet_entity_delete($entity, $type) {
   list($id) = entity_extract_ids($type, $entity);
   akismet_data_delete($type, $id);
 }
-
-/**
- * @name akismet_moderation Akismet Moderation integration.
- * @{
- */
-
-/**
- * Implements hook_akismet_data_insert().
- */
-function akismet_akismet_data_insert($data) {
-  // Only content can be updated.
-  if (empty($data->contentId)) {
-    return;
-  }
-
-  // Indicate that this content session is complete.
-  $params['id'] = $data->contentId;
-  $params['finalized'] = 1;
-
-  // Mark the content as stored for moderation-enabled content.
-  $akismet_form = akismet_form_load($data->form_id);
-  if (!empty($akismet_form['moderation'])) {
-    $params['stored'] = 1;
-  }
-
-  // Get additional information for submissions that result in a locally stored
-  // entity.
-  if ($data->entity != 'akismet_content' && $data->entity != 'akismet_captcha') {
-    // Add the URL of the posted content itself.
-    $entity_info = entity_get_info();
-    if (isset($entity_info[$data->entity])) {
-      $entity = entity_load($data->entity, array($data->id));
-      $entity = (isset($entity[$data->id]) ? $entity[$data->id] : FALSE);
-    }
-    if (!empty($entity)) {
-      $options = entity_uri($data->entity, $entity);
-      $options['absolute'] = TRUE;
-      $params['url'] = url($options['path'], $options);
-
-      // Add the title and URL of the parent content/context of the post, if any.
-      // @todo Figure out how to do this in a generic way.
-      if ($data->entity == 'comment') {
-        $node = node_load($entity->nid);
-        $options = entity_uri('node', $node);
-        $options['absolute'] = TRUE;
-        $params['contextUrl'] = url($options['path'], $options);
-        $params['contextTitle'] = entity_label('node', $node);
-      }
-      // Associate the new user ID for newly registered user accounts.
-      elseif ($data->entity == 'user') {
-        $params['authorId'] = $data->id;
-      }
-    }
-  }
-
-  $result = akismet()->checkContent($params);
-}
-
-/**
- * Implements hook_akismet_data_delete().
- */
-function akismet_akismet_data_delete($data) {
-  // Only content can be deleted.
-  if (empty($data->contentId)) {
-    return;
-  }
-  // Exclude data for form submissions not resulting in a locally stored entity.
-  // These usually map to mails and similar things, but not in content that can
-  // be moderated.
-  if ($data->entity == 'akismet_content' || $data->entity == 'akismet_captcha') {
-    return;
-  }
-  // Skip forms for which Akismet moderation integration is not enabled.
-  $akismet_form = akismet_form_load($data->form_id);
-  if (empty($akismet_form['moderation'])) {
-    return;
-  }
-
-  // Mark the content as discarded (not stored).
-  $params['id'] = $data->contentId;
-  $params['stored'] = 0;
-
-  $result = akismet()->checkContent($params);
-}
-
-/**
- * Menu access callback; Validates an inbound Akismet Moderation request.
- *
- * @param object $data
- *   The Akismet data record associated with the content to moderate.
- * @param string $action
- *   The moderation action to perform; e.g., 'spam', 'delete', 'approve'.
- *
- * @return bool
- *   Whether the moderation request is valid and authorized.
- *
- * @see akismet_moderate()
- */
-function akismet_moderate_access($data, $action) {
-  static $access;
-
-  // Drupal invokes _menu_translate() once more when rendering local tasks for
-  // the page, which breaks the OAuth nonce validation.
-  // @see http://drupal.org/node/1373072
-  if (isset($access)) {
-    return $access;
-  }
-  $access = TRUE;
-  // Check global opt-in configuration setting.
-  $akismet_form = akismet_form_load($data->form_id);
-  if (empty($akismet_form['moderation'])) {
-    $access = FALSE;
-  }
-  // Check required request parameters.
-  if (empty($data) || empty($action)) {
-    $access = FALSE;
-  }
-  // Validate authentication protocol parameters.
-  if (!akismet_moderate_validate_oauth()) {
-    $access = FALSE;
-  }
-  return $access;
-}
-
-/**
- * Returns whether the OAuth request signature is valid.
- */
-function akismet_moderate_validate_oauth() {
-  // For inbound moderation requests, only the production API keys are valid.
-  // The testing mode API keys cannot be trusted. Therefore, this validation
-  // is based on the the stored variables only.
-  $publicKey = variable_get('akismet_public_key', '');
-  $privateKey = variable_get('akismet_private_key', '');
-  if ($publicKey === '' || $privateKey === '') {
-    akismet_log(array(
-      'message' => 'Missing module configuration',
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-
-  $data = AkismetDrupal::getServerParameters();
-  $header = AkismetDrupal::getServerAuthentication();
-
-  // Validate protocol parameters.
-  if (!isset($header['oauth_consumer_key'], $header['oauth_nonce'], $header['oauth_timestamp'], $header['oauth_signature_method'], $header['oauth_signature'])) {
-    akismet_log(array(
-      'message' => 'Missing protocol parameters',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header,
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-
-  $sent_signature = $header['oauth_signature'];
-  unset($header['oauth_signature']);
-
-  $allowed_timeframe = 900;
-
-  // Validate consumer key.
-  if ($header['oauth_consumer_key'] !== $publicKey) {
-    akismet_log(array(
-      'message' => 'Invalid public/consumer key',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header,
-      'My public key:' => $publicKey,
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-
-  // Validate timestamp.
-  if ($header['oauth_timestamp'] <= REQUEST_TIME - $allowed_timeframe) {
-    $diff = $header['oauth_timestamp'] - REQUEST_TIME;
-    $diff_sign = ($diff < 0 ? '-' : '+');
-    if ($diff < 0) {
-      $diff *= -1;
-    }
-    akismet_log(array(
-      'message' => 'Outdated authentication timestamp',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header,
-      'Time difference:' => $diff_sign . format_interval($diff),
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-
-  // Validate nonce.
-  if (empty($header['oauth_nonce'])) {
-    akismet_log(array(
-      'message' => 'Missing authentication nonce',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header,
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-  if ($cached = cache_get('akismet_moderation_nonces', 'cache')) {
-    $nonces = $cached->data;
-  }
-  else {
-    $nonces = array();
-  }
-  if (isset($nonces[$header['oauth_nonce']])) {
-    akismet_log(array(
-      'message' => 'Replay attack',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header,
-    ), WATCHDOG_WARNING);
-    return FALSE;
-  }
-  foreach ($nonces as $nonce => $created) {
-    if ($created < REQUEST_TIME - $allowed_timeframe) {
-      unset($nonces[$nonce]);
-    }
-  }
-  $nonces[$header['oauth_nonce']] = REQUEST_TIME;
-  cache_set('akismet_moderation_nonces', $nonces, 'cache');
-
-  // Validate signature.
-  $base_string = implode('&', array(
-    $_SERVER['REQUEST_METHOD'],
-    Akismet::rawurlencode($GLOBALS['base_url'] . '/' . $_GET['q']),
-    Akismet::rawurlencode(Akismet::httpBuildQuery($data + $header)),
-  ));
-  $key = Akismet::rawurlencode($privateKey) . '&' . '';
-  $signature = rawurlencode(base64_encode(hash_hmac('sha1', $base_string, $key, TRUE)));
-
-  $valid = ($signature === $sent_signature);
-  if (!$valid) {
-    akismet_log(array(
-      'message' => 'Invalid authentication signature',
-      'Request:' => $_SERVER['REQUEST_METHOD'] . ' ' . $_GET['q'],
-      'Request headers:' => $header + array('oauth_signature' => $sent_signature),
-      'Base string:' => $base_string,
-      'Expected signature:' => $signature,
-      //'Expected key:' => $key,
-    ), WATCHDOG_WARNING);
-  }
-  return $valid;
-}
-
-/**
- * Menu callback; Performs an inbound Akismet Moderation request action.
- *
- * @param object $data
- *   The Akismet data record associated with the content to moderate.
- * @param string $action
- *   The moderation action to perform; e.g., 'spam', 'delete', 'approve'.
- *
- * @return void
- *   The request is terminated.
- *
- * @see akismet_moderate_access()
- */
-function akismet_moderate($data, $action) {
-  $result = FALSE;
-  $messages = array();
-
-  // Verify that action is supported or respond with a 404.
-  if (!in_array($action, array('approve', 'spam', 'delete'))) {
-    return MENU_NOT_FOUND;
-  }
-
-  // Retrieve 'delete form' id from registered information.
-  $form_info = akismet_form_load($data->form_id);
-
-  if ($form_info) {
-    if (isset($form_info['entity delete callback'])) {
-      $delete_callback = $form_info['entity delete callback'];
-      $messages[] = "May delete $form_info[entity] entity via {$delete_callback}().";
-    }
-    elseif (isset($form_info['entity delete multiple callback'])) {
-      $delete_multiple_callback = $form_info['entity delete multiple callback'];
-      $messages[] = "May delete $form_info[entity] entity via {$delete_multiple_callback}().";
-    }
-    elseif (function_exists($data->entity . '_delete')) {
-      $delete_callback = $data->entity . '_delete';
-      $messages[] = "May delete $form_info[entity] entity via {$delete_callback}().";
-    }
-    elseif (isset($form_info['delete form'])) {
-      $messages[] = "May delete $form_info[entity] entity via {$form_info['delete form']} form.";
-    }
-
-    // Programmatically invoke publish action.
-    if ($action == 'approve') {
-      $messages[] = "Attempt to load $form_info[entity] entity via entity_load().";
-      // @todo Abstract this. Possibly requires Entity module as dependency.
-      $entity = entity_load($data->entity, array($data->id));
-      if (isset($entity[$data->id])) {
-        $entity = $entity[$data->id];
-        $entity->status = 1;
-        $function = $data->entity . '_save';
-        $messages[] = "Attempt to save $form_info[entity] entity via {$data->entity}_save().";
-        if (function_exists($function)) {
-          $function($entity);
-          $messages[] = "Updated status of $form_info[entity] entity via {$data->entity}_save().";
-          $result = TRUE;
-        }
-      }
-    }
-    // Invoke entity delete callback.
-    elseif (isset($delete_callback)) {
-      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_callback({$data->id}).";
-      if (function_exists($delete_callback)) {
-        $delete_callback($data->id);
-        $messages[] = "Deleted $form_info[entity] entity via $delete_callback({$data->id}).";
-
-        // Entity delete callbacks do not return success or failure, so we can
-        // only assume success.
-        $result = TRUE;
-      }
-    }
-    // Invoke entity delete multiple callback.
-    // @todo Remove 'entity delete multiple' callback support later.
-    elseif (isset($delete_multiple_callback)) {
-      $messages[] = "Attempt to delete $form_info[entity] entity via $delete_multiple_callback(array({$data->id})).";
-      if (function_exists($delete_multiple_callback)) {
-        $delete_multiple_callback(array($data->id));
-        $messages[] = "Deleted $form_info[entity] entity via $delete_multiple_callback(array({$data->id})).";
-
-        // Entity delete callbacks do not return success or failure, so we can
-        // only assume success.
-        $result = TRUE;
-      }
-    }
-    // Programmatically invoke delete confirmation form.
-    elseif (isset($form_info['delete form'])) {
-      $messages[] = "Attempt to delete $form_info[entity] entity {$data->id} via {$form_info['delete form']} form.";
-      if (isset($form_info['delete form file'])) {
-        $file = $form_info['delete form file'] + array(
-          'type' => 'inc',
-          'module' => $form_info['module'],
-          'name' => NULL,
-        );
-        module_load_include($file['type'], $file['module'], $file['name']);
-        $messages[] = "Loaded {$file['name']}.{$file['type']} in {$file['module']} module.";
-      }
-      // Programmatic form submissions are not able to automatically use the
-      // primary form submit button/action, so we need to resemble
-      // drupal_form_submit().
-      $form_id = $form_info['delete form'];
-      $form_state = form_state_defaults();
-      // We assume that all delete confirmation forms take the fully loaded
-      // entity as (only) argument.
-      $messages[] = "Attempt to load $form_info[entity] entity via entity_load().";
-      $entities = entity_load($data->entity, array($data->id));
-      $form_state['build_info']['args'][] = $entities[$data->id];
-      $form = drupal_retrieve_form($form_id, $form_state);
-
-      $form_state['values'] = array();
-      $form_state['values']['akismet']['feedback'] = '';
-      // Take over the primary submit button of confirm_form().
-      $form_state['values']['op'] = $form['actions']['submit']['#value'];
-
-      $form_state['input'] = $form_state['values'];
-      $form_state['programmed'] = TRUE;
-      // Programmed forms are always submitted.
-      $form_state['submitted'] = TRUE;
-
-      // Reset form validation.
-      $form_state['must_validate'] = TRUE;
-      form_clear_error();
-
-      drupal_prepare_form($form_id, $form, $form_state);
-      drupal_process_form($form_id, $form, $form_state);
-
-      $result = $form_state['executed'];
-    }
-  }
-
-  $messages = implode("\n", $messages);
-
-  // Double-check for error messages, since entity delete callbacks typically do
-  // not return any status.
-  $drupal_messages = drupal_get_messages();
-
-  if ($result && !isset($drupal_messages['error'])) {
-    akismet_log(array(
-      'message' => '%action moderation success for @entity @id',
-      'arguments' => array(
-        '%action' => $action,
-        '@entity' => $data->entity,
-        '@id' => $data->id,
-      ),
-//      'Actions:' => $messages,
-    ));
-  }
-  else {
-    // 400 is not really appropriate, but comes closest.
-    drupal_add_http_header('Status', '400 Unable to process moderation request');
-
-    $errors = array();
-    if (isset($drupal_messages['error'])) {
-      $errors['Error messages:'] = implode("\n", $drupal_messages['error']);
-    }
-
-    akismet_log(array(
-      'message' => '%action moderation failure for @entity @id',
-      'arguments' => array(
-        '%action' => $action,
-        '@entity' => $data->entity,
-        '@id' => $data->id,
-      ),
-      'Actions:' => $messages,
-    ) + $errors + array(
-      'Akismet data:' => (array) $data,
-      'Akismet form:' => $form_info,
-    ), WATCHDOG_ERROR);
-  }
-
-  // Report back result as success status.
-  echo (int) $result;
-}
-
-/**
- * @} End of "name akismet_moderation".
- */
 
 /**
  * @name akismet_node Node module integration for Akismet.
@@ -3342,7 +2533,7 @@ function comment_akismet_form_info($form_id) {
  */
 function comment_akismet_entity_report_access($entity = NULL) {
   // All comments can be reported as long as the user has access to view the
-  // node and it's comments.
+  // node and its comments.
   if (!user_access('access comments')) {
     return FALSE;
   }

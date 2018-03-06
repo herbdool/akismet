@@ -204,7 +204,7 @@ class AkismetClassUnitTestCase extends DrupalUnitTestCase {
   <code>0</code>
   <message>Foo.</message>
   <content>
-    <contentId>321</contentId>
+    <content_id>321</content_id>
     <languages>
       <language>
         <languageCode>en</languageCode>
@@ -222,7 +222,7 @@ EOF;
       'code' => 0,
       'message' => 'Foo.',
       'content' => array(
-        'contentId' => 321,
+        'content_id' => 321,
         'languages' => array(
           array('languageCode' => 'en', 'languageScore' => 1.0),
           array('languageCode' => 'de', 'languageScore' => 0.5),
