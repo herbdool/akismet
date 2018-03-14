@@ -66,16 +66,6 @@ function akismet_help($path, $arg) {
     return $output;
   }
 
-  if ($path == 'admin/config/content/akismet/blacklist') {
-    $output = '<p>';
-    $output .= t('Akismet automatically blocks unwanted content and learns from all participating sites to improve its filters. On top of automatic filtering, you can define a custom blacklist.');
-    $output .= '</p>';
-    $output .= '<p>';
-    $output .= t('Use an "exact" match for short, single words that could be contained within another word.');
-    $output .= '</p>';
-    return $output;
-  }
-
   if ($path == 'admin/help#akismet') {
     $output = '<p>';
     $output .= t('Allowing users to react, participate and contribute while still keeping your site\'s content under control can be a huge challenge. <a href="@akismet-website">Akismet</a> is a web service that helps you stop spam. When content moderation becomes easier, you have more time and energy to interact with your site visitors and community. For more information, see <a href="@akismet-works">how Akismet works</a>.', array(
@@ -86,39 +76,6 @@ function akismet_help($path, $arg) {
     $output .= t('Data from your site is processed and stored as explained in the <a href="@akismet-privacy">privacy policy</a> of Akismet\'s parent company, Automattic. It is your responsibility to provide necessary notices and obtain the appropriate consent regarding Akismet\'s use of submitted data.', array(
       '@akismet-privacy' => 'http://automattic.com/privacy/',
     ));
-    $output .= '</p>';
-    $output .= '<p>';
-    $output .= t('If Akismet misses a spam post, you can help to train and improve its filters by sending feedback to Akismet when deleting the post on your site.');
-    $output .= '</p>';
-    $output .= '<h3>' . t('Akismet blacklist') . '</h3>';
-    $output .= '<p>';
-    $output .= t("Akismet's filters are shared and trained globally over all participating sites. Due to this, unwanted content might still be accepted on your site, even after sending feedback to Akismet. By using the site-specific blacklist, the filters can be customized to your specific needs.");
-    $output .= '</p>';
-    $output .= '<p>';
-    $output .= t("All blacklist entries are applied to a context: the entire submitted post, or only links in the post. When limiting the context to links, both the link URL and the link text is taken into account.");
-    $output .= '</p>';
-    $output .= '<p>';
-    $output .= t('Each blacklist entry defines how it matches:');
-    $output .= '</p>';
-    $output .= '<ul>';
-    $output .= '<li>';
-    $output .= t('Use "contains" matching to find a term within any other string.');
-    $output .= '</li><li>';
-    $output .= t('Use "exact" matching for terms made up of short, single words that could be contained within a larger permissible word.');
-    $output .= '</li>';
-    $output .= '</ul>';
-    $output .= '<p>';
-    $output .= t("If a blacklist entry contains multiple words, various combinations will be matched. For example, when adding \"<code>replica&nbsp;watches</code>\" limited to links, the following links will be blocked:");
-    $output .= '</p>';
-    $output .= '<ul>
-<li><code>http://replica-watches.com</code></li>
-<li><code>http://replica-watches.com/some/path</code></li>
-<li><code>http://replicawatches.net</code></li>
-<li><code>http://example.com/replica/watches</code></li>
-<li><code>&lt;a href="http://example.com"&gt;replica watches&lt;/a&gt;</code></li>
-</ul>';
-    $output .= '<p>';
-    $output .= t("The blacklist is optional. There is no whitelist, i.e., if a blacklist entry is matched in a post, it overrides any other filter result and the post will not be accepted. Blacklisting potentially ambiguous words should be avoided.");
     $output .= '</p>';
     return $output;
   }
@@ -187,31 +144,6 @@ function akismet_menu() {
     'access arguments' => array('administer akismet'),
     'file' => 'akismet.admin.inc',
   );
-  $items['admin/config/content/akismet/blacklist'] = array(
-    'title' => 'Blacklists',
-    'description' => 'Configure blacklists.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('akismet_admin_blacklist_form'),
-    'access callback' => '_akismet_access',
-    'access arguments' => array('administer akismet'),
-    'type' => MENU_LOCAL_TASK,
-    'file' => 'akismet.admin.inc',
-  );
-  $items['admin/config/content/akismet/blacklist/spam'] = array(
-    'title' => 'Spam',
-    'description' => 'Configure spam blacklist entries.',
-    'type' => MENU_DEFAULT_LOCAL_TASK,
-    'weight' => -10,
-  );
-  $items['admin/config/content/akismet/blacklist/delete'] = array(
-    'title' => 'Delete blacklist entry',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('akismet_admin_blacklist_delete'),
-    'access callback' => '_akismet_access',
-    'access arguments' => array('administer akismet'),
-    'type' => MENU_CALLBACK,
-    'file' => 'akismet.admin.inc',
-  );
   $items['admin/config/content/akismet/settings'] = array(
     'title' => 'Settings',
     'description' => 'Configure Akismet keys and global settings.',
@@ -219,16 +151,6 @@ function akismet_menu() {
     'page arguments' => array('akismet_admin_settings'),
     'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
-    'file' => 'akismet.admin.inc',
-  );
-
-  $items['admin/reports/akismet'] = array(
-    'title' => 'Akismet statistics',
-    'description' => 'Reports and usage statistics for the Akismet module.',
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('akismet_reports_page'),
-    'access callback' => '_akismet_access',
-    'access arguments' => array('access akismet statistics'),
     'file' => 'akismet.admin.inc',
   );
 
@@ -492,7 +414,7 @@ function akismet_data_delete_form_alter(&$form, &$form_state) {
     '#weight' => 80,
   );
   $form['akismet']['feedback'] = array(
-    '#type' => 'value',
+    '#type' => 'radios',
     '#title' => t('Report as…'),
     '#options' => array(
       'spam' => t('Spam, unsolicited advertising'),
@@ -1014,8 +936,8 @@ function akismet_form_delete($form_id) {
  *
  * This function generates the data to send for validation to Akismet by walking
  * through the submitted form values and
- * - copying element values as specified via 'mapping' in hook_akismet_form_info()
- *   into the dedicated data properties
+ * - copying element values as specified via 'mapping' in
+ *   hook_akismet_form_info() into the dedicated data properties
  * - collecting and concatenating all fields that have been selected for textual
  *   analysis into the 'post_body' property
  *
@@ -1031,6 +953,8 @@ function akismet_form_delete($form_id) {
  *   specified data property. This is usually the case for form elements that
  *   hold system user information.
  *
+ * @see hook_akismet_form_info()
+ *
  * @param $form_state
  *   An associative array containing
  *   - values: The submitted form values.
@@ -1042,7 +966,9 @@ function akismet_form_delete($form_id) {
  *   An associative array of form elements to map to Akismet's dedicated data
  *   properties. See hook_akismet_form_info() for details.
  *
- * @see hook_akismet_form_info()
+ * @return array
+ *   An associative array of keys and values suitable for
+ *   Akismet::checkContent().
  */
 function akismet_form_get_values(&$form_state, $fields, $mapping) {
   global $user;
@@ -1059,9 +985,9 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
   // All elements specified in $mapping must be excluded from $fields, as they
   // are used for dedicated $data properties instead. To reduce the parsing code
   // size, we are turning a given $mapping of f.e.
-  //   array('post_title' => 'title_form_element')
+  //   array('comment_author' => 'author_form_element')
   // into
-  //   array('title_form_element' => 'post_title')
+  //   array('author_form_element' => 'comment_author')
   // and we reset $mapping afterwards.
   // When iterating over the $fields, this allows us to quickly test whether the
   // current field should be excluded, and if it should, we directly get the
@@ -1111,11 +1037,6 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
   // which have been turned into $exclude_fields above. All fields that were
   // already used for 'post_body' no longer exist in $exclude_fields.
   foreach ($exclude_fields as $field => $property) {
-    // If the postTitle field was not included in the enabled fields, then don't
-    // set its mapping here.
-    if ($property === 'post_title' && !in_array($field, $fields)) {
-      continue;
-    }
     // Nested elements use a key of 'parent][child', so we need to recurse.
     $parents = explode('][', $field);
     $value = $form_values;
@@ -1139,81 +1060,57 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
   if (!empty($mapping['post_id'])) {
     $data['post_id'] = $mapping['post_id'];
   }
-  // Post title if included in enabled fields for the form.
-  if (!empty($mapping['post_title'])) {
-    $data['postTitle'] = $mapping['post_title'];
-  }
   // Post body.
   if (!empty($post_body)) {
-    $data['postBody'] = $post_body;
+    $data['comment_content'] = $post_body;
   }
 
   // Author ID.
   // If a non-anonymous user ID was mapped via form values, use that.
-  if (!empty($mapping['author_id'])) {
-    $data['authorId'] = $mapping['author_id'];
+  if (!empty($mapping['comment_author_id'])) {
+    $author_id = $mapping['comment_author_id'];
   }
   // Otherwise, the currently logged-in user is the author.
   elseif (!empty($user->uid)) {
-    $data['authorId'] = $user->uid;
+    $author_id = $user->uid;
   }
 
   // Load the user account of the author, if any, for the following author*
   // property assignments.
   $account = FALSE;
-  if (isset($data['authorId'])) {
-    $account = user_load($data['authorId']);
-  }
-
-  // Author creation date.
-  if (!empty($account->created)) {
-    $data['authorCreated'] = $account->created;
+  if (isset($author_id)) {
+    $account = user_load($author_id);
   }
 
   // Author name.
   // A form value mapping always has precedence.
-  if (!empty($mapping['author_name'])) {
-    $data['authorName'] = $mapping['author_name'];
+  if (!empty($mapping['comment_author'])) {
+    $data['comment_author'] = $mapping['comment_author'];
   }
   // In case a post of a registered user is edited and a form value mapping
-  // exists for author_id, but no form value mapping exists for author_name,
-  // use the name of the user account associated with author_id.
+  // exists for comment_author_id, but no form value mapping exists for
+  // comment_author, use the name of the user account associated with
+  // comment_author_id.
   // $account may be the same as the currently logged-in $user at this point.
   elseif (!empty($account->name)) {
-    $data['authorName'] = $account->name;
+    $data['comment_author'] = $account->name;
   }
 
   // Author e-mail.
-  if (!empty($mapping['author_mail'])) {
-    $data['authorMail'] = $mapping['author_mail'];
+  if (!empty($mapping['comment_author_email'])) {
+    $data['comment_author_email'] = $mapping['comment_author_email'];
   }
   elseif (!empty($account->mail)) {
-    $data['authorMail'] = $account->mail;
+    $data['comment_author_email'] = $account->mail;
   }
 
   // Author homepage.
-  if (!empty($mapping['author_url'])) {
-    $data['authorUrl'] = $mapping['author_url'];
-  }
-
-  // Author OpenID.
-  if (!empty($mapping['author_openid'])) {
-    $data['authorOpenid'] = $mapping['author_openid'];
-  }
-  elseif (!empty($account) && ($openid = _akismet_get_openid($account))) {
-    $data['authorOpenid'] = $openid;
+  if (!empty($mapping['comment_author_url'])) {
+    $data['comment_author_url'] = $mapping['comment_author_url'];
   }
 
   // Author IP.
-  $data['authorIp'] = ip_address();
-
-  // Honeypot.
-  // For the Akismet backend, it only matters whether 'honeypot' is non-empty.
-  // The submitted value is only taken over to allow site administrators to
-  // see the actual honeypot value in watchdog log entries.
-  if (isset($form_values['akismet']['homepage']) && $form_values['akismet']['homepage'] !== '') {
-    $data['honeypot'] = $form_values['akismet']['homepage'];
-  }
+  $data['user_ip'] = ip_address();
 
   // Add the contextCreated parameter if a callback exists.
   if (isset($form_state['akismet']['context created callback']) && function_exists($form_state['akismet']['context created callback'])) {
@@ -1221,7 +1118,7 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
       $context_id_field = $mapping['context_id'];
       $contextCreated = call_user_func($form_state['akismet']['context created callback'], $mapping['context_id']);
       if ($contextCreated !== FALSE) {
-        $data['contextCreated'] = $contextCreated;
+        $data['comment_post_modified_gmt'] = $contextCreated;
       }
     }
   }
@@ -1282,19 +1179,6 @@ function _akismet_flatten_form_values($values) {
     }
   }
   return $flat_values;
-}
-
-/**
- * Helper function to return OpenID identifiers associated with a given user account.
- */
-function _akismet_get_openid($account) {
-  if (isset($account->uid)) {
-    $ids = db_query('SELECT authname FROM {authmap} WHERE module = :module AND uid = :uid', array(':module' => 'openid', ':uid' => $account->uid))->fetchCol();
-
-    if (!empty($ids)) {
-      return implode($ids, ' ');
-    }
-  }
 }
 
 /**
@@ -1383,24 +1267,16 @@ function _akismet_status($force = FALSE, $update = FALSE) {
   $status['isConfigured'] = (!empty($status['key']));
 
   if ($testing_mode || $status['isConfigured']) {
-    $old_status = $status;
-    $data = array();
-    if ($update) {
-      // Ensure to use the most current API key (might have been changed).
-      $akismet->key = $status['key'];
-    }
-    $data += $akismet->getClientInformation();
-    $response = $akismet->updateSite($data);
+    $response = $akismet->verifyKey($status['key']);
 
-    if (is_array($response) && $akismet->lastResponseCode === TRUE) {
-      $status = array_merge($status,$response);
+    if ($response === TRUE) {
       $status['isVerified'] = TRUE;
       akismet_log(array(
         'message' => 'API key is valid.',
       ), WATCHDOG_INFO);
     }
-    elseif ($response === Akismet::AUTH_ERROR) {
-      $status['response'] = $response;
+    elseif ($response === FALSE) {
+      $status['isVerified'] = FALSE;
       akismet_log(array(
         'message' => 'Invalid API key.',
       ), WATCHDOG_ERROR);
@@ -1471,19 +1347,6 @@ function akismet_element_info() {
       '#process' => array(
         'akismet_process_akismet',
       ),
-    ),
-  );
-}
-
-/**
- * Implements hook_theme().
- */
-function akismet_theme() {
-  $base_path = base_path() . drupal_get_path('module', 'akismet');
-  return array(
-    'akismet_admin_blacklist_form' => array(
-      'render element' => 'form',
-      'file' => 'akismet.admin.inc',
     ),
   );
 }
@@ -1700,76 +1563,65 @@ function akismet_validate_analysis(&$form, &$form_state) {
   if (isset($form_state['akismet']['type'])) {
     $data['type'] = $form_state['akismet']['type'];
   }
-  $result = akismet()->checkContent($data);
+  $classification = akismet()->checkContent($data);
 
   // Use all available data properties for log messages below.
   $data += $all_data;
 
   // Trigger global fallback behavior if there is a unexpected result.
-  if (!is_array($result) || !isset($result['id'])) {
+  if (is_int($classification)) {
     _akismet_fallback();
     return;
   }
 
-  // Store the response returned by Akismet.
-  $form_state['akismet']['response']['content'] = $result;
-  // Set form values accordingly. Do not overwrite the entity ID.
-  // @todo Rename 'id' to 'entity_id'.
-  $result['content_id'] = $result['id'];
-  unset($result['id']);
-  $form_state['values']['akismet'] = array_merge($form_state['values']['akismet'], $result);
+  $result = $all_data;
+  $result['classification'] = $classification;
 
-  // Ensure the latest content ID is output as value.
-  // form_set_value() is effectless, as this is not a element-level but a
-  // form-level validation handler.
-  $form['akismet']['content_id']['#value'] = $result['content_id'];
+  // Store the response returned by Akismet.
+  $form_state['akismet']['response'] = $result;
+  $form_state['values']['akismet'] = $result;
 
   // Prepare watchdog message teaser text.
   $teaser = '--';
-  if (isset($data['postTitle'])) {
-    $teaser = truncate_utf8(strip_tags($data['postTitle']), 40);
-  }
-  elseif (isset($data['postBody'])) {
-    $teaser = truncate_utf8(strip_tags($data['postBody']), 40);
+  if (isset($data['comment_content'])) {
+    $teaser = truncate_utf8(strip_tags($data['comment_content']), 40);
   }
 
   // Handle the spam check result.
-  if (isset($result['spam_classification'])) {
-    switch ($result['spam_classification']) {
-      case 'ham':
-        akismet_log(array(
-          'message' => 'Ham: %teaser',
-          'arguments' => array('%teaser' => $teaser),
-        ), WATCHDOG_INFO);
-        break;
+  switch ($result) {
+    case 'ham':
+      akismet_log(array(
+        'message' => 'Ham: %teaser',
+        'arguments' => array('%teaser' => $teaser),
+      ), WATCHDOG_INFO);
+      break;
 
-      case 'spam':
-        if ($form_state['akismet']['discard']) {
-          form_set_error('akismet', t('Your submission has triggered the spam filter and will not be accepted.'));
-        }
-        else {
-          $form_state['akismet']['require_moderation'] = TRUE;
-        }
-        akismet_log(array(
-          'message' => 'Spam: %teaser',
-          'arguments' => array('%teaser' => $teaser),
-        ));
-        break;
+    case 'spam':
+      if ($form_state['akismet']['discard']) {
+        form_set_error('akismet', t('Your submission has triggered the spam filter and will not be accepted.'));
+      }
+      else {
+        $form_state['akismet']['require_moderation'] = TRUE;
+      }
+      akismet_log(array(
+        'message' => 'Spam: %teaser',
+        'arguments' => array('%teaser' => $teaser),
+      ));
+      break;
 
-      case 'unsure':
-      default:
-        if ($form_state['akismet']['unsure'] == 'discard') {
-          form_set_error('akismet', t('Your submission has triggered the spam filter and will not be accepted.'));
-        }
-        elseif ($form_state['akismet']['unsure'] == 'moderate') {
-          $form_state['akismet']['require_moderation'] = TRUE;
-        }
-        akismet_log(array(
-          'message' => 'Unsure: %teaser',
-          'arguments' => array('%teaser' => $teaser),
-        ), WATCHDOG_INFO);
-        break;
-    }
+    case 'unsure':
+    default:
+      if ($form_state['akismet']['unsure'] == 'discard') {
+        form_set_error('akismet', t('Your submission has triggered the spam filter and will not be accepted.'));
+      }
+      elseif ($form_state['akismet']['unsure'] == 'moderate') {
+        $form_state['akismet']['require_moderation'] = TRUE;
+      }
+      akismet_log(array(
+        'message' => 'Unsure: %teaser',
+        'arguments' => array('%teaser' => $teaser),
+      ), WATCHDOG_INFO);
+      break;
   }
 }
 
@@ -1825,7 +1677,7 @@ function akismet_form_submit($form, &$form_state) {
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($values['post_id'])) {
       // Save the Akismet session data.
-      $data = (object) $form_state['values']['akismet'];
+      $data = (object) $values;
       $data->id = $values['post_id'];
       // Set the moderation flag for forms accepting bad posts.
       $data->moderate = $form_state['akismet']['require_moderation'];
@@ -2378,7 +2230,7 @@ function node_akismet_form_info($form_id) {
     'context created callback' => 'node_akismet_context_created',
     'elements' => array(),
     'mapping' => array(
-      'author_name' => 'name',
+      'comment_author' => 'name',
       'context_id' => 'nid',
     ),
   );
@@ -2512,10 +2364,9 @@ function comment_akismet_form_info($form_id) {
       'subject' => t('Subject'),
     ),
     'mapping' => array(
-      'post_title' => 'subject',
-      'author_name' => 'name',
-      'author_mail' => 'mail',
-      'author_url' => 'homepage',
+      'comment_author' => 'name',
+      'comment_author_email' => 'mail',
+      'comment_author_url' => 'homepage',
       'context_id' => 'nid',
     ),
   );
@@ -2633,8 +2484,8 @@ function user_akismet_form_info($form_id) {
         'moderation callback' => 'user_akismet_form_moderation',
         'mail ids' => array('user_register_pending_approval_admin'),
         'mapping' => array(
-          'author_name' => 'name',
-          'author_mail' => 'mail',
+          'comment_author' => 'name',
+          'comment_author_email' => 'mail',
         ),
       );
       akismet_form_info_add_fields($form_info, 'user', 'user');
@@ -2645,9 +2496,9 @@ function user_akismet_form_info($form_id) {
         'bypass access' => array('administer users'),
         'mapping' => array(
           'post_id' => 'uid',
-          'author_name' => 'name',
+          'comment_author' => 'name',
           // The 'name' form element accepts either a username or mail address.
-          'author_mail' => 'name',
+          'comment_author_email' => 'name',
         ),
       );
       return $form_info;
@@ -2720,9 +2571,8 @@ function contact_akismet_form_info($form_id) {
           'message' => t('Message'),
         ),
         'mapping' => array(
-          'post_title' => 'subject',
-          'author_name' => 'name',
-          'author_mail' => 'mail',
+          'comment_author' => 'name',
+          'comment_author_email' => 'mail',
         ),
       );
       return $form_info;
@@ -2737,9 +2587,8 @@ function contact_akismet_form_info($form_id) {
           'message' => t('Message'),
         ),
         'mapping' => array(
-          'post_title' => 'subject',
-          'author_name' => 'name',
-          'author_mail' => 'mail',
+          'comment_author' => 'name',
+          'comment_author_email' => 'mail',
         ),
       );
       return $form_info;

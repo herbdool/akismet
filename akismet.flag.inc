@@ -13,8 +13,6 @@
 function _akismet_flag_reasons() {
   return array(
     'spam' => t('Spam, unsolicited advertising'),
-    'profanity' => t('Obscene, abusive, profane language'),
-    'unwanted' => t('Off-topic'),
   );
 }
 
@@ -34,20 +32,11 @@ function _akismet_flag_entity_count($entity, $id) {
   // default values
   $totals = array(
     'spam' => 0,
-    'profanity' => 0,
-    'unwanted' => 0,
-    'quality' => 0,
-    'total' => 0,
   );
 
   // Update the totals for all reasons.
   if (!empty($data)) {
     $totals['spam'] = $data->flags_spam;
-    $totals['profanity'] = $data->flags_profanity;
-    $totals['unwanted'] = $data->flags_unwanted;
-    $totals['quality'] = $data->flags_quality;
-    $totals['total'] = $data->flags_spam + $data->flags_profanity + $data->flags_unwanted + $data->flags_quality;
-    arsort($totals);
   }
   return $totals;
 }

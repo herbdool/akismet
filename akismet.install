@@ -24,10 +24,8 @@ function akismet_requirements($phase = 'runtime', $check = TRUE) {
   if ($phase == 'runtime') {
     $status = _akismet_status($check);
     $requirements['akismet'] = array(
-      'title' => t('Akismet API keys'),
-      'value' => t('Valid (public key: @publicKey)', array(
-        '@publicKey' => variable_get('akismet_public_key', ''),
-      )),
+      'title' => t('Akismet API key'),
+      'value' => t('Valid'),
     );
     // Immediately return if everything is in order.
     if ($status['isVerified']) {
@@ -41,53 +39,33 @@ function akismet_requirements($phase = 'runtime', $check = TRUE) {
     // shown on the settings page, since Akismet API keys can be entered later.
     $admin_message = '';
     if ($_GET['q'] != 'admin/config/content/akismet/settings') {
-      $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to configure your keys.', array(
+      $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to add your API key.', array(
         '@settings-url' => url('admin/config/content/akismet/settings'),
       ));
     }
-    // Generate an appropriate error message:
-    // If testing mode is enabled, then the Testing API is most likely down,
-    // since the testing client implementation automatically tries to recover
-    // from stale/outdated API keys.
-    if (variable_get('akismet_testing_mode', 0)) {
-      $requirements['akismet']['value'] = t('Testing API not available');
-      $requirements['akismet']['description'] = t('The Akismet Testing API is not available currently.');
-    }
     // Missing API keys.
-    elseif (!$status['isConfigured']) {
+    if (!$status['isConfigured']) {
       $requirements['akismet']['value'] = t('Not configured');
-      $requirements['akismet']['description'] = t('The Akismet API keys are not configured yet. !admin-message', array(
+      $requirements['akismet']['description'] = t('The Akismet API key is not configured yet. !admin-message', array(
         '!admin-message' => $admin_message,
-      ));
-    }
-    // Bad request: Invalid client system time: Too large offset from UTC.
-    elseif ($status['response'] === Akismet::REQUEST_ERROR) {
-      $requirements['akismet']['value'] = t('Client error');
-      $requirements['akismet']['description'] = t('The server time of this site is incorrect. The time of the operating system is not synchronized with the Coordinated Universal Time (UTC), which prevents a successful authentication with Akismet. The maximum allowed offset is @minutes minutes. Please consult your hosting provider or server operator to correct the server time.', array(
-        '@minutes' => Akismet::TIME_OFFSET_MAX / 60,
       ));
     }
     // Invalid API keys.
     elseif ($status['response'] === Akismet::AUTH_ERROR) {
       $requirements['akismet']['value'] = t('Invalid');
-      $requirements['akismet']['description'] = t('The configured Akismet API keys are invalid. !admin-message', array(
+      $requirements['akismet']['description'] = t('The configured Akismet API key is invalid. !admin-message', array(
         '!admin-message' => $admin_message,
       ));
     }
     // Communication error.
     elseif ($status['response'] === Akismet::NETWORK_ERROR) {
       $requirements['akismet']['value'] = t('Network error');
-      $requirements['akismet']['description'] = t('The Akismet servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.');
-    }
-    // Server error.
-    elseif ($status['response'] === Akismet::RESPONSE_ERROR) {
-      $requirements['akismet']['value'] = t('Service error');
-      $requirements['akismet']['description'] = t('The Akismet API keys could not be verified. Please try again later.');
+      $requirements['akismet']['description'] = t('The Akismet server could not be contacted. Please make sure that your web server can make outgoing HTTP requests.');
     }
     // 404, etc.
     else {
       $requirements['akismet']['value'] = t('Unknown error');
-      $requirements['akismet']['description'] = t('The Akismet servers could be contacted, but Akismet API keys could not be verified.');
+      $requirements['akismet']['description'] = t('The API key could not be verified.');
     }
   }
   return $requirements;
@@ -339,6 +317,15 @@ function akismet_schema() {
  * Implements hook_install().
  */
 function akismet_install() {
+  // Migrate any Mollom form settings that exist.
+  $query = db_select('mollom_form')->fields('mollom_form');
+  $result = db_insert('akismet_form')
+    ->from($query)
+    ->execute();
+
+
+
+
   // Point the user to Akismet's settings page after installation.
   $requirements = akismet_requirements('runtime', FALSE);
   drupal_set_message($requirements['akismet']['description'], 'warning');

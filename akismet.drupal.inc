@@ -17,11 +17,6 @@ class AkismetDrupal extends Akismet {
    */
   public function __construct() {
     parent::__construct();
-    // Set any configured endpoint that may be different from the default.
-    $configured_server = $this->loadConfiguration('server');
-    if (!empty($configured_server)) {
-      $this->server = $configured_server;
-    }
     $this->requestTimeout = variable_get('akismet_connection_timeout', 3);
   }
 
@@ -31,10 +26,7 @@ class AkismetDrupal extends Akismet {
    * @see Akismet::loadConfiguration()
    */
   public $configuration_map = array(
-    'publicKey' => 'akismet_public_key',
-    'privateKey' => 'akismet_private_key',
-    'expectedLanguages' => 'akismet_languages_expected',
-    'server' => 'akismet_api_endpoint',
+    'key' => 'akismet_api_key',
   );
 
   /**
@@ -55,7 +47,7 @@ class AkismetDrupal extends Akismet {
     }
     // Persist in Drupal.
     $name = $this->configuration_map[$name];
-    return variable_set($name, $value);
+    variable_set($name, $value);
   }
 
   /**
@@ -63,13 +55,13 @@ class AkismetDrupal extends Akismet {
    */
   public function deleteConfiguration($name) {
     $name = $this->configuration_map[$name];
-    return variable_del($name);
+    variable_del($name);
   }
 
   /**
-   * Implements Akismet::getClientInformation().
+   * Implements Akismet::getUserAgentInformation().
    */
-  public function getClientInformation() {
+  public function getUserAgentInformation() {
     // Retrieve Drupal distribution and installation profile information.
     $profile = drupal_get_profile();
     $profile_info = system_get_info('module', $profile) + array(
@@ -81,7 +73,7 @@ class AkismetDrupal extends Akismet {
     $akismet_info = system_get_info('module', 'akismet');
     if (empty($akismet_info['version'])) {
       // Manually build a module version string for repository checkouts.
-      $akismet_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-2.x-dev';
+      $akismet_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-1.x-dev';
     }
 
     $data = array(
@@ -91,6 +83,20 @@ class AkismetDrupal extends Akismet {
       'clientVersion' => $akismet_info['version'],
     );
     return $data;
+  }
+
+  /**
+   * Overrides Akismet::getSiteURL().
+   */
+  public function getSiteURL() {
+    return $GLOBALS['base_url'];
+  }
+
+  public function checkContent(array $data = array(), array $server = array()) {
+    if (empty($server)) {
+      $server = $_SERVER;
+    }
+    return parent::checkContent($data, $server);
   }
 
   /**
@@ -112,7 +118,7 @@ class AkismetDrupal extends Akismet {
       // can normalize the severity of all log entries to the overall success or
       // failure of the attempted request.
       // @see Akismet::query()
-      akismet_log($entry, $this->lastResponseCode === TRUE ? NULL : WATCHDOG_ERROR);
+      akismet_log($entry, $this->lastResponse->isError ? WATCHDOG_ERROR : NULL);
     }
 
     // After writing log messages, empty the log.
@@ -162,329 +168,18 @@ class AkismetDrupal extends Akismet {
     );
     return $response;
   }
-
-  /**
-   * Ping the Akismet API.
-   *
-   * Drupal may want to ping with a set of keys that
-   * are not yet saved in the configuration.  This function handles setting and
-   * resetting the private key after pinging in order to maintain this state.
-   *
-   * @param $publicKey
-   *   (Optional) the public key to use.  If not provided, the class's own
-   *   publicKey is used.
-   * @param $privateKey
-   *   (Optional) the private key to use.  If not provided, the class's own
-   *   privateKey is used.
-   * @param string $callback
-   *   A callback path to receive the "pong" response from Akismet.  The path
-   *   defaults to 'akismet/pong'.
-   */
-  public function pingAPI($publicKey = NULL, $privateKey = NULL, $callback = 'akismet/pong') {
-    // Handle setting the private key for authorization purposes.
-    $currentPrivateKey = $this->loadConfiguration('privateKey');
-    if (!empty($privateKey)) {
-      $this->privateKey = $privateKey;
-    }
-    // Update the callback to an absolute URL.
-    $callback = url($callback, array('absolute' => TRUE));
-    $result = $this->ping($callback, $publicKey);
-    $this->saveConfiguration('privateKey', $currentPrivateKey);
-    return $result;
-  }
-
-  /**
-   * Retrieves GET/HEAD or POST/PUT parameters of an inbound request.
-   *
-   * @return array
-   *   An array containing either GET/HEAD query string parameters or POST/PUT
-   *   post body parameters. Parameter parsing accounts for multiple request
-   *   parameters in non-PHP format; e.g., 'foo=one&foo=bar'.
-   */
-  public static function getServerParameters() {
-    $data = parent::getServerParameters();
-    if ($_SERVER['REQUEST_METHOD'] == 'GET' || $_SERVER['REQUEST_METHOD'] == 'HEAD') {
-      // Remove $_GET['q'].
-      unset($data['q']);
-    }
-    return $data;
-  }
-
 }
 
 /**
- * Drupal Akismet client implementation using testing API servers.
+ * Drupal Akismet client implementation using test parameter.
  */
 class AkismetDrupalTest extends AkismetDrupal {
-  /**
-   * Overrides Akismet::$server.
-   */
-  public $server = 'dev.akismet.com';
 
   /**
-   * Flag indicating whether to verify and automatically create testing API keys upon class instantiation.
-   *
-   * @var bool
+   * {@inheritdoc}
    */
-  public $createKeys;
-
-  /**
-   * Overrides Akismet::__construct().
-   *
-   * This class accounts for multiple scenarios:
-   * - Straight low-level requests against the testing API from a custom script,
-   *   caring for API keys on its own.
-   * - Whenever the testing mode is enabled (either through the module's
-   *   settings page or by changing the akismet_testing_mode system variable),
-   *   the client requires valid testing API keys to perform any calls. Testing
-   *   API keys are different to production API keys, need to be created first,
-   *   and may vanish at any time (whenever the testing API server is
-   *   redeployed). Since they are different, the class stores them in different
-   *   system variables. Since they can vanish at any time, the class verifies
-   *   the keys upon every instantiation, and automatically creates new testing
-   *   API keys if necessary.
-   * - Some automated unit tests attempt to verify that authentication errors
-   *   are handled correctly by the class' error handling. The automatic
-   *   creation and recovery of testing API keys would break those assertions,
-   *   so said tests can disable the behavior by preemptively setting
-   *   $createKeys or the 'akismet_testing_create_keys' system variable to FALSE,
-   *   and manually create testing API keys (once).
-   */
-  function __construct() {
-    // Some tests are verifying the production behavior of e.g. setting up API
-    // keys, in which testing mode is NOT enabled and the test creates fake
-    // "production" API keys on the local fake server on its own. This special
-    // override must only be possible when executing tests.
-    // @todo Add global test_info as condition?
-    if (module_exists('akismet_test_server') && !variable_get('akismet_testing_mode', 0)) {
-      // Disable authentication error auto-recovery.
-      $this->createKeys = FALSE;
-    }
-    else {
-      // Do not destroy production variables when testing mode is enabled.
-      $this->configuration_map['publicKey'] = 'akismet_test_public_key';
-      $this->configuration_map['privateKey'] = 'akismet_test_private_key';
-      $this->configuration_map['server'] = 'akismet_test_api_endpoint';
-    }
-
-    // Load and set publicKey and privateKey configuration values.
-    parent::__construct();
-
-    // Unless pre-set, determine whether API keys should be auto-created.
-    if (!isset($this->createKeys)) {
-      $this->createKeys = (bool) variable_get('akismet_testing_create_keys', TRUE);
-    }
-
-    // Testing can require additional time.
-    $this->requestTimeout = variable_get('akismet_connection_timeout', 3) + 10;
-  }
-
-  /**
-   * Overrides Akismet::handleRequest().
-   *
-   * Automatically tries to generate new API keys in case of a 401 or 404 error.
-   * Intentionally reacts on 401 or 404 errors only, since any other error code
-   * can mean that either the Testing API is down or that the client site is not
-   * able to perform outgoing HTTP requests in general.
-   */
-  protected function handleRequest($method, $server, $path, $data, $expected = array()) {
-    try {
-      $response = parent::handleRequest($method, $server, $path, $data, $expected);
-    }
-    catch (AkismetException $e) {
-      $is_auth_error = $e->getCode() == self::AUTH_ERROR || ($e->getCode() == 404 && strpos($path, 'site') === 0);
-      $current_public_key = $this->publicKey;
-      if ($this->createKeys && $is_auth_error && $this->createKeys()) {
-        $this->saveKeys();
-        // Avoid to needlessly hit the previous/invalid public key again.
-        // Akismet::handleRequest() will sign the new request correctly.
-        // If it was empty, Akismet::handleRequest() returned an AUTH_ERROR
-        // without issuing a request.
-        if ($path == 'site/') {
-          $path = 'site/' . $this->publicKey;
-        }
-        elseif (!empty($current_public_key)) {
-          $path = str_replace($current_public_key, $this->publicKey, $path);
-        }
-        $response = parent::handleRequest($method, $server, $path, $data, $expected);
-      }
-      else {
-        throw $e;
-      }
-    }
-    return $response;
-  }
-
-  /**
-   * Creates new testing API keys.
-   *
-   * @todo Move site properties into $data argument (Drupal-specific values),
-   *   rename to createTestingSite(), and move into Akismet class?
-   */
-  public function createKeys() {
-    // Do not attempt to create API keys repeatedly.
-    $this->createKeys = FALSE;
-
-    // Without any API keys, the client does not even attempt to perform a
-    // request. Set dummy API keys to overcome that sanity check.
-    $this->publicKey = 'public';
-    $this->privateKey = 'private';
-
-    // Skip authorization for creating testing API keys.
-    $oAuthStrategy = $this->oAuthStrategy;
-    $this->oAuthStrategy = '';
-    $result = $this->createSite(array(
-      'url' => $GLOBALS['base_url'],
-      'email' => variable_get('site_mail', 'akismet-drupal-test@example.com'),
-    ));
-    $this->oAuthStrategy = $oAuthStrategy;
-
-    // Set class properties.
-    if (is_array($result) && !empty($result['publicKey']) && !empty($result['privateKey'])) {
-      $this->publicKey = $result['publicKey'];
-      $this->privateKey = $result['privateKey'];
-      return TRUE;
-    }
-    else {
-      $this->publicKey = $this->privateKey = '';
-      return FALSE;
-    }
-  }
-
-  /**
-   * Saves API keys to local configuration store.
-   */
-  public function saveKeys() {
-    $this->saveConfiguration('publicKey', $this->publicKey);
-    $this->saveConfiguration('privateKey', $this->privateKey);
-  }
-
-  /**
-   * Deletes API keys from local configuration store.
-   */
-  public function deleteKeys() {
-    $this->deleteConfiguration('publicKey');
-    $this->deleteConfiguration('privateKey');
-  }
-}
-
-/**
- * Drupal Akismet client implementation using local dummy/fake REST server.
- */
-class AkismetDrupalTestLocal extends AkismetDrupalTest {
-
-  /**
-   * Overrides AkismetDrupalTest::__construct().
-   */
-  function __construct() {
-    // Replace server/endpoint with our local fake server.
-    list(, $server) = explode('://', $GLOBALS['base_url'], 2);
-    $this->server = $server . '/akismet-test/rest';
-
-    parent::__construct();
-  }
-
-  /**
-   * Overrides AkismetDrupal::saveKeys().
-   */
-  public function saveKeys() {
-    parent::saveKeys();
-
-    // Ensure that the site exists on the local fake server. Not required for
-    // remote REST testing API, because our testing API keys persist there.
-    // @see akismet_test_server_rest_site()
-    $bin = 'akismet_test_server_site';
-    $sites = variable_get($bin, array());
-    if (!isset($sites[$this->publicKey])) {
-      // Apply default values.
-      $sites[$this->publicKey] = array(
-        'publicKey' => $this->publicKey,
-        'privateKey' => $this->privateKey,
-        'url' => '',
-        'email' => '',
-      );
-      variable_set($bin, $sites);
-    }
-  }
-
-  /**
-   * Overrides AkismetDrupal::request().
-   *
-   * Passes-through SimpleTest assertion HTTP headers from child-child-site and
-   * triggers errors to make them appear in parent site (where tests are ran).
-   *
-   * @todo Remove when in core.
-   * @see http://drupal.org/node/875342
-   */
-  protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
-    $response = parent::request($method, $server, $path, $query, $headers);
-    $keys = preg_grep('@^x-drupal-assertion-@', array_keys($response->headers));
-    foreach ($keys as $key) {
-      $header = $response->headers[$key];
-      $header = unserialize(urldecode($header));
-      $message = strtr('%type: !message in %function (line %line of %file).', array(
-        '%type' => $header[1],
-        '!message' => $header[0],
-        '%function' => $header[2]['function'],
-        '%line' => $header[2]['line'],
-        '%file' => $header[2]['file'],
-      ));
-      trigger_error($message, E_USER_ERROR);
-    }
-    return $response;
-  }
-}
-
-/**
- * Drupal Akismet client implementation using an invalid server.
- */
-class AkismetDrupalTestInvalid extends AkismetDrupalTest {
-
-  /**
-   * Overrides AkismetDrupalTest::$createKeys.
-   *
-   * Do not attempt to verify API keys against invalid server.
-   */
-  public $createKeys = FALSE;
-
-  private $currentAttempt = 0;
-
-  private $originalServer;
-
-  /**
-   * Overrides AkismetDrupalTest::__construct().
-   */
-  function __construct() {
-    $this->originalServer = $this->server;
-    $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';
-    parent::__construct();
-
-    $this->saveConfiguration('server', 'fake-host');
-  }
-
-  /**
-   * Overrides Akismet::query().
-   */
-  public function query($method, $path, array $data = array(), array $expected = array()) {
-    $this->currentAttempt = 0;
-    return parent::query($method, $path, $data, $expected);
-  }
-
-  /**
-   * Overrides Akismet::handleRequest().
-   *
-   * Akismet::$server is replaced with an invalid server, so all requests will
-   * result in a network error. However, if the 'akismet_testing_server_failover'
-   * variable is set to TRUE, then the last request attempt will succeed.
-   */
-  protected function handleRequest($method, $server, $path, $data, $expected = array()) {
-    $this->currentAttempt++;
-
-    if (variable_get('akismet_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
-      // Prior to PHP 5.3, there is no late static binding, so there is no way
-      // to access the original value of AkismetDrupalTest::$server.
-      $server = strtr($server, array($this->server => $this->originalServer));
-    }
-    return parent::handleRequest($method, $server, $path, $data, $expected);
+  public function query($method, $path, $data, $authenticate = TRUE) {
+    $data['is_test'] = 1;
+    return parent::query($method, $path, $data, $authenticate);
   }
 }

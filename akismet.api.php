@@ -93,7 +93,7 @@
  * Whenever a form submission is related to the entity (e.g., leads to a stored
  * entity being created, updated, or deleted) the form should *always* contain
  * the entity id in the same location of the submitted form values.
- * Above example therefore purposively assigns the new id after inserting it.
+ * Above example therefore purposely assigns the new id after inserting it.
  *
  * @code
  * function im_message_delete_confirm_form(&$form_state, $im) {
@@ -171,16 +171,14 @@
  *           // find the message id of the created, edited, or deleted message
  *           // in $form_state['values']['im']['id'].
  *           'post_id' => 'im][id',
- *           // Required if the form or entity contains a title-alike field:
- *           'post_title' => 'im][subject',
  *           // Optional: If our instant message form was accessible for
  *           // anonymous users and would contain form elements to enter the
  *           // sender's name, e-mail address, and web site, then those fields
  *           // should be additionally specified. Otherwise, information from
  *           // the global user session would be automatically taken over.
- *           'author_name' => 'im][sender][name',
- *           'author_mail' => 'im][sender][mail',
- *           'author_url' => 'im][sender][homepage',
+ *           'comment_author' => 'im][sender][name',
+ *           'comment_author_email' => 'im][sender][mail',
+ *           'comment_author_url' => 'im][sender][homepage',
  *         ),
  *       );
  *       break;
@@ -195,14 +193,11 @@
  * "elements", Akismet is able to perform textual analysis. Without registered
  * form elements, Akismet can only provide a CAPTCHA.
  *
- * "mapping" is a mapping of form elements to predefined XML-RPC data properties
- * of the Akismet web service. For example, "post_title", "author_name",
- * "author_id", "author_mail", etc. Normally, all form elements specified in
- * "elements" would be merged into the "post_body" data property. By specifying
- * a "mapping", certain form element values are sent for the specified data
- * property instead. In our case, the form submission contains something along
- * the lines of a title in the "subject" field, so we map the "post_title" data
- * property to the "subject" field.
+ * "mapping" is a mapping of form elements to properties defined in the Akismet
+ * API. For example, "comment_author", "comment_author_email", etc. Normally,
+ * all form elements specified in "elements" would be merged into the
+ * "comment_content" data property. By specifying a "mapping", certain form
+ * element values are sent for the specified data property instead.
  *
  * Additionally, the "post_id" data property always needs to be mapped to a form
  * element that holds the entity id.
@@ -334,12 +329,6 @@ function hook_akismet_form_list_alter(&$form_list) {
  *
  * @return
  *   An associative array describing the form identified by $form_id:
- *   - mode: (optional) The default protection mode for the form, which can be
- *     one of:
- *     - AKISMET_MODE_ANALYSIS: Text analysis of submitted form values with
- *       fallback to CAPTCHA.
- *     - AKISMET_MODE_CAPTCHA: CAPTCHA-only protection.
- *   - type: Internal use only.
  *   - bypass access: (optional) A list of user permissions to check for the
  *     current user to determine whether to protect the form with Akismet or do
  *     not validate submitted form values. If the current user has at least one
@@ -377,20 +366,16 @@ function hook_akismet_form_list_alter(&$form_list) {
  *     The following mappings are possible:
  *     - post_id: The form element value that denotes the ID of the content
  *       stored in the database.
- *     - post_title: The form element value that should be used as title.
- *     - post_body: Akismet automatically assigns this property based on all
- *       elements that have been selected for textual analysis in Akismet's
+ *     - comment_content: Akismet automatically assigns this property based on
+ *       all elements that have been selected for textual analysis in Akismet's
  *       administrative form configuration.
- *     - author_name: The form element value that should be used as author name.
- *     - author_mail: The form element value that should be used as the author's
- *       e-mail address.
- *     - author_url: The form element value that should be used as the author's
- *       homepage.
- *     - author_id: The form element value that should be used as the author's
- *       user uid.
- *     - author_openid: Akismet automatically assigns this property based on
- *       'author_id', if no explicit form element value mapping was specified.
- *     - author_ip: Akismet automatically assigns the user's IP address if no
+ *     - comment_author: The form element value that should be used as the
+ *       content author name.
+ *     - comment_author_email: The form element value that should be used as the
+ *       content author's e-mail address.
+ *     - comment_author_url: The form element value that should be used as the
+ *       author's homepage.
+ *     - user_ip: Akismet automatically assigns the user's IP address if no
  *       explicit form element value mapping was specified.
  *     - context_id: The form element value that should be used to determine the
  *       post's parent context.  In the case of a comment, this would be the
@@ -403,7 +388,6 @@ function hook_akismet_form_info($form_id) {
     // Mymodule's comment form.
     case 'mymodule_comment_form':
       $form_info = array(
-        'mode' => AKISMET_MODE_ANALYSIS,
         'bypass access' => array('administer comments'),
         'mail ids' => array('mymodule_comment_mail'),
         'elements' => array(
@@ -413,10 +397,9 @@ function hook_akismet_form_info($form_id) {
         'context created callback' => 'akismet_node_created',
         'mapping' => array(
           'post_id' => 'cid',
-          'post_title' => 'subject',
-          'author_name' => 'name',
-          'author_mail' => 'mail',
-          'author_url' => 'homepage',
+          'comment_author' => 'name',
+          'comment_author_email' => 'mail',
+          'comment_author_url' => 'homepage',
           'context_id' => 'nid',
         ),
       );
@@ -425,11 +408,11 @@ function hook_akismet_form_info($form_id) {
     // Mymodule's user registration form.
     case 'mymodule_user_register':
       $form_info = array(
-        'mode' => AKISMET_MODE_CAPTCHA,
+        'mode' => AKISMET_MODE_ANALYSIS,
         'mapping' => array(
           'post_id' => 'uid',
-          'author_name' => 'name',
-          'author_mail' => 'mail',
+          'comment_author' => 'name',
+          'comment_author_email' => 'mail',
         ),
       );
       return $form_info;
