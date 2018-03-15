@@ -275,9 +275,14 @@ function akismet_cron() {
  *   The entity type to retrieve data for.
  * @param $id
  *   The entity id to retrieve data for.
+ *
+ * @return stdClass
  */
 function akismet_data_load($entity, $id) {
   $data = db_query_range('SELECT * FROM {akismet} WHERE entity = :entity AND id = :id', 0, 1, array(':entity' => $entity, ':id' => $id))->fetchObject();
+  if (isset($data->request)) {
+    $data->request = unserialize($data->request);
+  }
   return $data;
 }
 
@@ -312,25 +317,13 @@ function akismet_entity_type_load($type) {
  *   - entity: The entity type of the data to save.
  *   - id: The entity ID the data belongs to.
  *   - form_id: The form ID the session data belongs to.
- *   - session_id: The session ID returned by Akismet.
- *   And optionally:
- *   - spam: A spam check result double returned by Akismet.
- *   - spam_classification: A final spam classification result string; 'ham',
- *     'spam', or 'unsure'.
- *   - flags_spam: Total count of spam feedback reports.
- *   - flags_ham: Total count of ham feedback reports.
+ *   - request: An associative array of keys and values originally sent to Akismet
+ *     for analysis.
+ *
+ * @return mixed
  */
 function akismet_data_save($data) {
   $data->changed = REQUEST_TIME;
-
-  // Convert languages array into a string.
-  if (isset($data->languages) && is_array($data->languages)) {
-    $languages = array();
-    foreach ($data->languages as $language) {
-      $languages[] = $language['languageCode'];
-    }
-    $data->languages = implode(',', $languages);
-  }
 
   $update = db_query_range("SELECT 'id' FROM {akismet} WHERE entity = :entity AND id = :id", 0, 1, array(
     ':entity' => $data->entity,
@@ -338,7 +331,6 @@ function akismet_data_save($data) {
   ))->fetchField();
   drupal_write_record('akismet', $data, $update ? array('entity', $update) : array());
 
-  // Pass unconverted data to other modules for backwards compatibility.
   if (!$update) {
     module_invoke_all('akismet_data_insert', $data);
   }
@@ -365,7 +357,7 @@ function akismet_data_moderate($entity, $id) {
   }
 
   // Report the session to Akismet.
-  _akismet_send_feedback($data, 'approve', 'moderate', 'akismet_data_moderate');
+  _akismet_send_feedback($data, 'ham');
 
   // Mark the session data as moderated.
   $data->moderate = 0;
@@ -439,7 +431,7 @@ function akismet_data_delete_form_submit($form, &$form_state) {
   $id = $data['post_id'];
 
   if (!empty($form_state['values']['akismet']['feedback'])) {
-    if (akismet_data_report($entity, $id, $form_state['values']['akismet']['feedback'], 'moderate', 'akismet_data_delete_form_submit')) {
+    if (akismet_data_report($entity, $id, $form_state['values']['akismet']['feedback'])) {
       drupal_set_message(t('The content was successfully reported as inappropriate.'));
     }
   }
@@ -464,8 +456,8 @@ function akismet_data_delete_form_submit($form, &$form_state) {
  *   This is tracked along with the feedback to provide a more complete picture
  *   of how feedback is used and submitted on the site.
  */
-function akismet_data_report($entity, $id, $feedback, $type = 'moderate', $source = 'akismet_data_report') {
-  return akismet_data_report_multiple($entity, array($id), $feedback, $type, $source);
+function akismet_data_report($entity, $id, $feedback) {
+  return akismet_data_report_multiple($entity, array($id), $feedback);
 }
 
 /**
@@ -476,22 +468,19 @@ function akismet_data_report($entity, $id, $feedback, $type = 'moderate', $sourc
  * @param $ids
  *   An array of entity ids to send feedback for.
  * @param $feedback
- *   The feedback reason for reporting content.
- * @param $type
- *   The type of feedback, one of 'moderate' or 'flag'.
- * @param $source
- *   An optional single word string identifier for the user interface source.
- *   This is tracked along with the feedback to provide a more complete picture
- *   of how feedback is used and submitted on the site.
+ *   The feedback reason for reporting content: either 'spam' or 'ham'
+ *
+ * @return bool
+ *   TRUE on success; FALSE if any of the requests failed.
  */
-function akismet_data_report_multiple($entity, array $ids, $feedback, $type = 'moderate', $source = 'akismet_data_report_multiple') {
+function akismet_data_report_multiple($entity, array $ids, $feedback) {
   $return = TRUE;
   foreach ($ids as $id) {
     // Load the Akismet session data.
     $data = akismet_data_load($entity, $id);
-    // Send feedback, if we have session data.
-    if (!empty($data->content_id) || !empty($data->captcha_id)) {
-      $result = _akismet_send_feedback($data, $feedback, $type, $source);
+    // Send feedback, if we have the original request data.
+    if (!empty($data->request)) {
+      $result = _akismet_send_feedback($data, $feedback);
       $return = $return && $result;
     }
   }
@@ -558,24 +547,6 @@ function akismet_form_alter(&$form, &$form_state, $form_id) {
       // #element_validate handlers while it is recursing into the form.
       $form['#validate'][] = 'akismet_validate_analysis';
       $form['#validate'][] = 'akismet_validate_post';
-
-      // TODO: Maybe we can do without this
-      // Append a submit handler to store Akismet session data. Requires that
-      // the primary submit handler has run already, so a potential 'post_id'
-      // mapping can be retrieved from $form_state['values'].
-      // @todo Core: node_form_submit() uses a button-level submit handler,
-      //   which invokes form-level submit handlers before the node/entity is
-      //   saved, so $form_state does not contain the new node ID yet. There is
-      //   no #post_submit property or form processing phase, we could rely on.
-      //   Potentially applies to other contrib entities, too.
-      // @see http://drupal.org/node/1150756
-      if (isset($form_state['build_info']['base_form_id']) && $form_state['build_info']['base_form_id'] == 'node_form') {
-        $form_submit_key = &$form['actions']['submit'];
-      }
-      else {
-        $form_submit_key = &$form;
-      }
-      $form_submit_key['#submit'][] = 'akismet_form_submit';
 
       // Add link to privacy policy on forms protected via textual analysis,
       // if enabled.
@@ -1486,7 +1457,6 @@ function akismet_form_comment_form_alter(&$form, &$form_state, $form_id) {
  * @see akismet_form_alter()
  * @see akismet_element_info()
  */
-// TODO: Figure out how much more of this we can do without.
 function akismet_process_akismet($element, &$form_state, $complete_form) {
   // Setup initial Akismet session and form information.
   $form_state += array('akismet' => array());
@@ -1508,10 +1478,9 @@ function akismet_process_akismet($element, &$form_state, $complete_form) {
     $form_state['akismet']['discard'] = TRUE;
   }
 
-  // TODO: How much of this is needed?
   // Add the Akismet session data elements.
   // These elements resemble the {akismet} database schema. The form validation
-  // handlers will pollute them with values returned by Akismet. For entity
+  // handlers will populate them with values returned by Akismet. For entity
   // forms, the submitted values will appear in a $entity->akismet property,
   // which in turn represents the Akismet session data record to be stored.
   $element['entity'] = array(
@@ -1530,7 +1499,7 @@ function akismet_process_akismet($element, &$form_state, $complete_form) {
     '#type' => 'value',
     '#value' => 0,
   );
-  $element['spam_classification'] = array(
+  $element['classification'] = array(
     '#type' => 'value',
     '#value' => NULL,
   );
@@ -1563,6 +1532,7 @@ function akismet_validate_analysis(&$form, &$form_state) {
   if (isset($form_state['akismet']['type'])) {
     $data['type'] = $form_state['akismet']['type'];
   }
+  $data['server'] = _akismet_prepare_server_vars($_SERVER);
   $classification = akismet()->checkContent($data);
 
   // Use all available data properties for log messages below.
@@ -1574,7 +1544,7 @@ function akismet_validate_analysis(&$form, &$form_state) {
     return;
   }
 
-  $result = $all_data;
+  $result = $data;
   $result['classification'] = $classification;
 
   // Store the response returned by Akismet.
@@ -1624,6 +1594,34 @@ function akismet_validate_analysis(&$form, &$form_state) {
       break;
   }
 }
+
+/**
+ * Removes possibly sensitive entries from an array of $_SERVER data.
+ */
+function _akismet_prepare_server_vars($server_vars) {
+  static $safe_to_send = array(
+    'CONTENT_LENGTH',
+    'CONTENT_TYPE',
+    'HTTP_ACCEPT',
+    'HTTP_ACCEPT_CHARSET',
+    'HTTP_ACCEPT_ENCODING',
+    'HTTP_ACCEPT_LANGUAGE',
+    'HTTP_REFERER',
+    'HTTP_USER_AGENT',
+    'REMOTE_ADDR',
+    'REMOTE_PORT',
+    'SCRIPT_URI',
+    'SCRIPT_URL',
+    'SERVER_ADDR',
+    'SERVER_NAME',
+    'REQUEST_METHOD',
+    'REQUEST_URI',
+    'SCRIPT_NAME'
+  );
+
+  return array_intersect_key($server_vars, array_flip($safe_to_send));
+}
+
 
 /**
  * Form validation handler to perform post-validation tasks.
@@ -1677,8 +1675,10 @@ function akismet_form_submit($form, &$form_state) {
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($values['post_id'])) {
       // Save the Akismet session data.
-      $data = (object) $values;
+      $data = new stdClass;
       $data->id = $values['post_id'];
+      $data->request = $values;
+      $data->request['server'] = $_SERVER;
       // Set the moderation flag for forms accepting bad posts.
       $data->moderate = $form_state['akismet']['require_moderation'];
       $form_state['akismet']['data'] = akismet_data_save($data);
@@ -1987,65 +1987,30 @@ function _akismet_format_string($string, array $args = array()) {
 /**
  * Send feedback to Akismet.
  *
- * @param $data
- *   A Akismet data record containing one or both of:
- *   - content_id: The content ID to send feedback for.
- *   - captcha_id: The CAPTCHA ID to send feedback for.
+ * @param stdClass $data
+ *   An Akismet data record containing at least
+ *   - entity: The entity type of the data in the record.
+ *   - id: The entity id.
+ *   - request: The original request data sent to Akismet.
  * @param $reason
- *   The feedback to send, one of 'spam', 'profanity', 'quality', 'unwanted',
- *   'approve'.
- * @param $type
- *   The type of feedback, one of 'moderate' or 'flag'.
- * @param $source
- *   An optional single word string identifier for the user interface source.
- *   This is tracked along with the feedback to provide a more complete picture
- *   of how feedback is used and submitted on the site.
+ *   The feedback to send: either 'spam' or 'ham'.
+ *
+ * @return int|string
+ *   On success, the text response from Akismet. On failure, the error code.
  */
-function _akismet_send_feedback($data, $reason = 'spam', $type = 'moderate', $source = NULL) {
-  global $user;
-  $params = array();
-  if (!empty($data->captcha_id)) {
-    $params['captcha_id'] = $data->captcha_id;
-    $resource = 'CAPTCHA';
-    $id = $data->captcha_id;
+function _akismet_send_feedback($data, $reason = 'spam') {
+  if ($reason === 'spam') {
+    $result = akismet()->sendFeedback((array) $data->request, 'spam');
   }
-  // In case we also have a content_id, also pass that, and override $resource
-  // and $id for the log message.
-  if (!empty($data->content_id)) {
-    $params['content_id'] = $data->content_id;
-    $resource = 'content';
-    $id = $data->content_id;
+  else {
+    $result = akismet()->sendFeedback((array) $data->request, 'ham');
   }
-  if (!isset($id)) {
-    return FALSE;
-  }
-  $params += array(
-    'reason' => $reason,
-    'type' => $type,
-    'authorIp' => ip_address(),
-  );
-  if (!empty($source)) {
-    $params['source'] = $source;
-  }
-  if ($user->uid > 0) {
-    $params['authorId'] = $user->uid;
-    // Passing the user rather than account object because only the uid property
-    // is used by _akismet_get_openid.
-    $authorOpenId = _akismet_get_openid($user);
-    if (!empty($authorOpenId)) {
-      $params['authorOpenId'] = $authorOpenId;
-    }
-  }
-
-  $result = akismet()->sendFeedback($params);
   akismet_log(array(
-    'message' => 'Reported %feedback for @resource %id from %source - %type.',
+    'message' => 'Reported %feedback for @resource %id.',
     'arguments' => array(
-      '%type' => $type,
       '%feedback' => $reason,
-      '@resource' => $resource,
-      '%id' => $id,
-      '%source' => $source,
+      '@resource' => $data->entity,
+      '%id' => $data->id,
     ),
   ));
   return $result;
@@ -2142,7 +2107,10 @@ function akismet_entity_insert($entity, $type) {
   list($id) = entity_extract_ids($type, $entity);
   if (!empty($entity->akismet) && !empty($id)) {
     $entity->akismet['id'] = $id;
-    $data = (object) $entity->akismet;
+    $data = new stdClass;
+    $data->entity = $type;
+    $data->id = $id;
+    $data->request = (object) $entity->akismet;
     akismet_data_save($data);
   }
 }
@@ -2453,7 +2421,7 @@ function akismet_form_node_form_alter(&$form, &$form_state, $form_id) {
  */
 function user_akismet_form_list() {
   $forms['user_register_form'] = array(
-    'mode' => AKISMET_MODE_CAPTCHA,
+    'mode' => AKISMET_MODE_ANALYSIS,
     'title' => t('User registration form'),
     'type' => 'user',
     'entity' => 'user',
@@ -2466,7 +2434,7 @@ function user_akismet_form_list() {
   $forms['user_profile_form']['title'] = t('User profile form');
 
   $forms['user_pass'] = array(
-    'mode' => AKISMET_MODE_CAPTCHA,
+    'mode' => AKISMET_MODE_ANALYSIS,
     'title' => t('User password request form'),
   );
   return $forms;
@@ -2695,7 +2663,7 @@ function _akismet_action_unpublish($entity_type, $entities) {
 
   // Send feedback to Akismet.
   $ids = $entity_type === 'comment' ? $cids : $nids;
-  akismet_data_report_multiple($entity_type, $ids, 'spam', 'moderate', "akismet_action_unpublish_{$entity_type}");
+  akismet_data_report_multiple($entity_type, $ids, 'spam');
 
   if ($entity_type === 'comment') {
     // Unpublish the comment.

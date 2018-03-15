@@ -92,13 +92,6 @@ class AkismetDrupal extends Akismet {
     return $GLOBALS['base_url'];
   }
 
-  public function checkContent(array $data = array(), array $server = array()) {
-    if (empty($server)) {
-      $server = $_SERVER;
-    }
-    return parent::checkContent($data, $server);
-  }
-
   /**
    * Overrides Akismet::writeLog().
    */

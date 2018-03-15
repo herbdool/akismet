@@ -158,16 +158,20 @@ abstract class Akismet {
    *   - user_role: The role of the user who submitted the comment. Optional.
    *     Should be 'administrator' for site administrators; submitting a value
    *     of 'administrator' will guarantee that Akismet sees the content as ham.
-   * @param array $server
-   *   An associative array with any parameters from $_SERVER that should be
-   *   added to the request.
+   *   - server: The contents of $_SERVER, to be added to the request.
    *
    * @return int|string
    *   On failure, the status code. On success, the classification ('ham',
    *   'spam', or 'unsure').
    */
-  public function checkContent(array $data = array(), array $server = array()) {
-    $server = $this->sanitizeServerData($server);
+  public function checkContent(array $data = array()) {
+    if (empty($data['server'])) {
+      $server = $_SERVER;
+    }
+    else {
+      $server = _akismet_prepare_server_vars($data['server']);
+      unset($data['server']);
+    }
     $parameters = $data + $server;
     $result = $this->query('POST', 'comment-check', $parameters);
     if ($result->isError) {
@@ -189,6 +193,25 @@ abstract class Akismet {
     // If we get to this point, there was an error of some kind that we didn't
     // catch.
     return 500;
+  }
+
+  public function sendFeedback($data, $feedback) {
+    if (isset($data['server'])) {
+      $server = _akismet_prepare_server_vars($data['server']);
+      unset($data['server']);
+    }
+    $parameters = $data + $server;
+
+    if ($feedback === 'spam') {
+      $result = $this->query('POST', 'submit-spam', $parameters);
+    }
+    else {
+      $result = $this->query('POST', 'submit-ham', $parameters);
+    }
+    if ($result->isError) {
+      return $result->code;
+    }
+    return $result->body;
   }
 
   /**
@@ -218,33 +241,6 @@ abstract class Akismet {
   }
 
   abstract public function getSiteURL();
-
-  /**
-   * Removes possibly sensitive entries from an array of $_SERVER data.
-   */
-  public function sanitizeServerData($server_vars) {
-    static $safe_to_send = array(
-      'CONTENT_LENGTH',
-      'CONTENT_TYPE',
-      'HTTP_ACCEPT',
-      'HTTP_ACCEPT_CHARSET',
-      'HTTP_ACCEPT_ENCODING',
-      'HTTP_ACCEPT_LANGUAGE',
-      'HTTP_REFERER',
-      'HTTP_USER_AGENT',
-      'REMOTE_ADDR',
-      'REMOTE_PORT',
-      'SCRIPT_URI',
-      'SCRIPT_URL',
-      'SERVER_ADDR',
-      'SERVER_NAME',
-      'REQUEST_METHOD',
-      'REQUEST_URI',
-      'SCRIPT_NAME'
-    );
-
-    return array_intersect_key($server_vars, array_flip($safe_to_send));
-  }
 
   /**
    * Writes log messages to a permanent location/storage.

@@ -50,9 +50,9 @@ function akismet_report_form_submit($form, &$form_state) {
     // Load the Akismet session data.
     $data = akismet_data_load($entity, $id);
 
-    // Send feedback to Akismet, if we have session data.
-    if ((!empty($data->content_id) || !empty($data->captcha_id)) && !empty($form_state['values']['akismet']['feedback'])) {
-      if (_akismet_send_feedback($data, $form_state['values']['akismet']['feedback'], 'moderate', 'akismet_report_form_submit')) {
+    // Send feedback to Akismet, if we have the original request data.
+    if ((!empty($data->request)) && !empty($form_state['values']['akismet']['feedback'])) {
+      if (_akismet_send_feedback($data, $form_state['values']['akismet']['feedback'])) {
         drupal_set_message(t('The content was successfully reported as inappropriate.'));
       }
     }

@@ -76,7 +76,7 @@ function akismet_requirements($phase = 'runtime', $check = TRUE) {
  */
 function akismet_schema() {
   $schema['akismet'] = array(
-    'description' => 'Stores Akismet responses for content.',
+    'description' => 'Stores Akismet request and response data.',
     'fields' => array(
       'entity' => array(
         'description' => 'Entity type of the content.',
@@ -89,20 +89,6 @@ function akismet_schema() {
         'description' => 'Unique entity ID of the content.',
         'type' => 'varchar',
         'length' => 36,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'content_id' => array(
-        'description' => 'Content ID returned by Akismet.',
-        'type' => 'varchar',
-        'length' => 128,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'captcha_id' => array(
-        'description' => 'CAPTCHA ID returned by Akismet.',
-        'type' => 'varchar',
-        'length' => 128,
         'not null' => TRUE,
         'default' => '',
       ),
@@ -126,93 +112,17 @@ function akismet_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
-      // Server response columns are NULL by default, because any default value
-      // would have an unintended meaning. Also, values are stored in individual
-      // columns, so as to be able to join and filter/sort on these values for
-      // improved content moderation.
-      'spam_score' => array(
-        'description' => 'Text analysis spam check result.',
-        'type' => 'float',
-        'size' => 'tiny',
-        'not null' => FALSE,
-      ),
-      'spam_classification' => array(
-        'description' => 'Text analysis final spam classification result.',
+      'classification' => array(
+        'description' => 'Result of text analysis: "ham", "spam" or "unsure".',
         'type' => 'varchar',
         'length' => 16,
         'not null' => FALSE,
       ),
-      'solved' => array(
-        'description' => 'Whether a CAPTCHA has been solved (1) or not (0).',
-        'type' => 'int',
-        'size' => 'tiny',
-        'not null' => FALSE,
-      ),
-      'quality_score' => array(
-        'description' => 'Text analysis quality check result.',
-        'type' => 'float',
-        'size' => 'tiny',
-        'not null' => FALSE,
-      ),
-      'profanity_score' => array(
-        'description' => 'Text analysis profanity check result.',
-        'type' => 'float',
-        'size' => 'tiny',
-        'not null' => FALSE,
-      ),
-      'reason' => array(
-        'description' => 'A special reason for why a post was blocked.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'languages' => array(
-        'description' => 'Text analysis language check result.',
-        'type' => 'varchar',
-        'length' => 255,
-        'not null' => TRUE,
-        'default' => '',
-      ),
-      'flags_spam' => array(
-        'description' => 'Count of spam feedback reports.',
-        'type' => 'int',
-        'size' => 'medium',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'flags_ham' => array(
-        'description' => 'Count of ham feedback reports.',
-        'type' => 'int',
-        'size' => 'medium',
-        'not null' => TRUE,
-        'default' => 0,
+      'request' => array(
+        'description' => 'The original data sent to Akismet for analysis.',
+        'type' => 'blob',
+        'serialize' => TRUE,
        ),
-      'flags_profanity' => array(
-        'description' => 'Count of profanity feedback reports.',
-        'type' => 'int',
-        'size' => 'medium',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'flags_quality' => array(
-        'description' => 'Count of low quality feedback reports.',
-        'type' => 'int',
-        'size' => 'medium',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'flags_unwanted' => array(
-        'description' => 'Count of unwanted feedback reports.',
-        'type' => 'int',
-        'size' => 'medium',
-        'not null' => TRUE,
-        'default' => 0,
-       ),
-    ),
-    'indexes' => array(
-      'content_id' => array('content_id'),
-      'captcha_id' => array('captcha_id'),
     ),
     'primary key' => array('entity', 'id'),
     'foreign keys' => array(
@@ -259,12 +169,6 @@ function akismet_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
-      'checks' => array(
-        'description' => 'Text analyis checks to perform.',
-        'type' => 'text',
-        'not null' => FALSE,
-        'serialize' => TRUE,
-      ),
       'unsure' => array(
         'description' => 'Action to perform when text analysis is unsure.',
         'type' => 'varchar',
@@ -279,25 +183,11 @@ function akismet_schema() {
         'not null' => TRUE,
         'default' => 1,
       ),
-      'moderation' => array(
-        'description' => 'Whether to integrate with Akismet moderation.',
-        'type' => 'int',
-        'size' => 'tiny',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
       'enabled_fields' => array(
         'description' => 'Form elements to analyze.',
         'type' => 'text',
         'not null' => FALSE,
         'serialize' => TRUE,
-      ),
-      'strictness' => array(
-        'description' => 'Strictness of text analysis checks.',
-        'type' => 'varchar',
-        'length' => 8,
-        'not null' => TRUE,
-        'default' => 'normal',
       ),
       'module' => array(
         'description' => 'Module name owning the form.',
@@ -317,14 +207,16 @@ function akismet_schema() {
  * Implements hook_install().
  */
 function akismet_install() {
-  // Migrate any Mollom form settings that exist.
-  $query = db_select('mollom_form')->fields('mollom_form');
-  $result = db_insert('akismet_form')
+  // Migrate Mollom form settings, if any.
+  $query = db_select('mollom_form')
+    ->fields('mollom_form', array(
+      'form_id', 'entity', 'bundle', 'mode', 'unsure', 'discard', 'enabled_fields', 'module'
+    ));
+  db_insert('akismet_form')
     ->from($query)
     ->execute();
 
-
-
+  akismet_form_cache(TRUE);
 
   // Point the user to Akismet's settings page after installation.
   $requirements = akismet_requirements('runtime', FALSE);

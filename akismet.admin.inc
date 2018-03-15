@@ -36,7 +36,6 @@ function akismet_admin_form_list() {
 
   $modes = array(
     AKISMET_MODE_ANALYSIS => t('Text analysis'),
-    AKISMET_MODE_CAPTCHA => t('CAPTCHA'),
   );
 
   $header = array(
@@ -272,7 +271,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
 
       $form['akismet']['discard'] = array(
         '#type' => 'radios',
-        '#title' => t('When text analysis identifies spam'),
+        '#title' => t('When Akismet is sure a post is spam'),
         '#default_value' => $akismet_form['discard'],
         '#options' => array(
           1 => t('!option <em class="akismet-recommended">(!recommended)</em>', array(
