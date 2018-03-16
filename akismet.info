@@ -7,7 +7,7 @@ test_dependencies[] = ctools
 
 stylesheets[all][] = akismet.css
 
-files[] = includes/akismet.class.inc
+files[] = akismet.class.inc
 files[] = akismet.drupal.inc
 files[] = tests/akismet.test
 files[] = tests/akismet.class.test
