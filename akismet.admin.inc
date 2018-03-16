@@ -547,52 +547,6 @@ function akismet_admin_settings($form, &$form_state) {
     '#field_suffix' => t('seconds'),
     '#required' => TRUE,
   );
-  // Available entity types are those entities that have a report access
-  // callback defined.  This is limited by type even though multiple forms
-  // can be for the same entity type.
-  $forms = akismet_form_list();
-  $options = array();
-  foreach($forms as $info) {
-    if (!empty($info['entity']) && !empty($info['entity report access callback'])) {
-      $options[] = $info['entity'];
-    }
-  };
-  sort($options);
-  $form['akismet_advanced']['akismet_fai_entity_types'] = array(
-    '#type' => 'checkboxes',
-    '#title' => t('Allow users to  "Flag as Inappropriate" for the following:'),
-    '#description' => t('"Flag as inappropriate" will only appear on protected forms for users who have permission to the content type and have the permission to "Report to Akismet".  <a href="!fai-url">Learn more</a>.', array(
-      '!fai-url' => 'https://akismet.com/faq/flag-as-inappropriate',
-    )),
-    '#options' => drupal_map_assoc($options),
-    '#default_value' => variable_get('akismet_fai_entity_types', array('comment' => 'comment')),
-  );
-  // Only display dialog options if the user has at least one integrated
-  // module installed and enabled.
-  module_load_include('inc', 'akismet', 'akismet.flag');
-  $implemented = akismet_flag_dialog_info();
-  $available = array_intersect_key($implemented, module_list());
-  $options = array();
-  foreach($available as $module => $info) {
-    $options[$module] = $info['title'];
-  }
-  if (count($options) > 0) {
-    $options['akismet'] = 'Akismet custom dialog';
-    $form['akismet_advanced']['akismet_fai_dialog'] = array(
-      '#type' => 'radios',
-      '#title' => t('Flag as inappropriate dialog type'),
-      '#options' => $options,
-      '#default_value' => variable_get('akismet_fai_dialog', 'akismet'),
-    );
-  }
-  else {
-    // Reset to use the Akismet dialog if no integrated modules are available.
-    $form['akismet_advanced']['akismet_fai_dialog'] = array(
-      '#type' => 'value',
-      '#value' => 'akismet',
-    );
-  }
-
   $form['#submit'][] = 'akismet_admin_settings_prepare_submit';
   $form = system_settings_form($form);
   $form['#submit'][] = 'akismet_admin_settings_submit';
@@ -625,7 +579,7 @@ function akismet_admin_settings_prepare_submit($form, &$form_state) {
  * Form submission handler for global settings form.
  */
 function akismet_admin_settings_submit($form, &$form_state) {
-  // Update Akismet site record with local configuration.
+  // Clear the local Akismet status cache.
   _akismet_status(TRUE, TRUE);
 }
 
@@ -646,31 +600,3 @@ function akismet_admin_verify_key_ajax_callback($form, &$form_state) {
   $form_state['storage']['akismet_ping'] = $form['access-keys']['ping_holder']['akismet_ping_replace']['response']['#markup'] = $log_message;
   return $form['access-keys']['ping_holder']['akismet_ping_replace'];
 }
-
-/**
- * Menu callback; Displays the administrative reports page.
- */
-function akismet_reports_page($form, &$form_state) {
-  $embed_attributes = array(
-    'src' => 'https://akismet.com/statistics.swf?key=' . check_plain(variable_get('akismet_public_key', '')),
-    'quality' => 'high',
-    'width' => '100%',
-    'height' => '430',
-    'name' => 'Akismet',
-    'align' => 'middle',
-    'play' => 'true',
-    'loop' => 'false',
-    'allowScriptAccess' => 'sameDomain',
-    'type' => 'application/x-shockwave-flash',
-    'pluginspage' => 'http://www.adobe.com/go/getflashplayer',
-    'wmode' => 'transparent',
-  );
-  $form['chart'] = array(
-    '#type' => 'item',
-    '#title' => t('Statistics'),
-    '#markup' => '<embed' . drupal_attributes($embed_attributes) . '></embed>',
-  );
-
-  return $form;
-}
-

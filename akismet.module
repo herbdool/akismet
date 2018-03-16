@@ -154,16 +154,6 @@ function akismet_menu() {
     'file' => 'akismet.admin.inc',
   );
 
-  // Report as inappropriate.
-  $items['akismet/flag/%/%/%/%'] = array(
-    'page callback' => '_akismet_flag',
-    'page arguments' => array(2, 3, 4),
-    'access callback' => '_akismet_flag_access',
-    'access arguments' => array(3, 4),
-    'type' => MENU_CALLBACK,
-    'file' => 'akismet.flag.inc',
-  );
-
   return $items;
 }
 
@@ -449,12 +439,6 @@ function akismet_data_delete_form_submit($form, &$form_state) {
  *   The entity id to send feedback for.
  * @param $feedback
  *   The feedback reason for reporting content.
- * @param $type
- *   The type of feedback, one of 'moderate' or 'flag'.
- * @param $source
- *   An optional single word string identifier for the user interface source.
- *   This is tracked along with the feedback to provide a more complete picture
- *   of how feedback is used and submitted on the site.
  */
 function akismet_data_report($entity, $id, $feedback) {
   return akismet_data_report_multiple($entity, array($id), $feedback);
@@ -1323,107 +1307,6 @@ function akismet_element_info() {
 }
 
 /**
- * Helper function to determine if "report to Akismet" is available
- * and activated for a specific entity type.
- *
- * @param $type
- *   The entity type to check.
- * @param $bundles
- *   An array of entity bundles to check.
- */
-function akismet_flag_entity_type_access($type, $bundles = array()) {
-  // Check to see if flag as inappropriate is enabled for this entity type.
-  $allowed = variable_get('akismet_fai_entity_types', array('comment' => 1));
-  if (empty($allowed[$type])) {
-    return;
-  }
-
-  // Check to see if there are protected forms for this content type.
-  $protected = _akismet_get_entity_forms_protected($type, $bundles);
-  if (empty($protected)) {
-    return FALSE;
-  }
-
-  // Make sure that flag as inappropriate is active for this type.
-  // If any form for this entity type is reportable, then show data.
-  $forms = akismet_form_list();
-  foreach ($forms as $info) {
-    if (!isset($info['entity']) || $info['entity'] != $type) {
-      continue;
-    }
-    if (isset($info['entity report access callback'])) {
-      $function = $info['entity report access callback'];
-      if ($function()) {
-        return TRUE;
-      }
-    }
-  }
-  return FALSE;
-}
-
-/**
- * Implements hook_library().
- */
-function akismet_library() {
-  $libraries['flag'] = array(
-    'title' => 'Flag as Inappropriate',
-    'version' => '1.0',
-    'js' => array(
-      drupal_get_path('module', 'akismet') . '/akismet.flag.js' => array(),
-    ),
-    'css' => array(
-      drupal_get_path('module', 'akismet') . '/akismet.flag.position.css' => array(),
-      drupal_get_path('module', 'akismet') . '/akismet.flag.css' => array(),
-    ),
-    'dependencies' => array(
-      array('system', 'drupal.ajax'),
-    )
-  );
-  return $libraries;
-}
-
-/**
- * Helper function to determine if "report to akismet" is available for the
- * current entity.
- *
- * @param $type
- *   The type of the entity to check.
- * @param $entity
- *   The entity to check.  This can be either the entity object or an id.
- * @return bool
- *   True if reporting is available and false if not available.
- */
-function _akismet_flag_access($type, $entity) {
-  // make sure that Akismet is active and user is able to report.
-  if (!_akismet_access('report to akismet')) {
-    return FALSE;
-  }
-  // Find out if this entity bundle is protected.
-  if (!is_object($entity)) {
-    $entities = entity_load($type, array($entity));
-    $entity = $entities[$entity];
-  }
-  list($id, $rid, $bundle) = entity_extract_ids($type, $entity);
-  return akismet_flag_entity_type_access($type, array($bundle));
-}
-
-/**
- * Implements hook_entity_view().
- */
-function akismet_entity_view($entity, $type, $view_mode, $langcode) {
-  module_load_include('inc', 'akismet', 'akismet.flag');
-  akismet_flag_entity_view($entity, $type, $view_mode, $langcode);
-}
-
-/**
- * Implements hook_form_FORMID_alter().
- */
-function akismet_form_comment_form_alter(&$form, &$form_state, $form_id) {
-  module_load_include('inc', 'akismet', 'akismet.flag');
-  akismet_flag_comment_form_alter($form, $form_state, $form_id);
-}
-
-/**
  * #process callback for #type 'akismet'.
  *
  * Akismet supports two fundamentally different protection modes:
@@ -2233,10 +2116,6 @@ function akismet_form_node_admin_content_alter(&$form, &$form_state) {
     // Report before deletion.
     array_unshift($form['#submit'], 'akismet_form_node_multiple_delete_confirm_submit');
   }
-  else {
-    module_load_include('inc', 'akismet', 'akismet.flag');
-    _akismet_table_add_flag_counts('node', $form['admin']['nodes']['#header'], $form['admin']['nodes']['#options']);
-  }
 }
 
 /**
@@ -2254,7 +2133,6 @@ function akismet_form_node_multiple_delete_confirm_submit($form, &$form_state) {
 
 /**
  * Entity report access callback for nodes.
- * This enables the flag as inappropriate feature for nodes.
  *
  * @param $entity
  *   Optional entity object to check access to a specific entity.
@@ -2389,22 +2267,6 @@ function akismet_form_comment_multiple_delete_confirm_submit($form, &$form_state
     }
   }
   akismet_data_delete_multiple('comment', $cids);
-}
-
-/**
- * Implements hook_form_FORMID_alter().
- */
-function akismet_form_comment_admin_overview_alter(&$form, &$form_state) {
-  module_load_include('inc', 'akismet', 'akismet.flag');
-  _akismet_table_add_flag_counts('comment', $form['comments']['#header'], $form['comments']['#options']);
-}
-
-/**
- * Implements hook_form_FORMID_alter().
- */
-function akismet_form_node_form_alter(&$form, &$form_state, $form_id) {
-  module_load_include('inc', 'akismet', 'akismet.flag');
-  akismet_flag_node_form_alter($form, $form_state, $form_id);
 }
 
 /**
