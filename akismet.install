@@ -208,15 +208,17 @@ function akismet_schema() {
  */
 function akismet_install() {
   // Migrate Mollom form settings, if any.
-  $query = db_select('mollom_form')
-    ->fields('mollom_form', array(
-      'form_id', 'entity', 'bundle', 'mode', 'unsure', 'discard', 'enabled_fields', 'module'
-    ));
-  db_insert('akismet_form')
-    ->from($query)
-    ->execute();
+  if (db_table_exists('mollom_form')) {
+    $query = db_select('mollom_form')
+      ->fields('mollom_form', array(
+        'form_id', 'entity', 'bundle', 'mode', 'unsure', 'discard', 'enabled_fields', 'module'
+      ));
+    db_insert('akismet_form')
+      ->from($query)
+      ->execute();
 
-  akismet_form_cache(TRUE);
+    akismet_form_cache(TRUE);
+  }
 
   // Point the user to Akismet's settings page after installation.
   $requirements = akismet_requirements('runtime', FALSE);

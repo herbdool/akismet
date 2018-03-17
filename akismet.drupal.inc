@@ -176,3 +176,34 @@ class AkismetDrupalTest extends AkismetDrupal {
     return parent::query($method, $path, $data, $authenticate);
   }
 }
+
+class AkismetDrupalTestLocal extends AkismetDrupalTest {
+
+  /**
+   * Overrides AkismetDrupalTest::__construct().
+   */
+  function __construct() {
+    // Replace server/endpoint with our local fake server.
+    list(, $server) = explode('://', $GLOBALS['base_url'], 2);
+    $this->server = $server . '/akismet-test';
+
+    parent::__construct();
+  }
+
+  function getAkismetURL($authenticate) {
+    if ($authenticate) {
+      return $this->server . '/' . $this->key . '/1.1';
+    }
+    else {
+      return $this->server . '/unauthenticated/1.1';
+    }
+  }
+
+}
+
+class AkismetDrupalTestInvalid extends AkismetDrupalTest {
+  function __construct() {
+    $this->server = 'fake-server';
+    parent::__construct();
+  }
+}

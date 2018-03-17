@@ -821,7 +821,6 @@ function akismet_form_load($form_id) {
   else {
     $akismet_form = db_query('SELECT * FROM {akismet_form} WHERE form_id = :form_id', array(':form_id' => $form_id))->fetchAssoc();
     if ($akismet_form) {
-      $akismet_form['checks'] = unserialize($akismet_form['checks']);
       $akismet_form['enabled_fields'] = unserialize($akismet_form['enabled_fields']);
 
       // Attach form registry information.

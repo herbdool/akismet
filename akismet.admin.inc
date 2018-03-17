@@ -283,7 +283,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
             '!recommended' => $recommended,
           )),
         ),
-        '#required' => $akismet_form['mode'] == AKISMET_MODE_ANALYSIS,
+        '#required' => TRUE,
         // Only possible for forms supporting moderation of unpublished posts.
         '#access' => !empty($akismet_form['moderation callback']),
         // Only possible for forms protected via text analysis.
@@ -343,26 +343,6 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
 function akismet_admin_configure_form_next_submit($form, &$form_state) {
   $form_id = $form_state['values']['akismet']['form_id'];
   $form_state['redirect'] = $_GET['q'] . '/' . $form_id;
-}
-
-/**
- * Form validation handler for akismet_admin_configure_form().
- */
-function akismet_admin_configure_form_validate(&$form, &$form_state) {
-  // For the 'configure' step, output custom #required form element errors for
-  // 'checks' and 'enabled_fields', as their labels do not work with the default
-  // #required form error message.
-  if ($form_state['storage']['step'] == 'configure') {
-    // Make field checkboxes required, if protection mode is text analysis.
-    // @see http://drupal.org/node/875722
-    $required = ($form_state['values']['akismet']['mode'] == AKISMET_MODE_ANALYSIS);
-    $form['akismet']['checks']['#required'] = $required;
-    $form['akismet']['discard']['#required'] = $required;
-
-    if ($required && !array_filter($form_state['values']['akismet']['checks'])) {
-      form_error($form['akismet']['checks'], t('At least one text analysis check is required.'));
-    }
-  }
 }
 
 /**

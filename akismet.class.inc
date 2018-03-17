@@ -278,13 +278,7 @@ abstract class Akismet {
       'blog' => $this->getSiteURL(),
     );
 
-    if ($authenticate) {
-      $server = 'https://' . $this->key . '.' . $this->server;
-    }
-    else {
-      $server = 'https://' . $this->server;
-    }
-
+    $server = $this->getAkismetURL($authenticate);
     $max_attempts = $this->requestMaxAttempts;
     while ($max_attempts-- > 0) {
       try {
@@ -317,6 +311,26 @@ abstract class Akismet {
     }
 
     return $this->lastResponse;
+  }
+
+  /**
+   * Returns the correct REST server to use for a query.
+   *
+   * @param bool $authenticate
+   *   If TRUE, returns a URL with an API key subdomain. If FALSE, returns a
+   *   URL without an API key subdomain (to be used for non-authenticated
+   *   calls.)
+   *
+   * @return string
+   */
+  protected function getAkismetURL($authenticate) {
+    if ($authenticate) {
+      $url = 'https://' . $this->key . '.' . $this->server;
+    }
+    else {
+      $url = 'https://' . $this->server;
+    }
+    return $url;
   }
 
   /**

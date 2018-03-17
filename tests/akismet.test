@@ -6,15 +6,6 @@
  */
 
 /**
- * Indicates that Akismet testing keys are reseller keys.
- *
- * If the above keys are reseller keys, make sure to change this value to TRUE.
- * If you set this to TRUE and you are testing with non-reseller keys, the
- * tests will fail due to unprivileged API access.
- */
-define('AKISMET_TEST_RESELLER_KEY', FALSE);
-
-/**
  * Common base test class for Akismet tests.
  */
 class AkismetWebTestCase extends DrupalWebTestCase {
@@ -32,31 +23,9 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   protected $spam_message = 'Your submission has triggered the spam filter and will not be accepted.';
 
   /**
-   * The text the user should see if they did not fill out the CAPTCHA correctly.
+   * The API key used during testing.
    */
-  protected $incorrect_message = 'The word verification was not completed correctly. Please complete this new word verification and try again.';
-
-  /**
-   * The text the user should see if the textual analysis was unsure about the
-   * content.
-   */
-  protected $unsure_message = "To complete this form, please complete the word verification below.";
-
-  /**
-   * The text the user should see if the textual analysis determined that there
-   * was profane content.
-   */
-  protected $profanity_message = "Your submission has triggered the profanity filter and will not be accepted until the inappropriate language is removed.";
-
-  /**
-   * The public key used during testing.
-   */
-  protected $public_key;
-
-  /**
-   * The private key used during testing.
-   */
-  protected $private_key;
+  protected $key;
 
   /**
    * The Akismet client class implementation to use.
@@ -69,25 +38,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *
    * @var string
    */
-  protected $akismetClass = 'AkismetDrupalTest';
-
-  /**
-   * Flag indicating whether to automatically create testing API keys.
-   *
-   * If akismet_testing_mode is enabled, Akismet module automatically uses the
-   * AkismetDrupalTest client implementation. This implementation automatically
-   * creates testing API keys when being instantiated (and ensures to re-create
-   * testing API keys in case they vanish). The behavior is executed by default,
-   * but depends on the 'akismet_testing_create_keys' variable being TRUE.
-   *
-   * Some functional test cases verify that expected errors are displayed in
-   * case no or invalid API keys are configured. For such test cases, set this
-   * flag to FALSE to skip the automatic creation of testing keys.
-   *
-   * @see AkismetDrupalTest::$createKeys
-   * @see AkismetDrupalTest::createKeys()
-   */
-  protected $createKeys = TRUE;
+  protected $akismetClass = 'AkismetDrupalTestLocal';
 
   function __construct($test_id = NULL) {
     parent::__construct($test_id);
@@ -122,10 +73,6 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     // Save the Akismet client implementation to use for running the tests.
     variable_set('akismet_class', $this->akismetClass);
 
-    // Save the flag telling the testing client implementation whether to
-    // automatically create testing API keys.
-    variable_set('akismet_testing_create_keys', $this->createKeys);
-
     // Disable testing mode warnings.
     // drupal_set_message() starts a session, which disables page caching, and
     // in turn, page/form cache related tests would not behave correctly.
@@ -157,25 +104,10 @@ class AkismetWebTestCase extends DrupalWebTestCase {
         $permissions[] = 'administer comments';
       }
       $this->admin_user = $this->drupalCreateUser($permissions);
-
-      if ($this->createKeys) {
-        $this->setKeys();
-        $this->assertValidKeys();
-      }
     }
   }
 
   function tearDown() {
-    // Delete the testing site.
-    // Not (always) possible when working with local testing server, since
-    // getServerRecord() removes server records upon retrieval, so the site
-    // record may no longer exist.
-    // @todo Only remove keys after running the last test in a test case.
-    /*
-    if ($this->akismetClass == 'AkismetDrupalTest') {
-      $this->deleteKeys();
-    }
-    */
     // Capture any (remaining) watchdog messages.
     $this->assertAkismetWatchdogMessages();
     parent::tearDown();
@@ -342,61 +274,12 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Setup Akismet API keys for testing.
-   *
-   * New keys are only created if AkismetWebTestCase::$createKeys or respectively
-   * the 'akismet_testing_create_keys' variable is set to TRUE.
-   *
-   * @param bool $once
-   *   (optional) Whether to disable the 'akismet_testing_create_keys' variable
-   *   after the first call (and thus omit API key verifications on every page
-   *   request). Defaults to FALSE; i.e., API keys are verified repetitively.
-   *
-   * @see AkismetWebTestCase::$createKeys
-   * @see AkismetDrupalTest::__construct()
-   * @see AkismetDrupalTest::createKeys()
-   */
-  protected function setKeys($once = FALSE) {
-    // Instantiate a Akismet client class.
-    // Depending on AkismetWebTestCase::$createKeys and ultimately the
-    // 'akismet_testing_create_keys' variable, AkismetDrupalTest::__construct()
-    // will automatically setup testing API keys.
-    $this->getClient();
-
-    $this->akismet->createKeys();
-
-    // Make API keys available to test methods.
-    if (!empty($this->akismet->publicKey)) {
-      $this->publicKey = $this->akismet->publicKey;
-      $this->privateKey = $this->akismet->privateKey;
-
-      // Multiple tests might be executed in a single request. Every test sets
-      // up a new child site from scratch. The Akismet class with testing API
-      // keys still exists in the test, but the configuration is gone.
-      $this->akismet->saveKeys();
-    }
-    if ($once) {
-      variable_set('akismet_testing_create_keys', FALSE);
-    }
-  }
-
-  /**
    * Calls _akismet_status() directly to verify that current API keys are valid.
    */
   protected function assertValidKeys() {
     $status = _akismet_status(TRUE);
     $this->assertAkismetWatchdogMessages();
-    $this->assertIdentical($status['isVerified'], TRUE, t('Akismet servers can be contacted and testing API keys are valid.'));
-  }
-
-  /**
-   * Deletes the current testing site.
-   */
-  protected function deleteKeys() {
-    if (!empty($this->akismet->publicKey)) {
-      $this->akismet->deleteSite($this->akismet->publicKey);
-    }
-    unset($this->publicKey, $this->privateKey, $this->akismet);
+    $this->assertIdentical($status['isVerified'], TRUE, t('Akismet servers can be contacted and API key is valid.'));
   }
 
   /**
@@ -461,18 +344,9 @@ class AkismetWebTestCase extends DrupalWebTestCase {
       $this->drupalGet('admin/config/content/akismet/manage/' . $form_id);
     }
 
-    $edit += array(
-      'akismet[mode]' => $mode,
-    );
-
     // Process the enabled fields.
     $form_list = akismet_form_list();
     $form_info = akismet_form_info($form_id, $form_list[$form_id]['module']);
-    if (!empty($form_info['elements'])) {
-      $edit += array(
-        'akismet[checks][spam]' => TRUE,
-      );
-    }
     foreach (array_keys($form_info['elements']) as $field) {
       if (!isset($fields) || in_array($field, $fields)) {
         // If the user specified all fields by default or to include this
@@ -543,35 +417,6 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Assert that the CAPTCHA field is found on the current page.
-   */
-  protected function assertCaptchaField() {
-    $inputs = $this->xpath('//input[@type=:type and @name=:name]', array(
-      ':type' => 'text',
-      ':name' => 'akismet[captcha]',
-    ));
-    $labels = $this->xpath('//label[@for=:for]/span[@class=:class]', array(
-      ':for' => 'edit-akismet-captcha',
-      ':class' => 'form-required',
-    ));
-    $this->assert(!empty($inputs[0]) && !empty($labels[0]), 'Required CAPTCHA field found.');
-
-    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t("Type the characters you see in this picture.")));
-    $this->assert(!empty($image), 'CAPTCHA image found.');
-  }
-
-  /**
-   * Assert that the CAPTCHA field is not found on the current page.
-   */
-  protected function assertNoCaptchaField() {
-    $this->assertNoText($this->unsure_message);
-    $this->assertNoText($this->incorrect_message);
-    $this->assertNoFieldByXPath('//input[@type="text"][@name="akismet[captcha]"]', '', 'CAPTCHA field not found.');
-    $image = $this->xpath('//img[@alt=:alt]', array(':alt' => t("Type the characters you see in this picture.")));
-    $this->assert(empty($image), 'CAPTCHA image not found.');
-  }
-
-  /**
    * Assert that the privacy policy link is found on the current page.
    */
   protected function assertPrivacyLink() {
@@ -585,59 +430,6 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   protected function assertNoPrivacyLink() {
     $elements = $this->xpath('//div[contains(@class, "akismet-privacy")]');
     $this->assertFalse($elements, t('Privacy policy container not found.'));
-  }
-
-  /**
-   * Test submitting a form with a correct CAPTCHA value.
-   *
-   * @param $url
-   *   The URL of the form, or NULL to use the current page.
-   * @param $edit
-   *   An array of form values used in drupalPost().
-   * @param $button
-   *   The text of the form button to click in drupalPost().
-   * @param $success_message
-   *   An optional message to test does appear after submission.
-   */
-  protected function postCorrectCaptcha($url, array $edit = array(), $button, $success_message = '') {
-    if (isset($url)) {
-      $this->drupalGet($url);
-    }
-    $this->assertCaptchaField();
-    $edit['akismet[captcha]'] = 'correct';
-    $this->drupalPost(NULL, $edit, $button);
-    $this->assertNoCaptchaField();
-    $this->assertNoText($this->incorrect_message);
-    if ($success_message) {
-      $this->assertText($success_message);
-    }
-  }
-
-  /**
-   * Test submitting a form with an incorrect CAPTCHA value.
-   *
-   * @param $url
-   *   The URL of the form, or NULL to use the current page.
-   * @param $edit
-   *   An array of form values used in drupalPost().
-   * @param $button
-   *   The text of the form button to click in drupalPost().
-   * @param $success_message
-   *   An optional message to test does not appear after submission.
-   */
-  protected function postIncorrectCaptcha($url, array $edit = array(), $button, $success_message = '') {
-    if (isset($url)) {
-      $this->drupalGet($url);
-    }
-    $this->assertCaptchaField();
-    $edit['akismet[captcha]'] = 'incorrect';
-    $before_url = $this->getUrl();
-    $this->drupalPost(NULL, $edit, $button);
-    $this->assertCaptchaField();
-    $this->assertText($this->incorrect_message);
-    if ($success_message) {
-      $this->assertNoText($success_message);
-    }
   }
 
   /**
@@ -655,9 +447,11 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *   An optional message to test does not appear after submission.
    */
   protected function assertSpamSubmit($url, array $spam_fields, array $edit = array(), $button, $success_message = '') {
+    // NOTE: This will get an 'unsure' response from the live API. That is,
+    // the response body will be 'true' but there will not be an
+    // X-akismet-pro-tip header.
     $edit += array_fill_keys($spam_fields, 'spam');
     $this->drupalPost($url, $edit, $button);
-    $this->assertNoCaptchaField();
     $this->assertText($this->spam_message);
     if ($success_message) {
       $this->assertNoText($success_message);
@@ -679,9 +473,12 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *   An optional message to test does appear after submission.
    */
   protected function assertHamSubmit($url, array $ham_fields, array $edit = array(), $button, $success_message = '') {
+    // Note: There is no way to force a ham response from the live API.
+    // The local test server will return a ham response for any request that
+    // doesn't include 'viagra-test-123' or
+    // 'akismet-guaranteed-spam@example.com'.
     $edit += array_fill_keys($ham_fields, 'ham');
     $this->drupalPost($url, $edit, $button);
-    $this->assertNoCaptchaField($url);
     $this->assertNoText($this->spam_message);
     if ($success_message) {
       $this->assertText($success_message);
@@ -700,20 +497,18 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * @param $button
    *   The text of the form button to click in drupalPost().
    * @param $success_message
-   *   An optional message to test does appear after sucessful form and CAPTCHA
+   *   An optional message to test does appear after successful form and CAPTCHA
    *   submission.
    */
   protected function assertUnsureSubmit($url, array $unsure_fields, array $edit = array(), $button, $success_message = '') {
-    $edit += array_fill_keys($unsure_fields, 'unsure');
+    $edit += array_fill_keys($unsure_fields, 'viagra-test-123');
     $this->drupalPost($url, $edit, $button);
-    $this->assertCaptchaField();
+    return;
+    // TODO: Figure out what should be showing up based on the configuration.
     $this->assertText($this->unsure_message);
     if ($success_message) {
       $this->assertNoText($success_message);
     }
-
-    $this->postIncorrectCaptcha(NULL, $edit, $button, $success_message);
-    $this->postCorrectCaptcha(NULL, $edit, $button, $success_message);
   }
 
   /**
@@ -1024,11 +819,6 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
    */
   protected $akismetClass = 'AkismetDrupal';
 
-  /**
-   * Prevent automated setup of testing keys.
-   */
-  protected $disableDefaultSetup = TRUE;
-
   public static function getInfo() {
     return array(
       'name' => 'Testing mode',
@@ -1059,21 +849,17 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     $this->setProtectionUI('akismet_test_form', AKISMET_MODE_ANALYSIS);
     variable_set('akismet_fallback', AKISMET_FALLBACK_ACCEPT);
 
-    // Setup production API keys and expected languages. They must be retained.
-    $publicKey = 'the-invalid-akismet-api-key-value';
-    $privateKey = 'the-invalid-akismet-api-key-value';
-    $expectedLanguages = array('en','de');
+    // Set up production API key. It must be retained.
+    $apiKey = 'invalid-key';
     $edit = array(
-      'akismet_public_key' => $publicKey,
-      'akismet_private_key' => $privateKey,
-      'akismet_languages_expected[]' => $expectedLanguages,
+      'akismet_api_key' => $apiKey,
     );
     $this->drupalGet('admin/config/content/akismet/settings');
-    $this->assertText('The Akismet API keys are not configured yet.');
+    $this->assertText('The Akismet API key is not configured yet.');
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
-    $this->assertNoText('The Akismet API keys are not configured yet.');
+    $this->assertNoText('The Akismet API key is not configured yet.');
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText('The configured Akismet API keys are invalid.');
+    $this->assertText('The API key could not be verified.');
 
     $this->drupalLogout();
 
@@ -1084,7 +870,7 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
       'body' => 'spam',
     );
     $this->drupalGet('akismet-test/form');
-    $this->drupalPost(NULL, $edit, 'Submit', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertText('Successful form submission.');
 
     // Enable testing mode.
@@ -1093,15 +879,10 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
       'akismet_testing_mode' => 1,
     );
     $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
-    $this->assertText('The configured Akismet API keys are invalid.');
-    $this->drupalPost(NULL, $edit, t('Save configuration'));
-    $this->assertNoText('The Akismet API keys are not configured yet.');
-    $this->assertNoText('The configured Akismet API keys are invalid.');
+    $this->assertText('API key could not be verified.');
+    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->assertNoText('The Akismet API key is not configured yet.');
     $this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
-    // Verify that expected languages were retained.
-    foreach($expectedLanguages as $lang) {
-      $this->assertOptionSelected('akismet_languages_expected', $lang);
-    }
 
     $this->drupalLogout();
 
@@ -1109,33 +890,20 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     $this->drupalGet('akismet-test/form');
     $this->assertText('Akismet testing mode is still enabled.');
 
-    // Verify that no spam can be posted with testing mode enabled.
-    $edit = array(
-      'title' => $this->randomString(),
-      'body' => 'spam',
-    );
-    $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertText($this->spam_message);
-    $this->assertNoText('Successful form submission.');
-
     // Disable testing mode.
     $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet/settings');
+    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText('Akismet testing mode is still enabled.');
     $edit = array(
       'akismet_testing_mode' => FALSE,
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText('The configured Akismet API keys are invalid.');
+    $this->assertText('API key could not be verified.');
     $this->assertNoText('Akismet testing mode is still enabled.');
 
-    // Verify that production API keys still exist.
-    $this->assertFieldByName('akismet_public_key', $publicKey);
-    $this->assertFieldByName('akismet_private_key', $privateKey);
-    foreach($expectedLanguages as $lang) {
-      $this->assertOptionSelected('akismet_languages_expected', $lang);
-    }
+    // Verify that the production API key still exists.
+    $this->assertFieldByName('akismet_api_key', $apiKey);
   }
 }
 
@@ -1145,7 +913,6 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
 class AkismetInstallationTestCase extends AkismetWebTestCase {
   protected $akismetClass = 'AkismetDrupalTestLocal';
   protected $disableDefaultSetup = TRUE;
-  protected $createKeys = FALSE;
 
   public static function getInfo() {
     return array(
@@ -1176,14 +943,14 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
    * Note: Partial error messages tested here; hence, no t().
    */
   function testInstallationProcess() {
-    $message_short_invalid = t('The configured Akismet API keys are invalid.');
-    $message_invalid = t('The Akismet servers could be contacted, but Akismet API keys could not be verified.');
+    $message_short_invalid = t('API key could not be verified.');
+    $message_invalid = t('The Akismet server could be contacted, but the Akismet API key could not be verified.');
     $message_valid = t('The services are operating correctly.');
-    $message_missing = t('The Akismet API keys are not configured yet.');
-    $message_server = t('The Akismet servers could not be contacted. Please make sure that your web server can make outgoing HTTP requests.');
+    $message_missing = t('The Akismet API key is not configured yet.');
+    $message_server = t('The Akismet server could not be contacted. Please make sure that your web server can make outgoing HTTP requests.');
     $message_saved = t('The configuration options have been saved.');
 
-    $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to configure your keys.', array(
+    $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to add your API key.', array(
       '@settings-url' => url('admin/config/content/akismet/settings'),
     ));
     $this->drupalLogin($this->admin_user);
@@ -1220,10 +987,9 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->drupalGet('admin/reports/status');
     $this->assertRaw($message_missing . ' ' . $admin_message, t('Requirements error found.'));
 
-    // Configure invalid keys.
+    // Configure an invalid key.
     $edit = array(
-      'akismet_public_key' => 'the-invalid-akismet-api-key-value',
-      'akismet_private_key' => 'the-invalid-akismet-api-key-value',
+      'akismet_api_key' => 'invalid-key',
     );
     $this->drupalGet('admin/config/content/akismet/settings');
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1255,23 +1021,14 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
 
     // Create a testing site on backend to have some API keys.
     variable_set('akismet_class', $this->akismetClass);
-    $akismet = akismet();
-    $akismet->createKeys();
 
-    $response = $akismet->getSite();
-    $this->assertSame('publicKey', $response['publicKey'], $akismet->publicKey);
-
-    // Verify that valid keys work.
+    // Verify that a valid key works.
     $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
-    $this->assertFieldByName('akismet_public_key', 'the-invalid-akismet-api-key-value');
-    /*
-    This portion of the test is not working currently.
-    See issue 2391671 for full details.
-    Once identified and resolved this needs to be put back.
+    $this->assertFieldByName('akismet_api_key', 'invalid-key');
+    $akismet = akismet();
 
     $edit = array(
-      'akismet_public_key' => $akismet->publicKey,
-      'akismet_private_key' => $akismet->privateKey,
+      'akismet_api_key' => $akismet->key,
     );
     $this->drupalPost('admin/config/content/akismet/settings', $edit, t('Save configuration'));
     $this->assertText($message_saved);
@@ -1283,15 +1040,13 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->drupalGet('admin/config/content/akismet/settings');
     $this->assertText($message_valid);
     $edit = array(
-      'akismet_public_key' => '',
-      'akismet_private_key' => '',
+      'akismet_api_key' => '',
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_saved);
     $this->assertNoText($message_valid);
     $this->assertText($message_missing);
     $this->assertNoText($message_invalid);
-    */
   }
 }
 
@@ -1312,168 +1067,13 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
 
   function setUp() {
     parent::setUp(array('akismet', 'akismet_test'));
-    $this->setKeys();
-    $this->assertValidKeys();
     $this->admin_user = $this->drupalCreateUser();
   }
 
   /**
-   * Tests Site API.
+   * Tests /comment-check.
    */
-  function testSiteAPI() {
-    $akismet = akismet();
-    $info = $akismet->getClientInformation();
-
-    // Create a new site.
-    $site = array(
-      'url' => 'example.com',
-      'email' => 'akismet@example.com',
-    );
-    $result = $akismet->createSite($site);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!empty($result['publicKey']), 'publicKey found.');
-    $this->assertTrue(!empty($result['privateKey']), 'privateKey found.');
-    $this->assertSame('url', $result['url'], $site['url']);
-    $this->assertSame('email', $result['email'], $site['email']);
-    $this->assertTrue(!isset($result['platformName']), 'platformName not found.');
-    $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
-    $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
-    $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
-
-    $site = $result;
-    $akismet->publicKey = $site['publicKey'];
-    $akismet->privateKey = $site['privateKey'];
-
-    // Verify that getSite() response equals the createSite() response.
-    $result = $akismet->getSite();
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('publicKey', $result['publicKey'], $site['publicKey']);
-    $this->assertSame('privateKey', $result['privateKey'], $site['privateKey']);
-    $this->assertSame('url', $result['url'], $site['url']);
-    $this->assertSame('email', $result['email'], $site['email']);
-    $this->assertTrue(!isset($result['platformName']), 'platformName not found.');
-    $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
-    $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
-    $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
-
-    // Test that verifying keys updates client information.
-    $result = $akismet->verifyKeys();
-    $this->assertAkismetWatchdogMessages();
-    $this->assertIdentical($result, TRUE, 'Site was updated.');
-
-    $result = $akismet->getSite();
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('publicKey', $result['publicKey'], $site['publicKey']);
-    $this->assertSame('privateKey', $result['privateKey'], $site['privateKey']);
-    $this->assertSame('url', $result['url'], $site['url']);
-    $this->assertSame('email', $result['email'], $site['email']);
-    $this->assertSame('platformName', $result['platformName'], $info['platformName']);
-    $this->assertSame('platformVersion', $result['platformVersion'], $info['platformVersion']);
-    $this->assertSame('clientName', $result['clientName'], $info['clientName']);
-    $this->assertSame('clientVersion', $result['clientVersion'], $info['clientVersion']);
-
-    // Verify that the site is listed.
-    // FIXME: Site listing not supported by backend yet.
-    /*
-    $result = $akismet->getSites();
-    $this->assertAkismetWatchdogMessages();
-    $found = FALSE;
-    foreach ($result as $record) {
-      if ($record['publicKey'] == $site['publicKey']) {
-        $found = TRUE;
-      }
-    }
-    $this->assertTrue($found, 'Site record was found in site list.');
-    */
-
-    // Verify that the site can be deleted.
-    $result = $akismet->deleteSite($site['publicKey']);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertIdentical($result, TRUE, 'Site was deleted.');
-
-    // Verify that the site no longer appears in site list.
-    $akismet->publicKey = $this->publicKey;
-    $akismet->privateKey = $this->privateKey;
-    // FIXME: Site listing not supported by backend yet.
-    /*
-    $result = $akismet->getSites();
-    $this->assertAkismetWatchdogMessages();
-    $found = FALSE;
-    foreach ($result as $record) {
-      if ($record['publicKey'] == $site['publicKey']) {
-        $found = TRUE;
-      }
-    }
-    $this->assertFalse($found, 'Deleted site no longer exists.');
-    */
-
-    // Verify that retrieving the deleted site yields a 404.
-    $result = $akismet->getSite($site['publicKey']);
-    $this->assertAkismetWatchdogMessages(WATCHDOG_EMERGENCY);
-    $this->assertEqual($result, 404, 'Attempt to get deleted site throws 404.');
-
-    // Verify that authentication fails.
-    $akismet->publicKey = $site['publicKey'];
-    $akismet->privateKey = $site['privateKey'];
-    $result = $akismet->getSite();
-    $this->assertAkismetWatchdogMessages(WATCHDOG_EMERGENCY);
-    $this->assertEqual($akismet->lastResponseCode, Akismet::AUTH_ERROR, 'Attempt to authenticate with deleted site keys fails.');
-
-    // Restore keys for tearDown().
-    $akismet->publicKey = $this->publicKey;
-    $akismet->privateKey = $this->privateKey;
-  }
-
-  /**
-   * Tests Ping Site API.
-   */
-  function testPingSiteAPI() {
-    $akismet = akismet();
-    $info = $akismet->getClientInformation();
-
-    // Create a new site.
-    $site = array(
-      'url' => 'example.com',
-      'email' => 'akismet@example.com',
-    );
-    $result = $akismet->createSite($site);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!empty($result['publicKey']), 'publicKey found.');
-    $this->assertTrue(!empty($result['privateKey']), 'privateKey found.');
-    $this->assertSame('url', $result['url'], $site['url']);
-    $this->assertSame('email', $result['email'], $site['email']);
-    $this->assertTrue(!isset($result['platformName']), 'platformName not found.');
-    $this->assertTrue(!isset($result['platformVersion']), 'platformVersion not found.');
-    $this->assertTrue(!isset($result['clientName']), 'clientName not found.');
-    $this->assertTrue(!isset($result['clientVersion']), 'clientVersion not found.');
-
-    // Test that Akismet can be pinged with the site credentials.
-    $result = $akismet->pingAPI();
-    if ($result['code'] == 200) {
-      $this->assertAkismetWatchdogMessages();
-      $this->pass('Ping/pong success.');
-    }
-    else if ($result['code'] == 500 || $result == 900) {
-      // If a network error or a 500 data error is returned, then the request was submitted properly, but the
-      // pong callback could not succeed.  This is likely due to the test server
-      // not being publicly accessible.
-      $this->assertAkismetWatchdogMessages(WATCHDOG_ERROR);
-      $this->pass('Ping success but pong was inaccessible.');
-      // Run a quick test to validate that we can actually access the pong
-      // callback locally.
-      $this->drupalPost('akismet-test/pong', array(), 'Submit');
-      $this->assertAkismetWatchdogMessages();
-    }
-    else {
-      $this->assertAkismetWatchdogMessages();
-      $this->fail('Ping/pong failure with code: ' . $result['code']);
-    }
-  }
-
-  /**
-   * Tests akismet.checkContent().
-   */
-  function testCheckContent() {
+  function testCommentCheck() {
     $akismet = akismet();
     $data = array(
       'authorName' => $this->admin_user->name,
@@ -1490,9 +1090,6 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
     $this->assertAkismetWatchdogMessages();
     $this->assertSame('spam_score', $result['spam_score'], 0.0);
     $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
-    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
-    $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
     $data['postBody'] = 'spam';
@@ -1822,43 +1419,27 @@ class AkismetAccessTestCase extends AkismetWebTestCase {
   public static function getInfo() {
     return array(
       'name' => 'Access checking',
-      'description' => 'Confirm that there is a working key pair and that this status is correctly indicated on the module settings page for appropriate users.',
+      'description' => 'Confirm that there is a working API key and that this status is correctly indicated on the module settings page for appropriate users.',
       'group' => 'Akismet',
     );
   }
 
   /**
-   * Configure an invalid key pair and ensure error message.
+   * Configure an invalid API key and ensure error message.
    */
-  function testKeyPairs() {
+  function testAPIKey() {
     // No error message or watchdog messages should be thrown with default
     // testing keys.
     $this->drupalLogin($this->admin_user);
     $this->drupalGet('admin/config/content/akismet/settings');
 
-    // Try to setup completely invalid keys.
-    $edit = array(
-      'akismet_public_key' => 'foo',
-      'akismet_private_key' => 'bar',
-    );
-    $this->drupalPost(NULL, $edit, t('Save configuration'));
-    $this->assertText(t('!title must be 32 characters. Ensure you copied the key correctly.', array(
-      '!title' => t('Public key'),
-    )));
-    $this->assertText(t('!title must be 32 characters. Ensure you copied the key correctly.', array(
-      '!title' => t('Private key'),
-    )));
-    $this->assertNoText(t('The configuration options have been saved.'));
-    $this->assertNoText('The configured Akismet API keys are invalid.');
-
     // Set up invalid test keys and check that an error message is shown.
     $edit = array(
-      'akismet_public_key' => 'the-invalid-akismet-api-key-value',
-      'akismet_private_key' => 'the-invalid-akismet-api-key-value',
+      'akismet_api_key' => 'foo',
     );
     $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText(t('The configuration options have been saved.'));
-    $this->assertText('The configured Akismet API keys are invalid.');
+    $this->assertText('The API key could not be verified.');
   }
 
   /**
@@ -2115,350 +1696,6 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
 }
 
 /**
- * Tests blacklist functionality.
- *
- * The blacklists are stored on the server. These tests can fail when
- * different people run the tests at the same time because all tests share
- * the same blacklist. You can configure a custom key to avoid this.
- */
-class AkismetBlacklistTestCase extends AkismetWebTestCase {
-  protected $disableDefaultSetup = TRUE;
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Blacklist',
-      'description' => 'Tests URL and text blacklist functionality.',
-      'group' => 'Akismet',
-    );
-  }
-
-  function setUp() {
-    parent::setUp(array('akismet'));
-    $this->setKeys();
-  }
-
-  /**
-   * Test the blacklist functionality at the API level without using a web interface.
-   */
-  function testBlacklistAPI() {
-    $akismet = akismet();
-    // Remove any stale blacklist entries from test runs that did not finish.
-    $blacklist = $akismet->getBlacklist();
-    foreach ($blacklist as $entry) {
-      if (REQUEST_TIME - strtotime($entry['created']) > 86400) {
-        $akismet->deleteBlacklistEntry($entry['id']);
-      }
-    }
-    $this->assertAkismetWatchdogMessages();
-
-    // Blacklist a URL.
-    $domain = drupal_strtolower($this->randomName()) . '.com';
-    $entry = $akismet->saveBlacklistEntry(array(
-      'value' => $domain,
-      'context' => 'allFields',
-      'reason' => 'spam',
-      'match' => 'contains',
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue($entry['id'], t('The URL was blacklisted.'));
-
-    // Check whether posts containing the blacklisted URL are properly blocked.
-    $result = akismet()->checkContent(array(
-      'postBody' => "When the exact URL is present, the post should get blocked: http://{$domain}",
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Exact URL match was blocked.'));
-
-    $result = akismet()->checkContent(array(
-      'postBody' => "When the URL is expanded in the back, the post should get blocked: http://{$domain}/oh-my",
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Partial URL match was blocked.'));
-
-    $result = akismet()->checkContent(array(
-      'postBody' => "When the URL is expanded in the front, the post should get blocked: http://www.{$domain}",
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('URL with www-prefix was blocked.'));
-
-    $result = akismet()->checkContent(array(
-      'postBody' => "When the URL has a different schema, the post should get blocked: ftp://www.{$domain}",
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('URL with different schema was blocked.'));
-
-    $result = $akismet->deleteBlacklistEntry($entry['id']);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertIdentical($result, TRUE, t('The blacklisted URL was removed.'));
-
-    // Blacklist a word.
-    // @todo As of now, only non-numeric, lower-case text seems to be supported.
-    $term = drupal_strtolower(preg_replace('/[^a-zA-Z]/', '', $this->randomName()));
-    $entry = $akismet->saveBlacklistEntry(array(
-      'value' => $term,
-      'context' => 'allFields',
-      'reason' => 'spam',
-      'match' => 'contains',
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue($entry['id'], t('The text was blacklisted.'));
-
-    // Check whether posts containing the blacklisted word are properly blocked.
-    $data = array(
-      'postBody' => $term,
-    );
-    $result = akismet()->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Identical match was blocked.'));
-
-    $data = array(
-      'postBody' => "When the term is present, the post should get blocked: " . $term,
-    );
-    $result = akismet()->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Exact match was blocked.'));
-
-    $data = array(
-      'postBody' => "When match is 'contains', the word can be surrounded by other text: abc" . $term . "def",
-    );
-    $result = akismet()->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Partial match was blocked.'));
-
-    // Update the blacklist entry to match the term only exactly.
-    $entry = $akismet->saveBlacklistEntry(array(
-      'id' => $entry['id'],
-      'value' => $term,
-      'context' => 'allFields',
-      'reason' => 'spam',
-      'match' => 'exact',
-    ));
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue($entry['id'], t('The blacklist entry was updated.'));
-
-    $data = array(
-      'postBody' => "When match is 'exact', it has to be exact: " . $term,
-    );
-    $result = akismet()->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertEqual($result['spam_classification'], 'spam', t('Exact match was blocked.'));
-
-    $data = array(
-      'postBody' => "When match is 'exact', it has to be exact: abc{$term}def",
-    );
-    $result = akismet()->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.5);
-    $this->assertEqual($result['spam_classification'], 'unsure', t('Partial match was not blocked.'));
-
-    $result = $akismet->deleteBlacklistEntry($entry['id']);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertIdentical($result, TRUE, t('The blacklisted text was removed.'));
-
-    // Try to remove a non-existing entry.
-    // @todo Ensure that the ID does not exist.
-    $result = $akismet->deleteBlacklistEntry(999);
-    $this->assertAkismetWatchdogMessages(WATCHDOG_EMERGENCY);
-    $this->assertNotIdentical($result, TRUE, t('Error response for a non-existing blacklist text found.'));
-    $this->assertSame('Response code', $akismet->lastResponseCode, 404);
-  }
-
-  /**
-   * Test the blacklist administration interface.
-   *
-   * We don't need to check whether the blacklisting actually works
-   * (i.e. blocks posts) because that is tested in testTextBlacklistAPI() and
-   * testURLBlacklistAPI().
-   */
-  function testBlacklistUI() {
-    // Log in as an administrator and access the blacklist administration page.
-    $this->admin_user = $this->drupalCreateUser(array(
-      'administer akismet',
-      'access administration pages',
-    ));
-    $this->drupalLogin($this->admin_user);
-
-    // Add a word to the spam blacklist.
-    $this->drupalGet('admin/config/content/akismet/blacklist');
-    $text = $this->randomName();
-    $edit = array(
-      'entry[value]' => $text,
-      'entry[context]' => 'allFields',
-      'entry[match]' => 'contains',
-    );
-    $this->drupalPost(NULL, $edit, t('Add'));
-    $text = drupal_strtolower($text);
-    $this->assertText(t('The entry was added to the blacklist.'));
-    $this->assertText($text);
-
-    // Remove the word from the spam blacklist.
-    $links = $this->xpath('//td[contains(., :text)]/following-sibling::td/a', array(':text' => $text));
-    $delete_url = (string) $links[0]['href'];
-    $this->assertLinkByHref($delete_url);
-    $delete_url = $GLOBALS['base_root'] . $delete_url;
-    $this->drupalGet($delete_url);
-    $this->drupalPost(NULL, array(), t('Delete'));
-    $this->assertEqual($this->getUrl(), url('admin/config/content/akismet/blacklist', array('absolute' => TRUE)), t('Correct page redirection.'));
-    $this->assertNoText($text, 'Text blacklist removed.');
-
-    // Add a word to the profanity blacklist.
-    $this->drupalGet('admin/config/content/akismet/blacklist/profanity');
-    $text = $this->randomName();
-    $edit = array(
-      'entry[value]' => $text,
-      'entry[context]' => 'allFields',
-      'entry[match]' => 'contains',
-    );
-    $this->drupalPost(NULL, $edit, t('Add'));
-    $this->assertText(t('The entry was added to the blacklist.'));
-    $text = drupal_strtolower($text);
-    $this->assertText($text);
-
-    // Remove the word from the profanity blacklist.
-    $links = $this->xpath('//td[contains(., :text)]/following-sibling::td/a', array(':text' => $text));
-    $delete_url = (string) $links[0]['href'];
-    $this->assertLinkByHref($delete_url);
-    $delete_url = $GLOBALS['base_root'] . $delete_url;
-    $this->drupalGet($delete_url);
-    $this->drupalPost(NULL, array(), t('Delete'));
-    $this->assertEqual($this->getUrl(), url('admin/config/content/akismet/blacklist/profanity', array('absolute' => TRUE)), t('Correct page redirection.'));
-    $this->assertNoText($text, 'Text blacklist removed.');
-  }
-}
-
-/**
- * Tests Akismet form profanity filtering functionality.
- */
-class AkismetProfanityTestCase extends AkismetWebTestCase {
-  public static function getInfo() {
-    return array(
-      'name' => 'Profanity checking',
-      'description' => 'Tests form protection with text analysis checking for profanity.',
-      'group' => 'Akismet',
-    );
-  }
-
-  function setUp() {
-    parent::setUp(array('akismet_test'));
-  }
-
-  /**
-   * Tests text analysis profanity checking.
-   */
-  function testProfanity() {
-    // Protect Akismet test form but do not enable profanity checking.
-    $this->drupalLogin($this->admin_user);
-    $edit_config = array(
-      'akismet[checks][spam]' => TRUE,
-      'akismet[checks][profanity]' => FALSE,
-    );
-    $this->setProtectionUI('akismet_test_form', AKISMET_MODE_ANALYSIS, NULL, $edit_config);
-    $this->drupalLogout();
-
-    // Assert that the profanity filter is disabled.
-    $edit = array(
-      'title' => 'Joomla lover unite!',
-      'body' => 'This is a post just for unsure Joomla lovers. If you love Joomla, this is the profanity for you!',
-    );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
-    $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
-    $this->assertNoText($this->profanity_message);
-
-    // Enable profanity checking, disable spam checking.
-    $this->drupalLogin($this->admin_user);
-    $edit_config = array(
-      'akismet[checks][spam]' => FALSE,
-      'akismet[checks][profanity]' => TRUE,
-    );
-    $this->setProtectionUI('akismet_test_form', AKISMET_MODE_ANALYSIS, NULL, $edit_config);
-    $this->drupalLogout();
-
-    // Verify that the profanity filter now blocks this content.
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
-    $this->assertNoText('Successful form submission.');
-    $this->assertText($this->profanity_message);
-
-    // Verify that we are able to post after removing profanity, as the error
-    // message suggests.
-    $edit['body'] = 'This is a post just for unsure Joomla lovers.';
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
-    $this->assertText('Successful form submission.');
-    $this->assertNoText($this->profanity_message);
-  }
-
-  /**
-   * Tests text analysis with both profanity and spam checking.
-   */
-  function testProfanitySpam() {
-    // Enable spam and profanity checking for the article node comment form.
-    $this->drupalLogin($this->admin_user);
-    $edit_config = array(
-      'akismet[checks][profanity]' => TRUE,
-      'akismet[checks][spam]' => TRUE,
-    );
-    $this->setProtectionUI('akismet_test_form', AKISMET_MODE_ANALYSIS, NULL, $edit_config);
-    $this->drupalLogout();
-
-    // Sequence: Post profanity (ham), remove profanity (still ham), and expect
-    // that to be accepted.
-    $edit = array(
-      'title' => $this->randomName(),
-    );
-    $this->drupalGet('akismet-test/form');
-    $this->assertNoCaptchaField();
-    $this->assertPrivacyLink();
-
-    $edit['body'] = 'profanity ham';
-    $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertText($this->profanity_message);
-    $this->assertNoText('Successful form submission.');
-    $content_id = $this->assertResponseIDInForm('content_id');
-
-    $edit['body'] = 'not profane ham';
-    $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertNoText($this->profanity_message);
-    $this->assertText('Successful form submission.');
-    $mid = $this->getFieldValueByName('mid');
-    $this->assertAkismetData('akismet_test', $mid, 'content_id', $content_id);
-
-    // Sequence: Post unsure spam (not profanity), post profanity along with
-    // correct CAPTCHA, and expect that to be discarded.
-    $this->resetResponseID();
-    $this->web_user = $this->drupalCreateUser(array());
-    $this->drupalLogin($this->web_user);
-
-    $edit = array(
-      'title' => $this->randomName(),
-    );
-    $this->drupalGet('akismet-test/form');
-    $this->assertNoCaptchaField();
-    $this->assertPrivacyLink();
-
-    $edit['body'] = 'unsure';
-    $this->drupalPost(NULL, $edit, 'Submit');
-    $this->assertCaptchaField();
-    $this->assertNoText($this->profanity_message);
-    $this->assertNoText('Successful form submission.');
-    $content_id = $this->assertResponseIDInForm('content_id');
-    $captcha_id = $this->assertResponseIDInForm('captcha_id');
-
-    $edit['body'] = 'unsure profanity';
-    $this->postCorrectCaptcha(NULL, $edit, 'Submit');
-    $this->assertNoCaptchaField();
-    $this->assertText($this->profanity_message);
-    $this->assertNoText('Successful form submission.');
-  }
-}
-
-/**
  * Tests Akismet form configuration functionality.
  */
 class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
@@ -2495,7 +1732,6 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
 
     $edit = array(
       'akismet[mode]' => AKISMET_MODE_ANALYSIS,
-      'akismet[checks][spam]' => TRUE,
       'akismet[enabled_fields][title]' => TRUE,
       'akismet[enabled_fields][body]' => TRUE,
       'akismet[enabled_fields][exclude]' => FALSE,
@@ -2542,6 +1778,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     $edit = array(
       'title' => 'unsure',
       'body' => 'unsure',
+      'name' => 'viagra-test-123',
     );
     $this->drupalPost('akismet-test/form', $edit, 'Submit');
     $this->assertText($this->unsure_message);
@@ -2569,16 +1806,17 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     $this->drupalLogout();
     $edit = array(
       'title' => 'unsure',
+      'name' => 'viagra-test-123',
     );
     $this->drupalPost('akismet-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->unsure_message);
-    $this->postCorrectCaptcha(NULL, array(), 'Submit', 'Successful form submission.');
 
     // Try to submit values for top-level fields.
     $edit = array(
       'title' => 'spam',
       'body' => 'spam',
+      'name' => 'viagra-test-123',
     );
     $this->drupalPost('akismet-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
