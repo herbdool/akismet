@@ -923,6 +923,10 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
   }
 
   function setUp() {
+    // Use the real API key. TODO: Make this a configurable option.
+    $key = variable_get('akismet_api_key');
+    $this->key = $key;
+
     parent::setUp(array('akismet_test'));
 
     $this->admin_user = $this->drupalCreateUser(array(
@@ -1017,8 +1021,31 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
 
     variable_set('akismet_class', $this->akismetClass);
 
-    // TODO: Consider how to get a valid key from Akismet for testing,
-    // so we can verify that installation works correctly with a valid key.
+    // Verify that a valid key works.
+    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->assertFieldByName('akismet_api_key', 'invalid-key');
+    $akismet = akismet();
+
+    $edit = array(
+      'akismet_api_key' => $this->key,
+    );
+    $this->drupalPost('admin/config/content/akismet/settings', $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->assertText($message_saved);
+    $this->assertText($message_valid);
+    $this->assertNoText($message_missing);
+    $this->assertNoText($message_invalid);
+
+    // Verify that deleting keys throws the correct error message again.
+    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->assertText($message_valid);
+    $edit = array(
+      'akismet_api_key' => '',
+    );
+    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->assertText($message_saved);
+    $this->assertNoText($message_valid);
+    $this->assertText($message_missing);
+    $this->assertNoText($message_invalid);
   }
 }
 
@@ -1048,281 +1075,33 @@ class AkismetResponseTestCase extends AkismetWebTestCase {
   function testCommentCheck() {
     $akismet = akismet();
     $data = array(
-      'authorName' => $this->admin_user->name,
-      'authorMail' => $this->admin_user->mail,
-      'authorId' => $this->admin_user->uid,
-      'authorIp' => ip_address(),
+      'comment_author' => $this->admin_user->name,
+      'comment_author_email' => $this->admin_user->mail,
+      'author_id' => $this->admin_user->uid,
+      'user_ip' => ip_address(),
     );
 
     // Ensure proper response for 'ham' submissions.
-    // By default (i.e., omitting 'checks') we expect spam and quality checking
-    // only.
-    $data['postBody'] = 'ham';
+    $data['user_role'] = 'administrator';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
+    $this->assertSame('classification', $result, 'ham');
 
     // Ensure proper response for 'spam' submissions, re-using session_id.
-    $data['postBody'] = 'spam';
+    // Note that the API doesn't have any way to guarantee what we are calling
+    // 'spam' in this module (i.e. a 'true' response, with the X-akismet-pro-tip
+    // header, so this test will fail when using the real API.
+    $data['comment_author'] = 'viagra-test-123';
+    $data['comment_author_email'] = 'akismet-guaranteed-spam@example.com';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
-    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
-    $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
+    $this->assertSame('classification', $result, 'spam');
 
-    // Ensure proper response for 'unsure' submissions, re-using session_id.
-    $data['postBody'] = 'unsure';
+    // Ensure proper response for 'unsure' submissions.
+    $data['comment_author'] = 'viagra-test-123';
     $result = $akismet->checkContent($data);
     $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.5);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
-    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
-    $this->assertTrue(!isset($result['profanityScore']), 'profanityScore not returned.');
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
-
-    // Additionally enable profanity checking.
-    $data['postBody'] = 'spam profanity';
-    $data['checks'] = array('spam', 'quality', 'profanity');
-    $result = $akismet->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
-    $this->assertSame('qualityScore', $result['qualityScore'], 0.0);
-    $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
-
-    // Change the string to contain profanity only.
-    $data['postBody'] = 'profanity';
-    $data['checks'] = array('spam', 'quality', 'profanity');
-    $result = $akismet->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.5);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
-    $this->assertSame('qualityScore', $result['qualityScore'], 0.0);
-    $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
-
-    // Disable spam checking, only do profanity checking.
-    $data['postBody'] = 'spam profanity';
-    $data['checks'] = array('profanity');
-    $result = $akismet->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!isset($result['spam_score']), 'spam not returned.');
-    $this->assertTrue(!isset($result['spam_classification']), 'spam_classification not returned.');
-    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
-    $this->assertSame('profanityScore', $result['profanityScore'], 1.0);
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
-
-    // Pass arbitrary string to profanity checking.
-    $data['postBody'] = $this->randomString(12);
-    $result = $akismet->checkContent($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(!isset($result['spam_score']), 'spam not returned.');
-    $this->assertTrue(!isset($result['spam_classification']), 'spam_classification not returned.');
-    $this->assertTrue(!isset($result['qualityScore']), 'qualityScore not returned.');
-    $this->assertSame('profanityScore', $result['profanityScore'], 0.0);
-    $data['id'] = $this->assertResponseID('content_id', $result['id']);
-  }
-
-  /**
-   * Tests results of akismet.checkContent() across requests for a single session.
-   */
-  function testCheckContentSession() {
-    $akismet = akismet();
-    $base_data = array(
-      'authorName' => $this->admin_user->name,
-      'authorMail' => $this->admin_user->mail,
-      'authorId' => $this->admin_user->uid,
-      'authorIp' => ip_address(),
-    );
-
-    // Sequence:
-    // - Post unsure content
-    // - Solve CAPTCHA
-    // - Post spam content
-    // - Expect spam_classification 'spam' (spam always trumps)
-    $this->resetResponseID();
-    $content_data = $base_data;
-    $content_data['postBody'] = 'unsure';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.5);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-    $content_data['id'] = &$content_id;
-
-    $captcha_data = array(
-      'type' => 'image',
-      'content_id' => &$content_id,
-      'authorIp' => $base_data['authorIp'],
-    );
-    $result = $akismet->createCaptcha($captcha_data);
-    $this->assertAkismetWatchdogMessages();
-    $captcha_id = $this->assertResponseID('captcha_id', $result['id']);
-    $content_data['captcha_id'] = &$captcha_id;
-
-    $captcha_data = array(
-      'id' => &$captcha_id,
-      'content_id' => &$content_id,
-      'authorIp' => $base_data['authorIp'],
-      'authorId' => $base_data['authorId'],
-      'solution' => 'correct',
-    );
-    $result = $akismet->checkCaptcha($captcha_data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('solved', $result['solved'], 1);
-
-    $content_data['postBody'] = 'spam';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 1.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'spam');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-
-    // @todo Enable following sequence after fixing Testing API.
-    return;
-
-    // Sequence:
-    // - Post unsure content
-    // - Solve CAPTCHA
-    // - Post unsure content
-    // - Expect spam_classification 'ham'
-    // - Post ham content
-    // - Expect spam_classification 'ham'
-    // - Post unsure content
-    // - Expect spam_classification 'ham'
-    $this->resetResponseID();
-    $content_data = $base_data;
-    $content_data['postBody'] = 'unsure';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('spam_score', $result['spam_score'], 0.5);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'unsure');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-    $content_data['id'] = &$content_id;
-
-    $captcha_data = array(
-      'type' => 'image',
-      'content_id' => &$content_id,
-      'authorIp' => $base_data['authorIp'],
-    );
-    $result = $akismet->createCaptcha($captcha_data);
-    $this->assertAkismetWatchdogMessages();
-    $captcha_id = $this->assertResponseID('captcha_id', $result['id']);
-    $content_data['captcha_id'] = &$captcha_id;
-
-    $captcha_data = array(
-      'id' => &$captcha_id,
-      'content_id' => &$content_id,
-      'authorIp' => $base_data['authorIp'],
-      'authorId' => $base_data['authorId'],
-      'solution' => 'correct',
-    );
-    $result = $akismet->checkCaptcha($captcha_data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertSame('solved', $result['solved'], 1);
-
-    $content_data['postBody'] = 'unsure';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-
-    $content_data['postBody'] = 'ham';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-
-    $content_data['postBody'] = 'unsure';
-    $result = $akismet->checkContent($content_data);
-    $this->assertAkismetWatchdogMessages();
-    //$this->assertSame('spam_score', $result['spam_score'], 0.0);
-    $this->assertSame('spam_classification', $result['spam_classification'], 'ham');
-    $content_id = $this->assertResponseID('content_id', $result['id']);
-  }
-
-  /**
-   * Tests the language detection functionality at the API level.
-   */
-  function testCheckContentLanguage() {
-    // Note that Akismet supports more languages than those tested.
-    // Development server checks for the "lang-{language_code}" in content.
-    $tests = array(
-      'lang-en With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.' => array(
-        'en',
-      ),
-      'lang-en lang-de With 2.7 million residents, it is the most populous city in both the U.S. state of Illinois and the American Midwest.  Chicago ist seit der Mitte des 19. Jahrhunderts eine wichtige Handelsstadt in den Vereinigten Staaten.' => array(
-        'en',
-        'de',
-      ),
-      '!!!!!!!!!!!!!!!!!!!!!!!!!!!' => array(
-        'zxx',
-      ),
-    );
-
-    $akismet = akismet();
-    foreach ($tests as $string => $expected) {
-      $result = $akismet->checkContent(array(
-        'checks' => 'language',
-        'postBody' => $string,
-      ));
-      // Parse result values.
-      foreach ($result['languages'] as $item => $language) {
-        $this->assertTrue(in_array($language['languageCode'], $expected), 'Found returned language code ' . $language['languageCode'] . ' in expected languages.');
-      }
-    }
-  }
-
-  /**
-   * Tests akismet.getImageCaptcha().
-   */
-  function testGetImageCaptcha() {
-    $akismet = akismet();
-    // Ensure we get no SSL URL by default.
-    $data = array(
-      'type' => 'image',
-      'authorIp' => ip_address(),
-    );
-    $result = $akismet->createCaptcha($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(strpos($result['url'], 'http://') === 0, t('CAPTCHA URL uses HTTP protocol.'));
-
-    // Ensure we get a SSL URL when passing the 'ssl' parameter.
-    $data['ssl'] = TRUE;
-    $result = $akismet->createCaptcha($data);
-    $this->assertAkismetWatchdogMessages();
-    $this->assertTrue(strpos($result['url'], 'https://') === 0, t('CAPTCHA URL uses HTTPS protocol.'));
-  }
-
-  /**
-   * Tests akismet.checkCaptcha().
-   */
-  function testCheckCaptcha() {
-    $akismet = akismet();
-    // Ensure we can send an 'author_id'.
-    // Verifying no severe watchdog messages is sufficient, as unsupported
-    // parameters would trigger a XML-RPC error.
-    $uid = rand();
-    $data = array(
-      'type' => 'image',
-      'authorIp' => ip_address(),
-      'authorId' => $uid,
-    );
-    $result = $akismet->createCaptcha($data);
-    $this->assertAkismetWatchdogMessages();
-    $data['id'] = $this->assertResponseID('captcha_id', $result['id']);
-
-    $data += array(
-      'solution' => 'correct',
-    );
-    $result = $akismet->checkCaptcha($data);
-    $this->assertAkismetWatchdogMessages();
+    $this->assertSame('classification', $result, 'unsure');
   }
 }
 
@@ -1341,48 +1120,6 @@ class AkismetResponseLocalTestCase extends AkismetResponseTestCase {
     );
   }
 }
-
-/**
- * Tests low-level communication with configured server.
- */
-class AkismetResponseConfiguredTestCase extends AkismetWebTestCase {
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Server responses (configured)',
-      'description' => 'Tests that a configured endpoint behaves the same as specified endpoints.',
-      'group' => 'Akismet',
-    );
-  }
-
-  function setUp() {
-    parent::setUp(array('akismet_test_server', 'akismet_test', 'akismet'));
-  }
-
-  function testConfiguredUrl() {
-    // Set the configured URL to be the same as the test server endpoing.
-    $test_url = $this->getAbsoluteURL('akismet-test/rest');
-    $stripped = preg_replace('/^[a-z]+:\\/\\//i', '', $test_url);
-    variable_set('akismet_api_endpoint', $stripped);
-
-    // Clear out Akismet local variable so that it can be instantiated with the
-    // correct endpoint.
-    $this->getClient(TRUE);
-
-    // The DrupalTest class should now use the local test server.
-    $this->setKeys();
-    $this->assertValidKeys();
-
-    // Check the watchdog from the key assertion is using the correct server.
-    // If the keys passed assertion, then they were created on the right server
-    // too.
-    foreach ($this->messages as $row) {
-      $output = theme_dblog_message(array('event' => $row, 'link' => FALSE));
-      $this->assertTrue(strpos($output, 'Request: POST ' . $test_url . '/v1/site/') !== FALSE, 'Keys verified from configured endpoint.');
-    }
-  }
-}
-
 
 class AkismetAccessTestCase extends AkismetWebTestCase {
   protected $akismetClass = 'AkismetDrupalTestLocal';
@@ -2254,8 +1991,8 @@ class AkismetProfileFormsTestCase extends AkismetWebTestCase {
         'register' => 1,
       );
       $fields[$name] = $edit + array(
-        'type' => $type,
-      );
+          'type' => $type,
+        );
       $this->drupalPost('admin/config/people/profile/add/' . $type, $edit, t('Save field'));
     }
 
@@ -3621,14 +3358,14 @@ class AkismetAnalysisTestCase extends AkismetWebTestCase {
     $edit = array();
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertResponseIDInForm('content_id');
-//    $this->assertResponseIDInForm('captcha_id');
+    //    $this->assertResponseIDInForm('captcha_id');
     $this->assertCaptchaField();
     $edit = array(
       'akismet[captcha]' => 'incorrect',
     );
     $this->drupalPost(NULL, $edit, 'Submit');
     $this->assertResponseIDInForm('content_id');
-//    $this->assertResponseIDInForm('captcha_id');
+    //    $this->assertResponseIDInForm('captcha_id');
     $this->assertCaptchaField();
 
     $edit = array(
@@ -4306,8 +4043,8 @@ class AkismetCaptchaTestCase extends AkismetWebTestCase {
     // Ensure that any changes to variables in the other thread are picked up.
     $this->refreshVariables();
     $this->verbose('POST request to: ' . $path .
-                   '<hr />Ending URL: ' . $this->getUrl() .
-                   '<hr />' . $out);
+      '<hr />Ending URL: ' . $this->getUrl() .
+      '<hr />' . $out);
 
     $this->assertResponse(200);
     $this->assertText('akismet-captcha-player.swf');
@@ -4767,10 +4504,10 @@ abstract class AkismetModerationBaseTestCase extends AkismetWebTestCase {
     // Ensure that any changes to variables in the other thread are picked up.
     $this->refreshVariables();
     $this->verbose('POST request to: ' . $path .
-                   '<hr />Ending URL: ' . $this->getUrl() .
-                   '<hr />Headers: ' . highlight_string('<?php ' . var_export($headers, TRUE), TRUE) .
-                   '<hr />Fields: ' . highlight_string('<?php ' . var_export($data, TRUE), TRUE) .
-                   '<hr />' . $out);
+      '<hr />Ending URL: ' . $this->getUrl() .
+      '<hr />Headers: ' . highlight_string('<?php ' . var_export($headers, TRUE), TRUE) .
+      '<hr />Fields: ' . highlight_string('<?php ' . var_export($data, TRUE), TRUE) .
+      '<hr />' . $out);
     return $out;
   }
 

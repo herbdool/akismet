@@ -156,7 +156,7 @@ function akismet_test_server_endpoint_verify_key() {
  *   The body of the response.
  */
 function akismet_test_server_endpoint_comment_check($params) {
-  $required = array('blog', 'user_ip', 'user_agent');
+  $required = array('blog', 'user_ip');
   foreach ($required as $key) {
     if (empty($params[$key])) {
       drupal_add_http_header('X-akismet-debug-help', 'Empty "' . $key . '" value');

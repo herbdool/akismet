@@ -185,20 +185,57 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
   function __construct() {
     // Replace server/endpoint with our local fake server.
     list(, $server) = explode('://', $GLOBALS['base_url'], 2);
-    $this->server = $server . '/akismet-test';
+    $this->server = 'http://' . $server . '/akismet-test';
 
     parent::__construct();
   }
 
+  /**
+   * Implements Akismet::loadConfiguration().
+   */
+  public function loadConfiguration($name) {
+    $name = $this->configuration_map[$name];
+    $variables = array(
+      'akismet_api_key' => 'valid-key',
+    );
+    return $variables[$name];
+  }
+
+
   function getAkismetURL($authenticate) {
     if ($authenticate) {
-      return $this->server . '/' . $this->key . '/1.1';
+      return $this->server . '/' . $this->key;
     }
     else {
-      return $this->server . '/unauthenticated/1.1';
+      return $this->server . '/unauthenticated';
     }
   }
 
+  /**
+   * Overrides AkismetDrupal::request().
+   *
+   * Passes-through SimpleTest assertion HTTP headers from child-child-site and
+   * triggers errors to make them appear in parent site (where tests are ran).
+   *
+   * @see http://drupal.org/node/875342
+   */
+  protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
+    $response = parent::request($method, $server, $path, $query, $headers);
+    $keys = preg_grep('@^x-drupal-assertion-@', array_keys($response->headers));
+    foreach ($keys as $key) {
+      $header = $response->headers[$key];
+      $header = unserialize(urldecode($header));
+      $message = strtr('%type: !message in %function (line %line of %file).', array(
+        '%type' => $header[1],
+        '!message' => $header[0],
+        '%function' => $header[2]['function'],
+        '%line' => $header[2]['line'],
+        '%file' => $header[2]['file'],
+      ));
+      trigger_error($message, E_USER_ERROR);
+    }
+    return $response;
+  }
 }
 
 class AkismetDrupalTestInvalid extends AkismetDrupalTest {
