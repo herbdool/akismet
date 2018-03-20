@@ -222,7 +222,9 @@ function akismet_install() {
 
   // Point the user to Akismet's settings page after installation.
   $requirements = akismet_requirements('runtime', FALSE);
-  drupal_set_message($requirements['akismet']['description'], 'warning');
+  if (isset($requirements['akismet']['description'])) {
+    drupal_set_message($requirements['akismet']['description'], 'warning');
+  }
 }
 
 /**

@@ -1440,7 +1440,7 @@ function akismet_validate_analysis(&$form, &$form_state) {
   }
 
   // Handle the spam check result.
-  switch ($result) {
+  switch ($result['classification']) {
     case 'ham':
       akismet_log(array(
         'message' => 'Ham: %teaser',

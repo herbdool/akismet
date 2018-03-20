@@ -200,7 +200,7 @@ abstract class Akismet {
       $server = _akismet_prepare_server_vars($data['server']);
       unset($data['server']);
     }
-    $parameters = $data + $server;
+    $parameters = (array) $data + (array) $server;
 
     if ($feedback === 'spam') {
       $result = $this->query('POST', 'submit-spam', $parameters);

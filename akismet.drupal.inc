@@ -190,17 +190,6 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
     parent::__construct();
   }
 
-  /**
-   * Implements Akismet::loadConfiguration().
-   */
-  public function loadConfiguration($name) {
-    $name = $this->configuration_map[$name];
-    $variables = array(
-      'akismet_api_key' => 'valid-key',
-    );
-    return $variables[$name];
-  }
-
 
   function getAkismetURL($authenticate) {
     if ($authenticate) {
@@ -238,9 +227,49 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
   }
 }
 
+/**
+ * Drupal Akismet client implementation using an invalid server.
+ */
 class AkismetDrupalTestInvalid extends AkismetDrupalTest {
+
+  private $currentAttempt = 0;
+
+  private $originalServer;
+
+  /**
+   * Overrides MollomDrupalTest::__construct().
+   */
   function __construct() {
-    $this->server = 'fake-server';
+    $this->originalServer = $this->server;
+    $this->configuration_map['server'] = 'mollom_test_invalid_api_endpoint';
     parent::__construct();
+
+    $this->saveConfiguration('server', 'fake-host');
+  }
+
+  /**
+   * Overrides Akismet::query().
+   */
+  public function query($method, $path, $data, $authenticate = TRUE) {
+    $this->currentAttempt = 0;
+    return parent::query($method, $path, $data, $authenticate);
+  }
+
+  /**
+   * Overrides Akismet::handleRequest().
+   *
+   * Akismet::$server is replaced with an invalid server, so all requests will
+   * result in a network error. However, if the 'akismet_testing_server_failover'
+   * variable is set to TRUE, then the last request attempt will succeed.
+   */
+  protected function handleRequest($method, $server, $path, $data) {
+    $this->currentAttempt++;
+
+    if (variable_get('akismet_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
+      // Prior to PHP 5.3, there is no late static binding, so there is no way
+      // to access the original value of AkismetDrupalTest::$server.
+      $server = strtr($server, array($this->server => $this->originalServer));
+    }
+    return parent::handleRequest($method, $server, $path, $data);
   }
 }

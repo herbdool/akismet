@@ -187,14 +187,14 @@ function akismet_test_server_endpoint_comment_check($params) {
   // strings is found in the content being tested.
   // Note that the live API doesn't do this, even in test mode.
   $text = $params['comment_content'];
-  if (strpos($text, 'spam') !== -1) {
+  if (strpos($text, 'spam') !== FALSE) {
     drupal_add_http_header('X-akismet-pro-tip', 'discard');
     return 'true';
   }
-  if (strpos($text, 'unsure') !== -1) {
+  if (strpos($text, 'unsure') !== FALSE) {
     return 'true';
   }
-  if (strpos($text, 'ham') !== -1) {
+  if (strpos($text, 'ham') !== FALSE) {
     return 'false';
   }
 
