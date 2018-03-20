@@ -230,7 +230,7 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
 /**
  * Drupal Akismet client implementation using an invalid server.
  */
-class AkismetDrupalTestInvalid extends AkismetDrupalTest {
+class AkismetDrupalTestInvalid extends AkismetDrupalTestLocal {
 
   private $currentAttempt = 0;
 
@@ -240,9 +240,9 @@ class AkismetDrupalTestInvalid extends AkismetDrupalTest {
    * Overrides MollomDrupalTest::__construct().
    */
   function __construct() {
-    $this->originalServer = $this->server;
-    $this->configuration_map['server'] = 'mollom_test_invalid_api_endpoint';
+    $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';
     parent::__construct();
+    $this->originalServer = $this->server;
 
     $this->saveConfiguration('server', 'fake-host');
   }

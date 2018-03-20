@@ -1303,7 +1303,7 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     // Check the text analysis protected form.
     $this->web_user = $this->drupalCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
     $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid);
+    $this->drupalGet('comment/reply/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
     $this->assertText('privacy policy');
 
@@ -1331,7 +1331,7 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     // Check the text analysis protected form.
     $this->web_user = $this->drupalCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
     $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid);
+    $this->drupalGet('comment/reply/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
     $this->assertText('privacy policy');
 
@@ -1373,9 +1373,9 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $edit = array(
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->drupalPost(NULL, $edit, t('Preview'));
     $this->assertNoText($this->fallback_message);
-    $this->drupalPost(NULL, array(), t('Save'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->drupalPost(NULL, array(), t('Save'));
     $this->assertNoText($this->fallback_message);
   }
 }
