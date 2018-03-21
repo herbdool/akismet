@@ -186,16 +186,18 @@ function akismet_test_server_endpoint_comment_check($params) {
   // For easier testing, return 'spam', 'ham', or 'unsure' if any of those
   // strings is found in the content being tested.
   // Note that the live API doesn't do this, even in test mode.
-  $text = $params['comment_content'];
-  if (strpos($text, 'spam') !== FALSE) {
-    drupal_add_http_header('X-akismet-pro-tip', 'discard');
-    return 'true';
-  }
-  if (strpos($text, 'unsure') !== FALSE) {
-    return 'true';
-  }
-  if (strpos($text, 'ham') !== FALSE) {
-    return 'false';
+  if (isset($params['comment_content'])) {
+    $text = $params['comment_content'];
+    if (strpos($text, 'spam') !== FALSE) {
+      drupal_add_http_header('X-akismet-pro-tip', 'discard');
+      return 'true';
+    }
+    if (strpos($text, 'unsure') !== FALSE) {
+      return 'true';
+    }
+    if (strpos($text, 'ham') !== FALSE) {
+      return 'false';
+    }
   }
 
   // If we reach this point, none of the testing parameters was sent.

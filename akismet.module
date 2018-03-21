@@ -709,7 +709,7 @@ function akismet_form_info($form_id, $module, $form_list = NULL) {
     'entity' => NULL,
     'bundle' => NULL,
     // Configuration properties.
-    'mode' => NULL,
+    'mode' => AKISMET_MODE_ANALYSIS,
     'checks' => array(),
     'enabled_fields' => array(),
     'unsure' => 'moderate',

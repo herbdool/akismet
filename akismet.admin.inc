@@ -311,7 +311,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
           'html' => TRUE,
         );
       }
-      $form['akismet']['discard']['#description'] = t('Note that the spam check is skipped for users having any of these permissions: !permission-list', array(
+      $form['akismet']['bypass']['#markup'] = t('Note that the spam check is skipped for users having any of these permissions: !permission-list', array(
         '!permission-list' => theme('links', array(
           'links' => $permissions,
           // @todo D7: Something went entirely wrong: system.menus.css makes ANY
