@@ -99,6 +99,13 @@ function akismet_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      'guid' => array(
+        'description' => 'The GUID returned by Akismet',
+        'type' => 'varchar',
+        'length' => 36,
+        'not null' => TRUE,
+        'default' => '',
+      ),
       'changed' => array(
         'description' => 'Unix timestamp when the data was changed.',
         'type' => 'int',
@@ -123,6 +130,9 @@ function akismet_schema() {
         'type' => 'blob',
         'serialize' => TRUE,
        ),
+    ),
+    'indexes' => array(
+      'guid' => array('guid'),
     ),
     'primary key' => array('entity', 'id'),
     'foreign keys' => array(

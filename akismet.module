@@ -532,6 +532,23 @@ function akismet_form_alter(&$form, &$form_state, $form_id) {
       $form['#validate'][] = 'akismet_validate_analysis';
       $form['#validate'][] = 'akismet_validate_post';
 
+      // Append a submit handler to store Akismet session data. Requires that
+      // the primary submit handler has run already, so a potential 'post_id'
+      // mapping can be retrieved from $form_state['values'].
+      // @todo Core: node_form_submit() uses a button-level submit handler,
+      //   which invokes form-level submit handlers before the node/entity is
+      //   saved, so $form_state does not contain the new node ID yet. There is
+      //   no #post_submit property or form processing phase, we could rely on.
+      //   Potentially applies to other contrib entities, too.
+      // @see http://drupal.org/node/1150756
+      if (isset($form_state['build_info']['base_form_id']) && $form_state['build_info']['base_form_id'] == 'node_form') {
+        $form_submit_key = &$form['actions']['submit'];
+      }
+      else {
+        $form_submit_key = &$form;
+      }
+      $form_submit_key['#submit'][] = 'akismet_form_submit';
+
       // Add link to privacy policy on forms protected via textual analysis,
       // if enabled.
       if ($akismet_form['mode'] == AKISMET_MODE_ANALYSIS && variable_get('akismet_privacy_link', 1)) {
@@ -1308,34 +1325,6 @@ function akismet_element_info() {
 /**
  * #process callback for #type 'akismet'.
  *
- * Akismet supports two fundamentally different protection modes:
- * - For text analysis, the state of a post is essentially tracked by the Akismet
- *   API/backend:
- *   - Every form submission attempt (re-)sends the post data to Akismet, and the
- *     API ensures to return the correct spam_classification each time.
- *   - The client-side logic fully relies on the returned spam_classification
- *     value to trigger the corresponding actions and does not track the state
- *     of the form submission attempt locally.
- *   - For example, when Akismet is "unsure" and the user solved the CAPTCHA,
- *     then subsequent Content API responses will return "ham" instead of
- *     "unsure", so the user is not asked to solve more than one CAPTCHA.
- * - For CAPTCHA-only, the solution state of a CAPTCHA has to be tracked locally:
- *   - Unlike text analysis, a CAPTCHA can only be solved or not. Additionally,
- *     a CAPTCHA cannot be solved more than once. The Akismet API only returns
- *     (once) whether a CAPTCHA has been solved correctly. A previous state
- *     cannot be queried from Akismet.
- *   - State-tracking would not be necessary, if there could not be other form
- *     validation errors preventing the form from submitting directly, as well as
- *     "Preview" buttons that may rebuild the entire form from scratch (if there
- *     are no validation errors).
- *   - To track state, the Form API cache is enabled, which allows to store and
- *     retrieve the entire $form_state of a previous submission (attempt).
- *   - Furthermore, page caching is force-disabled, so as to ensure that cached
- *     form data is not re-used by different users/visitors.
- *   - In combination with the Form API cache, this is essentially equal to
- *     force-starting a session for all users that try to submit a CAPTCHA-only
- *     protected form. However, a session would persist across other pages.
- *
  * @see akismet_form_alter()
  * @see akismet_element_info()
  */
@@ -1415,19 +1404,20 @@ function akismet_validate_analysis(&$form, &$form_state) {
     $data['type'] = $form_state['akismet']['type'];
   }
   $data['server'] = _akismet_prepare_server_vars($_SERVER);
-  $classification = akismet()->checkContent($data);
+  $response = akismet()->checkContent($data);
 
   // Use all available data properties for log messages below.
   $data += $all_data;
 
   // Trigger global fallback behavior if there is a unexpected result.
-  if (is_int($classification)) {
+  if (is_int($response)) {
     _akismet_fallback();
     return;
   }
 
   $result = $data;
-  $result['classification'] = $classification;
+  $result['classification'] = $response['classification'];
+  $result['guid'] = $response['guid'];
 
   // Store the response returned by Akismet.
   $form_state['akismet']['response'] = $result;
@@ -1557,7 +1547,8 @@ function akismet_form_submit($form, &$form_state) {
     // We only consider non-empty and non-zero values as valid entity ids.
     if (!empty($values['post_id'])) {
       // Save the Akismet session data.
-      $data = new stdClass;
+      $data = (object) $values;
+      $data->entity = $form_state['akismet']['entity'];
       $data->id = $values['post_id'];
       $data->request = $values;
       $data->request['server'] = $_SERVER;
@@ -1881,11 +1872,13 @@ function _akismet_format_string($string, array $args = array()) {
  *   On success, the text response from Akismet. On failure, the error code.
  */
 function _akismet_send_feedback($data, $reason = 'spam') {
+  $feedback = (array) $data->request;
+  $feedback['guid'] = $data->guid;
   if ($reason === 'spam') {
-    $result = akismet()->sendFeedback((array) $data->request, 'spam');
+    $result = akismet()->sendFeedback($feedback, 'spam');
   }
   else {
-    $result = akismet()->sendFeedback((array) $data->request, 'ham');
+    $result = akismet()->sendFeedback($feedback, 'ham');
   }
   akismet_log(array(
     'message' => 'Reported %feedback for @resource %id.',
@@ -1992,6 +1985,10 @@ function akismet_entity_insert($entity, $type) {
     $data = new stdClass;
     $data->entity = $type;
     $data->id = $id;
+    $data->classification = $entity->akismet['classification'];
+    if (!empty($entity->akismet['guid'])) {
+      $data->guid = $entity->akismet['guid'];
+    }
     $data->request = (object) $entity->akismet;
     akismet_data_save($data);
   }

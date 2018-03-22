@@ -160,9 +160,11 @@ abstract class Akismet {
    *     of 'administrator' will guarantee that Akismet sees the content as ham.
    *   - server: The contents of $_SERVER, to be added to the request.
    *
-   * @return int|string
-   *   On failure, the status code. On success, the classification ('ham',
-   *   'spam', or 'unsure').
+   * @return int|array
+   *   On failure, the status code. On success, an associative array keyed as
+   *   follows:
+   *   - guid: The GUID returned by Akismet.
+   *   - classification: the spam classification ('ham', 'spam', or 'unsure').
    */
   public function checkContent(array $data = array()) {
     if (empty($data['server'])) {
@@ -178,16 +180,26 @@ abstract class Akismet {
       return $result->code;
     }
 
+    $guid = $result->guid();
     if ($result->body === 'false') {
-      return 'ham';
+      return array(
+        'classification' => 'ham',
+        'guid' => $guid,
+      );
     }
 
     if (!empty($result->headers['x-akismet-pro-tip'])) {
-      return 'spam';
+      return array(
+        'classification' => 'spam',
+        'guid' => $guid,
+      );
     }
 
     if ($result->body === 'true') {
-      return 'unsure';
+      return array(
+        'classification' => 'unsure',
+        'guid' => $guid,
+      );
     }
 
     // If we get to this point, there was an error of some kind that we didn't
@@ -523,6 +535,13 @@ class AkismetResponse {
 
   public function __get($name) {
     return $this->{$name};
+  }
+
+  public function guid() {
+    if (!empty($this->headers['x-akismet-guid'])) {
+      return $this->headers['x-akismet-guid'];
+    }
+    return FALSE;
   }
 }
 
