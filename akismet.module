@@ -556,7 +556,7 @@ function akismet_form_alter(&$form, &$form_state, $form_id) {
           '#prefix' => '<div class="description akismet-privacy">',
           '#suffix' => '</div>',
           '#markup' => t('By submitting this form, you accept the <a href="@privacy-policy-url" class="akismet-target" rel="nofollow">Akismet privacy policy</a>.', array(
-            '@privacy-policy-url' => 'https://www.akismet.com/web-service-privacy-policy',
+            '@privacy-policy-url' => 'http://automattic.com/privacy/',
           )),
           '#weight' => 10,
         );
