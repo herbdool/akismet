@@ -18,7 +18,7 @@ function akismet_admin_site_status($force = FALSE, $update = FALSE) {
     module_load_install('akismet');
     $requirements = akismet_requirements('runtime', FALSE);
     if (isset($requirements['akismet']['description'])) {
-      drupal_set_message($requirements['akismet']['description'], 'error');
+      backdrop_set_message($requirements['akismet']['description'], 'error');
     }
   }
   return $status;
@@ -61,7 +61,7 @@ function akismet_admin_form_list() {
   }
 
   // Sort forms by title (including module name prefix).
-  uasort($forms, 'drupal_sort_title');
+  backdrop_sort($forms, array('title' => SORT_STRING));
 
   $rows = array();
   foreach ($forms as $form_id => $akismet_form) {
@@ -93,7 +93,7 @@ function akismet_admin_form_list() {
     else {
       $row[] = '';
       $row_attributes['class'] = array('error');
-      drupal_set_message(t("%module module's %form_id form no longer exists.", array(
+      backdrop_set_message(t("%module module's %form_id form no longer exists.", array(
         '%form_id' => $form_id,
         '%module' => isset($module_info[$akismet_form['module']]['name']) ? t($module_info[$akismet_form['module']]['name']) : $akismet_form['module'],
       )), 'warning');
@@ -132,8 +132,8 @@ function akismet_admin_form_options() {
   // If all registered forms are configured already, output a message, and
   // redirect the user back to overview.
   if (empty($form_list)) {
-    drupal_set_message(t('All available forms are protected already.'));
-    drupal_goto('admin/config/content/akismet');
+    backdrop_set_message(t('All available forms are protected already.'));
+    backdrop_goto('admin/config/content/akismet');
   }
 
   // Load module information.
@@ -191,7 +191,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
   );
   $form['#attached'] = array(
     'js' => array(
-      drupal_get_path('module', 'akismet') . '/akismet.admin.js',
+      backdrop_get_path('module', 'akismet') . '/akismet.admin.js',
     ),
   );
 
@@ -211,7 +211,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
       break;
 
     case 'configure':
-      drupal_set_title(t('Configure %form-title protection', array('%form-title' => $akismet_form['title'])), PASS_THROUGH);
+      backdrop_set_title(t('Configure %form-title protection', array('%form-title' => $akismet_form['title'])), PASS_THROUGH);
       $recommended = t('recommended');
 
       $form['akismet']['form_id'] = array(
@@ -304,7 +304,7 @@ function akismet_admin_configure_form($form, &$form_state, $akismet_form = NULL)
       foreach ($akismet_form['bypass access'] as $permission) {
         // @todo D7: Array keys are used as CSS class for the link list item,
         //   but are not sanitized: http://drupal.org/node/98696
-        $permissions[drupal_html_class($permission)] = array(
+        $permissions[backdrop_html_class($permission)] = array(
           'title' => $all_permissions[$permission]['title'],
           'href' => 'admin/people/permissions',
           'fragment' => 'module-' . $all_permissions[$permission]['module'],
@@ -364,10 +364,10 @@ function akismet_admin_configure_form_submit($form, &$form_state) {
 
   $status = akismet_form_save($akismet_form);
   if ($status === SAVED_NEW) {
-    drupal_set_message(t('The form protection has been added.'));
+    backdrop_set_message(t('The form protection has been added.'));
   }
   else {
-    drupal_set_message(t('The form protection has been updated.'));
+    backdrop_set_message(t('The form protection has been updated.'));
   }
 
   $form_state['redirect'] = 'admin/config/content/akismet';
@@ -401,7 +401,7 @@ function akismet_admin_unprotect_form($form, &$form_state, $akismet_form) {
 function akismet_admin_unprotect_form_submit($form, &$form_state) {
   akismet_form_delete($form_state['values']['akismet']['form_id']);
 
-  drupal_set_message(t('The form protection has been removed.'));
+  backdrop_set_message(t('The form protection has been removed.'));
 
   $form_state['redirect'] = 'admin/config/content/akismet';
 }
@@ -422,7 +422,7 @@ function akismet_admin_settings($form, &$form_state) {
   $check = empty($_POST);
   $status = akismet_admin_site_status($check);
   if ($check && $status['isVerified'] && !variable_get('akismet_testing_mode', 0)) {
-    drupal_set_message(t('Akismet verified your key. The service is operating correctly.'));
+    backdrop_set_message(t('Akismet verified your key. The service is operating correctly.'));
   }
 
   // The key is not #required, so that users can install this module and

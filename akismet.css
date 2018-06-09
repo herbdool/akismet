@@ -1,32 +1,6 @@
-.akismet-captcha-container span,
-#edit-akismet-captcha {
-  display: block;
-}
 
 /* Help themes to properly display Akismet's log messages. */
 .dblog-event pre,
 #simpletest-result-form table td {
   white-space: pre-wrap;
-}
-
-/* Allow CAPTCHA rendering to take full form width. */
-.form-item-akismet-captcha label[for="edit-akismet-captcha"] {
-    float: none;
-}
-
-/* Accessibilty focus helper for audio CAPTCHA. */
-.akismet_captcha_flash_player:focus{
-    border: yellow 2px solid;
-}
-
-/* Refresh CAPTCHA icon */
-.akismet-captcha-container {
-  display: inline-block;
-  position: relative;
-}
-.akismet-captcha-container .akismet-refresh-captcha {
-  position: absolute;
-}
-.akismet-captcha-container .akismet-captcha-content {
-  padding-left: 20px;
 }

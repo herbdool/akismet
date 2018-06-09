@@ -1,14 +1,10 @@
 name = Akismet
 description = Protects your site from spam by sending user-submitted content to the Akismet anti-spam service.
-core = 7.x
+backdrop = 1.x
+type = module
 configure = admin/config/content/akismet
-
-test_dependencies[] = ctools
 
 stylesheets[all][] = akismet.css
 
 files[] = akismet.class.inc
 files[] = akismet.drupal.inc
-files[] = tests/akismet.test
-files[] = tests/akismet.class.test
-

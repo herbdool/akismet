@@ -5,7 +5,7 @@
  * Fake Akismet REST Testing server implementation.
  *
  * This is a simplified re-implementation of Akismet's REST Testing API, which
- * is used by functional Drupal module tests only.
+ * is used by functional Backdrop module tests only.
  *
  * While the duplication means additional engineering work, the fake server
  * provides unique testing facilities that are not possible to achieve with
@@ -34,11 +34,11 @@
  * behaviors in the past.
  *
  * The module communicates with this fake server when the 'akismet_class'
- * variable is set to 'AkismetDrupalTestLocal'. The fake test server module is
+ * variable is set to 'AkismetBackdropTestLocal'. The fake test server module is
  * automatically enabled for tests when needed.
  *
  * @see AkismetWebTestCase::setUp()
- * @see AkismetDrupalTestLocal
+ * @see AkismetBackdropTestLocal
  *
  * The fake server architecture is kept as simple as possible:
  *
@@ -137,10 +137,10 @@ function akismet_test_server_endpoint_verify_key() {
   }
   else {
     if (empty($key)) {
-      drupal_add_http_header('X-akismet-debug-help', 'Empty "key" value');
+      backdrop_add_http_header('X-akismet-debug-help', 'Empty "key" value');
     }
     elseif (empty($blog)) {
-      drupal_add_http_header('X-akismet-debug-help', 'Empty "blog" value');
+      backdrop_add_http_header('X-akismet-debug-help', 'Empty "blog" value');
     }
     return 'invalid';
   }
@@ -159,17 +159,17 @@ function akismet_test_server_endpoint_comment_check($params) {
   $required = array('blog', 'user_ip');
   foreach ($required as $key) {
     if (empty($params[$key])) {
-      drupal_add_http_header('X-akismet-debug-help', 'Empty "' . $key . '" value');
+      backdrop_add_http_header('X-akismet-debug-help', 'Empty "' . $key . '" value');
       return "Missing required field: $key.";
     }
   }
 
   if (isset($params['guid'])) {
-    drupal_add_http_header('X-akismet-guid', $params['guid']);
+    backdrop_add_http_header('X-akismet-guid', $params['guid']);
   }
   else {
     // This is obviously not a real GUID. That's okay.
-    drupal_add_http_header('X-akismet-guid', uniqid('guid-'));
+    backdrop_add_http_header('X-akismet-guid', uniqid('guid-'));
   }
 
   // From the Akismet API docs: 'If you are having trouble triggering a spam
@@ -183,7 +183,7 @@ function akismet_test_server_endpoint_comment_check($params) {
     // header under any specifiable test circumstances. :( Here, we make the
     // 'akismet-guaranteed-spam@example.com' email into a guaranteed 'yes this
     // is egregious spam' response, but the API doesn't.
-    drupal_add_http_header('X-akismet-pro-tip', 'discard');
+    backdrop_add_http_header('X-akismet-pro-tip', 'discard');
     return 'true';
   }
 
@@ -197,7 +197,7 @@ function akismet_test_server_endpoint_comment_check($params) {
   if (isset($params['comment_content'])) {
     $text = $params['comment_content'];
     if (strpos($text, 'spam') !== FALSE) {
-      drupal_add_http_header('X-akismet-pro-tip', 'discard');
+      backdrop_add_http_header('X-akismet-pro-tip', 'discard');
       return 'true';
     }
     if (strpos($text, 'unsure') !== FALSE) {
@@ -230,20 +230,20 @@ function akismet_test_server_endpoint_submit_feedback($type, $params) {
   $required = array('blog', 'user_ip');
   foreach ($required as $key) {
     if (empty($params[$key])) {
-      drupal_add_http_header('X-akismet-debug-help', 'Empty "' . $key . '" value');
+      backdrop_add_http_header('X-akismet-debug-help', 'Empty "' . $key . '" value');
       return "Missing required field: $key.";
     }
   }
 
   if (isset($params['guid'])) {
     $guid = $params['guid'];
-    drupal_add_http_header('X-akismet-guid', $params['guid']);
+    backdrop_add_http_header('X-akismet-guid', $params['guid']);
   }
   else {
     // This is obviously not a real GUID. Luckily we don't need one.
     $guid = uniqid('guid-feedback-');
     $params['guid'] = $guid;
-    drupal_add_http_header('X-akismet-guid', $guid);
+    backdrop_add_http_header('X-akismet-guid', $guid);
   }
 
   $storage = variable_get('akismet_test_server_' . $type, array());
@@ -258,20 +258,20 @@ function akismet_test_server_endpoint_submit_feedback($type, $params) {
  */
 function akismet_test_server_rest_deliver($page_callback_result) {
   // All fake-server responses are not cached.
-  drupal_page_is_cacheable(FALSE);
+  backdrop_page_is_cacheable(FALSE);
 
-  drupal_add_http_header('Content-Type', 'text/plain; charset=utf-8');
+  backdrop_add_http_header('Content-Type', 'text/plain; charset=utf-8');
 
   if (is_int($page_callback_result)) {
     switch ($page_callback_result) {
       case MENU_NOT_FOUND:
-        drupal_add_http_header('Status', '404 Not Found');
+        backdrop_add_http_header('Status', '404 Not Found');
         $message = '<html><head><title>404 Not Found</title></head><body bgcolor="white"><center><h1>404 Not Found</h1></center><hr><center>nginx</center></body></html>';
         break;
 
       // As far as I can tell the Akismet API only ever issues 404s or 200s.
       default:
-        drupal_add_http_header('Status', '400 Bad Request');
+        backdrop_add_http_header('Status', '400 Bad Request');
         $message = 'Bad request';
         break;
     }
@@ -283,5 +283,5 @@ function akismet_test_server_rest_deliver($page_callback_result) {
   print $message;
 
   // Perform end-of-request tasks.
-  drupal_page_footer();
+  backdrop_page_footer();
 }

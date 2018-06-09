@@ -2,13 +2,13 @@
 
 /**
  * @file
- * Akismet client class for Drupal.
+ * Akismet client class for Backdrop.
  */
 
 /**
- * Drupal Akismet client implementation.
+ * Backdrop Akismet client implementation.
  */
-class AkismetDrupal extends Akismet {
+class AkismetBackdrop extends Akismet {
 
   /**
    * Overrides the connection timeout based on module configuration.
@@ -21,7 +21,7 @@ class AkismetDrupal extends Akismet {
   }
 
   /**
-   * Mapping of configuration names to Drupal variables.
+   * Mapping of configuration names to Backdrop variables.
    *
    * @see Akismet::loadConfiguration()
    */
@@ -42,10 +42,10 @@ class AkismetDrupal extends Akismet {
    */
   public function saveConfiguration($name, $value) {
     // Set local variable.
-    if (property_exists('AkismetDrupal', $name)) {
+    if (property_exists('AkismetBackdrop', $name)) {
       $this->{$name} = $value;
     }
-    // Persist in Drupal.
+    // Persist in Backdrop.
     $name = $this->configuration_map[$name];
     variable_set($name, $value);
   }
@@ -62,10 +62,10 @@ class AkismetDrupal extends Akismet {
    * Implements Akismet::getUserAgentInformation().
    */
   public function getUserAgentInformation() {
-    // Retrieve Drupal distribution and installation profile information.
+    // Retrieve Backdrop distribution and installation profile information.
     $profile = drupal_get_profile();
     $profile_info = system_get_info('module', $profile) + array(
-      'distribution_name' => 'Drupal',
+      'distribution_name' => 'Backdrop',
       'version' => VERSION,
     );
 
@@ -164,9 +164,9 @@ class AkismetDrupal extends Akismet {
 }
 
 /**
- * Drupal Akismet client implementation using test parameter.
+ * Backdrop Akismet client implementation using test parameter.
  */
-class AkismetDrupalTest extends AkismetDrupal {
+class AkismetBackdropTest extends AkismetBackdrop {
 
   /**
    * {@inheritdoc}
@@ -177,10 +177,10 @@ class AkismetDrupalTest extends AkismetDrupal {
   }
 }
 
-class AkismetDrupalTestLocal extends AkismetDrupalTest {
+class AkismetBackdropTestLocal extends AkismetBackdropTest {
 
   /**
-   * Overrides AkismetDrupalTest::__construct().
+   * Overrides AkismetBackdropTest::__construct().
    */
   function __construct() {
     // Replace server/endpoint with our local fake server.
@@ -201,7 +201,7 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
   }
 
   /**
-   * Overrides AkismetDrupal::request().
+   * Overrides AkismetBackdrop::request().
    *
    * Passes-through SimpleTest assertion HTTP headers from child-child-site and
    * triggers errors to make them appear in parent site (where tests are ran).
@@ -228,16 +228,16 @@ class AkismetDrupalTestLocal extends AkismetDrupalTest {
 }
 
 /**
- * Drupal Akismet client implementation using an invalid server.
+ * Backdrop Akismet client implementation using an invalid server.
  */
-class AkismetDrupalTestInvalid extends AkismetDrupalTestLocal {
+class AkismetBackdropTestInvalid extends AkismetBackdropTestLocal {
 
   private $currentAttempt = 0;
 
   private $originalServer;
 
   /**
-   * Overrides MollomDrupalTest::__construct().
+   * Overrides MollomBackdropTest::__construct().
    */
   function __construct() {
     $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';
@@ -267,7 +267,7 @@ class AkismetDrupalTestInvalid extends AkismetDrupalTestLocal {
 
     if (variable_get('akismet_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
       // Prior to PHP 5.3, there is no late static binding, so there is no way
-      // to access the original value of AkismetDrupalTest::$server.
+      // to access the original value of AkismetBackdropTest::$server.
       $server = strtr($server, array($this->server => $this->originalServer));
     }
     return parent::handleRequest($method, $server, $path, $data);

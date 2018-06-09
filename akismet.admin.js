@@ -3,13 +3,13 @@
 /**
  * Attaches jQuery MultiSelect.
  */
-Drupal.behaviors.akismetMultiSelect = {
+Backdrop.behaviors.akismetMultiSelect = {
   attach: function (context) {
     if ($().chosen) {
       $(context).find('select[multiple]').chosen({
         width: '90%',
         // @see search-results.tpl.php
-        no_results_text: Drupal.t('Your search yielded no results')
+        no_results_text: Backdrop.t('Your search yielded no results')
       });
     }
 

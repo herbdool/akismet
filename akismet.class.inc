@@ -234,7 +234,7 @@ abstract class Akismet {
    *
    * @return array
    *   An associative array containing:
-   *   - platformName: The name of the platform/distribution; e.g., "Drupal".
+   *   - platformName: The name of the platform/distribution; e.g., "Backdrop".
    *   - platformVersion: The version of platform/distribution; e.g., "7.0".
    *   - clientName: The official Akismet client name; e.g., "Akismet".
    *   - clientVersion: The version of the Akismet client; e.g., "7.x-1.0".
@@ -245,7 +245,7 @@ abstract class Akismet {
    * Returns a string suitable for the User-Agent header of an Akismet request.
    *
    * @return string
-   *   A string such as 'Drupal/7.0 / Akismet/7.1'.
+   *   A string such as 'Backdrop/1.0 / Akismet/7.1'.
    */
   public function getUserAgent() {
     $info = $this->getUserAgentInformation();

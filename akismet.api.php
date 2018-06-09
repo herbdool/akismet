@@ -243,7 +243,7 @@
  *     confirmation form constructor to assign the mapped post_id key in $form
  *     as a #value. See http://drupal.org/node/645374 for examples. Optionally
  *     limit access to report options by defining 'report access' permissions.
- *   - report path: (optional) A Drupal system path pattern to be used for
+ *   - report path: (optional) A Backdrop system path pattern to be used for
  *     reporting an entity to Akismet via a "Report to Akismet" link in e-mail
  *     notifications. This typically points to the menu router path that allows
  *     to delete an entity. The placeholder '%id' is dynamically replaced with
@@ -339,7 +339,7 @@ function hook_akismet_form_list_alter(&$form_list) {
  *   - mail ids: (optional) An array of mail IDs that will be sent as a result
  *     of this form being submitted. When these mails are sent, a 'report to
  *     Akismet' link will be included at the bottom of the mail body. Be sure to
- *     include only user-submitted mails and not any mails sent by Drupal since
+ *     include only user-submitted mails and not any mails sent by Backdrop since
  *     they should never be reported as spam.
  *   - elements: (optional) An associative array of elements in the form that
  *     can be configured for Akismet's text analysis. The site administrator can

@@ -8,8 +8,15 @@
 /**
  * Common base test class for Akismet tests.
  */
-class AkismetWebTestCase extends DrupalWebTestCase {
+class AkismetWebTestCase extends BackdropWebTestCase {
   protected $profile = 'testing';
+
+  /**
+   * A user with permission to bypass node access and administer nodes.
+   *
+   * @var object
+   */
+  protected $admin_user;
 
   protected $useProductionKey = FALSE;
 
@@ -32,15 +39,15 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   /**
    * The Akismet client class implementation to use.
    *
-   * By default, we use AkismetDrupalTestLocal and test against the local
-   * testing server. Assign AkismetDrupalTest to test against the production
+   * By default, we use AkismetBackdropTestLocal and test against the local
+   * testing server. Assign AkismetBackdropTest to test against the production
    * Akismet instance, using the production API key.
    *
-   * @see akismet.drupal.inc
+   * @see akismet.backdrop.inc
    *
    * @var string
    */
-  protected $akismetClass = 'AkismetDrupalTestLocal';
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   function __construct($test_id = NULL) {
     parent::__construct($test_id);
@@ -85,7 +92,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     variable_set('akismet_api_key', $this->key);
 
     // Disable testing mode warnings.
-    // drupal_set_message() starts a session, which disables page caching, and
+    // backdrop_set_message() starts a session, which disables page caching, and
     // in turn, page/form cache related tests would not behave correctly.
     variable_set('akismet_testing_mode_omit_warning', TRUE);
 
@@ -95,7 +102,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     // D7's new default theme Bartik is bogus in various locations, which leads
     // to failing tests.
     // @todo Remove this override.
-    variable_set('theme_default', 'garland');
+    config_set('system.core', 'theme_default', 'basis');
 
     // If not explicitly disabled by a test, setup and validate testing keys,
     // and create a default admin user.
@@ -114,12 +121,12 @@ class AkismetWebTestCase extends DrupalWebTestCase {
         $permissions[] = 'skip comment approval';
         $permissions[] = 'administer comments';
       }
-      $this->admin_user = $this->drupalCreateUser($permissions);
+      $this->admin_user = $this->backdropCreateUser($permissions);
     }
 
   }
 
-  function tearDown() {
+  public function tearDown() {
     // Capture any (remaining) watchdog messages.
     $this->assertAkismetWatchdogMessages();
     parent::tearDown();
@@ -144,7 +151,8 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     // them. Actions executed within the test class may lead to log messages,
     // but those get only logged when hook_exit() is triggered.
     // akismet.module may not be installed by a test and thus not loaded yet.
-    drupal_load('module', 'akismet');
+
+    backdrop_load('module', 'akismet');
     akismet_log_write();
 
     module_load_include('inc', 'dblog', 'dblog.admin');
@@ -166,7 +174,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
       // Only messages with a maximum severity of $max_severity or less severe
       // messages must pass. More severe messages need to fail. See note about
       // severity level constant values above.
-      $output = theme_dblog_message(array('event' => $row, 'link' => FALSE));
+      $output = dblog_format_message($row, FALSE);
       if ($row->severity >= $max_severity) {
         // Visually separate debug log messages from other messages.
         if ($row->severity == WATCHDOG_DEBUG) {
@@ -177,7 +185,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
         }
       }
       else {
-        $this->fail(check_plain($row->type) . ': ' . $output, t('Watchdog'));
+        $this->error(check_plain($row->type) . ': ' . $output, t('Watchdog'));
       }
       // In case a severe message is expected, non-severe messages always pass,
       // since we would trigger a false positive test failure otherwise.
@@ -247,8 +255,8 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * This is a wrapper around assertResponseID() allows to assert that a proper
    * Akismet session id is found in the form contained in the internal browser
    * output. The usual flow is:
-   * - drupalGet() or drupalPost() requests or submits a form.
-   * - drupalGet() and drupalPost() invoke assertAkismetWatchdogMessages()
+   * - backdropGet() or backdropPost() requests or submits a form.
+   * - backdropGet() and backdropPost() invoke assertAkismetWatchdogMessages()
    *   internally, which records all new watchdog messages.
    * - This function, assertResponseIDInForm(), is invoked to assert that there
    *   is a Akismet session id and, depending on the recorded watchdog messages,
@@ -277,7 +285,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   protected function getClient($force = FALSE) {
     if ($force || !isset($this->akismet)) {
       // akismet.module may not be enabled in the parent site executing the test.
-      drupal_load('module', 'akismet');
+      backdrop_load('module', 'akismet');
       $this->akismet = akismet($this->akismetClass, $force);
     }
     return $this->akismet;
@@ -332,12 +340,12 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *   omitted and the form registers individual elements, all fields are
    *   enabled by default.
    * @param $edit
-   *   (optional) An array of POST data to pass through to drupalPost() when
+   *   (optional) An array of POST data to pass through to backdropPost() when
    *   configuring the form's protection.
    */
   protected function setProtectionUI($form_id, $fields = NULL, $edit = array()) {
     // Always start from overview page, also to make debugging easier.
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropGet('admin/config/content/akismet');
     // Determine whether the form is already protected.
     $exists = db_query_range('SELECT 1 FROM {akismet_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id))->fetchField();
     // Add a new form.
@@ -346,12 +354,12 @@ class AkismetWebTestCase extends DrupalWebTestCase {
       $add_form_edit = array(
         'akismet[form_id]' => $form_id,
       );
-      $this->drupalPost(NULL, $add_form_edit, t('Next'));
+      $this->backdropPost(NULL, $add_form_edit, t('Next'));
     }
     // Edit an existing form.
     else {
       $this->assertLinkByHref('admin/config/content/akismet/manage/' . $form_id);
-      $this->drupalGet('admin/config/content/akismet/manage/' . $form_id);
+      $this->backdropGet('admin/config/content/akismet/manage/' . $form_id);
     }
 
     // Process the enabled fields.
@@ -368,7 +376,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
         $edit['akismet[enabled_fields][' . rawurlencode($field) . ']'] = FALSE;
       }
     }
-    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->backdropPost(NULL, $edit, t('Save'));
     if (!$exists) {
       $this->assertText(t('The form protection has been added.'));
     }
@@ -387,9 +395,9 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     // Determine whether the form is protected.
     $exists = db_query_range('SELECT 1 FROM {akismet_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $form_id));
     if ($exists) {
-      $this->drupalGet('admin/config/content/akismet/unprotect/' . $form_id);
+      $this->backdropGet('admin/config/content/akismet/unprotect/' . $form_id);
       $this->assertText(t('Akismet will no longer protect this form from spam.'), t('Unprotect confirmation form found.'));
-      $this->drupalPost(NULL, array(), t('Confirm'));
+      $this->backdropPost(NULL, array(), t('Confirm'));
     }
   }
 
@@ -450,16 +458,16 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * @param $spam_fields
    *   An array of form field names to inject spam content into.
    * @param $edit
-   *   An array of non-spam form values used in drupalPost().
+   *   An array of non-spam form values used in backdropPost().
    * @param $button
-   *   The text of the form button to click in drupalPost().
+   *   The text of the form button to click in backdropPost().
    * @param $success_message
    *   An optional message to test does not appear after submission.
    */
   protected function assertSpamSubmit($url, array $spam_fields, array $edit = array(), $button, $success_message = '') {
     // NOTE: This will not work with the live API.
     $edit += array_fill_keys($spam_fields, 'spam');
-    $this->drupalPost($url, $edit, $button);
+    $this->backdropPost($url, $edit, $button);
     $this->assertText($this->spam_message);
     if ($success_message) {
       $this->assertNoText($success_message);
@@ -474,9 +482,9 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * @param $ham_fields
    *   An array of form field names to inject ham content into.
    * @param $edit
-   *   An array of non-spam form values used in drupalPost().
+   *   An array of non-spam form values used in backdropPost().
    * @param $button
-   *   The text of the form button to click in drupalPost().
+   *   The text of the form button to click in backdropPost().
    * @param $success_message
    *   An optional message to test does appear after submission.
    */
@@ -485,7 +493,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
     // it will usually return a ham response for content that looks like
     // it's just a test comment.
     $edit += array_fill_keys($ham_fields, 'ham');
-    $this->drupalPost($url, $edit, $button);
+    $this->backdropPost($url, $edit, $button);
     $this->assertNoText($this->spam_message);
     if ($success_message) {
       $this->assertText($success_message);
@@ -500,16 +508,16 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * @param $unsure_fields
    *   An array of form field names to inject unsure content into.
    * @param $edit
-   *   An array of non-spam form values used in drupalPost().
+   *   An array of non-spam form values used in backdropPost().
    * @param $button
-   *   The text of the form button to click in drupalPost().
+   *   The text of the form button to click in backdropPost().
    * @param $success_message
    *   An optional message to test does appear after successful form and CAPTCHA
    *   submission.
    */
   protected function assertUnsureSubmit($url, array $unsure_fields, array $edit = array(), $button, $success_message = '') {
     $edit += array_fill_keys($unsure_fields, 'viagra-test-123');
-    $this->drupalPost($url, $edit, $button);
+    $this->backdropPost($url, $edit, $button);
     return;
     // TODO: Figure out what should be showing up based on the configuration.
     $this->assertText($this->unsure_message);
@@ -521,7 +529,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   /**
    * Asserts that the most recently sent mail contains a "Report to Akismet" link.
    *
-   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
+   * Contrary to BackdropWebTestCase::assertMail(), this function removes the last
    * sent mail from the internally recorded stack.
    *
    * @param string $entity_type
@@ -535,14 +543,14 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *   - id: The entity ID contained in the report link URL.
    *   - mail: The full mail message array, as recorded by TestingMailSystem.
    *   - external: TRUE.
-   *   The array can be passed directly as $options to drupalGet().
+   *   The array can be passed directly as $options to backdropGet().
    */
   protected function assertMailAkismetReportLink($entity_type = 'akismet_content') {
     // Grab the last sent mail.
-    // @see DrupalWebTestCase::assertMail()
-    $captured_emails = variable_get('drupal_test_email_collector', array());
+    // @see BackdropWebTestCase::assertMail()
+    $captured_emails = state_get('test_email_collector', array());
     $message = array_pop($captured_emails);
-    variable_set('drupal_test_email_collector', $captured_emails);
+    state_set('test_email_collector', $captured_emails);
 
     $found = FALSE;
     // Determine the report URI pattern for the passed entity type.
@@ -583,7 +591,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   /**
    * Asserts that the most recently sent mail does NOT contain a "Report to Akismet" link.
    *
-   * Contrary to DrupalWebTestCase::assertMail(), this function removes the last
+   * Contrary to BackdropWebTestCase::assertMail(), this function removes the last
    * sent mail from the internally recorded stack.
    *
    * @return bool
@@ -591,14 +599,14 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    */
   protected function assertNoMailAkismetReportLink() {
     // Grab the last sent mail.
-    // @see DrupalWebTestCase::assertMail()
-    $captured_emails = variable_get('drupal_test_email_collector', array());
+    // @see BackdropWebTestCase::assertMail()
+    $captured_emails = state_get('test_email_collector', array());
     $message = array_pop($captured_emails);
     if (empty($message)) {
       $this->fail('No mail to assert.');
       return;
     }
-    variable_set('drupal_test_email_collector', $captured_emails);
+    state_set('test_email_collector', $captured_emails);
 
     $found = preg_match('@http.+?akismet/report/([^/]+)/([^\s]+)@', $message['body'], $matches);
     $this->assertFalse($found, 'Report to Akismet link not found in e-mail.');
@@ -666,7 +674,7 @@ class AkismetWebTestCase extends DrupalWebTestCase {
   }
 
   /**
-   * Wraps drupalGet() for additional watchdog message assertion.
+   * Wraps backdropGet() for additional watchdog message assertion.
    *
    * @param $options
    *   In addition to regular $options that are passed to url():
@@ -674,19 +682,19 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *     watchdog messages have been logged. Defaults to TRUE. Use FALSE to
    *     negate the watchdog message severity assertion.
    *
-   * @see DrupalWebTestCase->drupalGet()
+   * @see BackdropWebTestCase->backdropGet()
    * @see AkismetWebTestCase->assertAkismetWatchdogMessages()
    * @see AkismetWebTestCase->assertResponseID()
    */
-  protected function drupalGet($path, array $options = array(), array $headers = array()) {
-    $output = parent::drupalGet($path, $options, $headers);
+  protected function backdropGet($path, array $options = array(), array $headers = array()) {
+    $output = parent::backdropGet($path, $options, $headers);
     $options += array('watchdog' => WATCHDOG_NOTICE);
     $this->assertAkismetWatchdogMessages($options['watchdog']);
     return $output;
   }
 
   /**
-   * Wraps drupalPost() for additional watchdog message assertion.
+   * Wraps backdropPost() for additional watchdog message assertion.
    *
    * @param $options
    *   In addition to regular $options that are passed to url():
@@ -696,10 +704,10 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    *
    * @see AkismetWebTestCase->assertAkismetWatchdogMessages()
    * @see AkismetWebTestCase->assertResponseID()
-   * @see DrupalWebTestCase->drupalPost()
+   * @see BackdropWebTestCase->backdropPost()
    */
-  protected function drupalPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL, $extra_post = NULL) {
-    $output = parent::drupalPost($path, $edit, $submit, $options, $headers, $form_html_id, $extra_post);
+  protected function backdropPost($path, $edit, $submit, array $options = array(), array $headers = array(), $form_html_id = NULL, $extra_post = NULL) {
+    $output = parent::backdropPost($path, $edit, $submit, $options, $headers, $form_html_id, $extra_post);
     $options += array('watchdog' => WATCHDOG_NOTICE);
     if ($options['watchdog'] === -1) {
       return $output;
@@ -770,8 +778,8 @@ class AkismetWebTestCase extends DrupalWebTestCase {
    * Enables aggressive page caching options to resemble reverse-proxies.
    */
   protected function enablePageCache() {
-    variable_set('cache', 1);
-    variable_set('page_cache_maximum_age', 180);
+    config_set('system.core', 'cache', 1);
+    config_set('system.core', 'page_cache_maximum_age', 180);
     // A minimum cache lifetime causes cache_clear_all() to start a session.
     //variable_set('cache_lifetime', 60);
   }
@@ -827,15 +835,7 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
    * In order to test toggling of the testing mode, ensure the regular class for
    * production usage is used.
    */
-  protected $akismetClass = 'AkismetDrupal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Testing mode',
-      'description' => 'Tests toggling of testing mode.',
-      'group' => 'Akismet',
-    );
-  }
+  protected $akismetClass = 'AkismetBackdrop';
 
   function setUp() {
     $this->useProductionKey = TRUE;
@@ -844,7 +844,7 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     // Enable testing mode warnings.
     variable_del('akismet_testing_mode_omit_warning');
 
-    $this->admin_user = $this->drupalCreateUser(array(
+    $this->admin_user = $this->backdropCreateUser(array(
       'access administration pages',
       'administer akismet',
     ));
@@ -853,8 +853,8 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
   /**
    * Tests enabling and disabling of testing mode.
    */
-  function testTestingMode() {
-    $this->drupalLogin($this->admin_user);
+  public function testTestingMode() {
+    $this->backdropLogin($this->admin_user);
 
     // Protect akismet_test_form.
     $this->setProtectionUI('akismet_test_form');
@@ -866,14 +866,14 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     $edit = array(
       'akismet_api_key' => $apiKey,
     );
-    $this->drupalGet('admin/config/content/akismet/settings');
+    $this->backdropGet('admin/config/content/akismet/settings');
     $this->assertNoText('The Akismet API key is not configured yet.');
-    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText('The Akismet API key is not configured yet.');
     $this->assertText(t('The configuration options have been saved.'));
     $this->assertText('The API key could not be verified.');
 
-    $this->drupalLogout();
+    $this->backdropLogout($this->admin_user);
 
     // Verify that spam can be posted, since testing mode is disabled and API
     // keys are invalid.
@@ -881,35 +881,34 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
       'title' => $this->randomString(),
       'body' => 'spam',
     );
-    $this->drupalGet('akismet-test/form');
-    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->backdropPost(NULL, $akismet_test, 'Submit');
     $this->assertText('Successful form submission.');
 
     // Enable testing mode.
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
     $edit = array(
       'akismet_testing_mode' => 1,
     );
-    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText('API key could not be verified.');
-    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText('The Akismet API key is not configured yet.');
     $this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
 
-    $this->drupalLogout();
+    $this->backdropLogout($this->admin_user);
 
     // Verify presence of testing mode warning.
-    $this->drupalGet('akismet-test/form');
+    $this->backdropGet('akismet-test/form');
     $this->assertText('Akismet testing mode is still enabled.');
 
     // Disable testing mode.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText('Akismet testing mode is still enabled.');
     $edit = array(
       'akismet_testing_mode' => FALSE,
     );
-    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText(t('The configuration options have been saved.'));
     $this->assertText('API key could not be verified.');
     $this->assertNoText('Akismet testing mode is still enabled.');
@@ -923,29 +922,22 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
  * Tests module installation and global status handling.
  */
 class AkismetInstallationTestCase extends AkismetWebTestCase {
-  protected $akismetClass = 'AkismetDrupalTestLocal';
+  protected $akismetClass = 'AkismetBackdropTestLocal';
   protected $disableDefaultSetup = TRUE;
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Installation and key handling',
-      'description' => 'Tests module installation and key error handling.',
-      'group' => 'Akismet',
-    );
-  }
 
   function setUp() {
     // Start with no key, as would be the case before installing the module.
     $this->key = '';
     parent::setUp(array('akismet_test'));
 
-    $this->admin_user = $this->drupalCreateUser(array(
+    $this->admin_user = $this->backdropCreateUser(array(
       'access administration pages',
       'administer site configuration',
       'administer modules',
       'administer permissions',
+      'access site reports',
     ));
-    $this->web_user = $this->drupalCreateUser(array());
+    $this->web_user = $this->backdropCreateUser(array());
   }
 
   /**
@@ -956,7 +948,7 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
    *
    * Note: Partial error messages tested here; hence, no t().
    */
-  function testInstallationProcess() {
+  public function testInstallationProcess() {
     $message_invalid = t('API key could not be verified.');
     $message_valid = t('The service is operating correctly.');
     $message_missing = t('The Akismet API key is not configured yet.');
@@ -965,46 +957,49 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to add your API key.', array(
       '@settings-url' => url('admin/config/content/akismet/settings'),
     ));
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
 
     // Ensure there is no requirements error by default.
-    $this->drupalGet('admin/reports/status');
-    $this->clickLink('run cron manually');
+    $this->backdropGet('admin/reports/status');
+    $this->clickLink('Run cron manually');
 
     // Install the Akismet module.
-    $this->drupalPost('admin/modules', array('modules[Other][akismet][enable]' => TRUE), t('Save configuration'));
+    $this->backdropPost('admin/modules', array('modules[Other][akismet][enable]' => TRUE), t('Save configuration'));
     $this->assertRaw($message_missing . ' ' . $admin_message, t('Post installation warning found.'));
 
     // Verify that forms can be submitted without valid Akismet module configuration.
-    $this->drupalLogin($this->web_user);
+    $this->backdropLogin($this->web_user);
+    
     $edit = array(
       'title' => 'spam',
+      'body' => '',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropGet('akismet-test/form/' . $akismet_test->mid);
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertText('Successful form submission.');
 
     // Assign the 'administer akismet' permission and log in a user.
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
     $edit = array(
-      DRUPAL_AUTHENTICATED_RID . '[administer akismet]' => TRUE,
+      BACKDROP_AUTHENTICATED_ROLE . '[administer akismet]' => TRUE,
     );
-    $this->drupalPost('admin/people/permissions', $edit, t('Save permissions'));
+    $this->backdropPost('admin/config/people/permissions', $edit, t('Save permissions'));
 
     // Verify presence of 'empty keys' error message.
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropGet('admin/config/content/akismet');
     $this->assertText($message_missing);
     $this->assertNoText($message_invalid);
 
     // Verify requirements error about missing API keys.
-    $this->drupalGet('admin/reports/status');
+    $this->backdropGet('admin/reports/status');
     $this->assertRaw($message_missing . ' ' . $admin_message, t('Requirements error found.'));
 
     // Configure an invalid key.
     $edit = array(
       'akismet_api_key' => 'invalid-key',
     );
-    $this->drupalGet('admin/config/content/akismet/settings');
-    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/config/content/akismet/settings');
+    $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_saved);
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
@@ -1013,35 +1008,35 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->assertNoText($message_missing);
 
     // Verify requirements error about invalid API key.
-    $this->drupalGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_invalid);
 
     // Ensure unreachable servers.
-    variable_set('akismet_class', 'AkismetDrupalTestInvalid');
+    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
 
     // Verify presence of 'network error' message.
-    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_invalid);
     $this->assertNoText($message_missing);
 
     // Verify requirements error about network error.
-    $this->drupalGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/reports/status', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($message_invalid);
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
     variable_set('akismet_class', $this->akismetClass);
 
     // Verify that a valid key works.
-    $this->drupalGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertFieldByName('akismet_api_key', 'invalid-key');
 
     $edit = array(
       'akismet_api_key' => 'valid-key',
     );
-    // drupalPost calls drupalGet. There is a watchdog message after the get,
+    // backdropPost calls backdropGet. There is a watchdog message after the get,
     // but not after the post. Pass -1 as the watchdog option to skip the
     // watchdog check.
-    $this->drupalPost('admin/config/content/akismet/settings', $edit, t('Save configuration'), array('watchdog' => -1));
+    $this->backdropPost('admin/config/content/akismet/settings', $edit, t('Save configuration'), array('watchdog' => -1));
 
     $this->assertText($message_saved);
     $this->assertText($message_valid);
@@ -1049,12 +1044,12 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->assertNoText($message_invalid);
 
     // Verify that deleting keys throws the correct error message again.
-    $this->drupalGet('admin/config/content/akismet/settings');
+    $this->backdropGet('admin/config/content/akismet/settings');
     $this->assertText($message_valid);
     $edit = array(
       'akismet_api_key' => '',
     );
-    $this->drupalPost(NULL, $edit, t('Save configuration'));
+    $this->backdropPost(NULL, $edit, t('Save configuration'));
     $this->assertText($message_saved);
     $this->assertNoText($message_valid);
     $this->assertText($message_missing);
@@ -1067,27 +1062,19 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
  */
 class AkismetResponseLocalTestCase extends AkismetWebTestCase {
   // Re-route Akismet communication to this testing site.
-  protected $akismetClass = 'AkismetDrupalTestLocal';
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   protected $disableDefaultSetup = TRUE;
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Server responses (local)',
-      'description' => 'Tests that local fake Akismet server responses match expectations.',
-      'group' => 'Akismet',
-    );
-  }
-
   function setUp() {
     parent::setUp(array('akismet', 'akismet_test'));
-    $this->admin_user = $this->drupalCreateUser();
+    $this->admin_user = $this->backdropCreateUser();
   }
 
   /**
    * Tests /comment-check.
    */
-  function testCommentCheck() {
+  public function testCommentCheck() {
     $akismet = akismet();
     $data = array(
       'comment_author' => $this->admin_user->name,
@@ -1129,17 +1116,9 @@ class AkismetResponseLocalTestCase extends AkismetWebTestCase {
  */
 class AkismetResponseTestCase extends AkismetResponseLocalTestCase {
   // Re-route Akismet communication to the live site.
-  protected $akismetClass = 'AkismetDrupalTest';
+  protected $akismetClass = 'AkismetBackdropTest';
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Server responses',
-      'description' => 'Tests that Akismet server responses match expectations.',
-      'group' => 'Akismet',
-    );
-  }
-
-  public function setUp() {
+  function setUp() {
     $this->useProductionKey = TRUE;
     parent::setUp();
   }
@@ -1147,30 +1126,22 @@ class AkismetResponseTestCase extends AkismetResponseLocalTestCase {
 
 
 class AkismetAccessTestCase extends AkismetWebTestCase {
-  protected $akismetClass = 'AkismetDrupalTestLocal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Access checking',
-      'description' => 'Confirm that there is a working API key and that this status is correctly indicated on the module settings page for appropriate users.',
-      'group' => 'Akismet',
-    );
-  }
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   /**
    * Configure an invalid API key and ensure error message.
    */
-  function testAPIKey() {
+  public function testAPIKey() {
     // No error message or watchdog messages should be thrown with default
     // testing keys.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet/settings');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/config/content/akismet/settings');
 
     // Set up an invalid test key and check that an error message is shown.
     $edit = array(
       'akismet_api_key' => 'foo',
     );
-    $this->drupalPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText(t('The configuration options have been saved.'));
     $this->assertText('The API key could not be verified.');
   }
@@ -1180,89 +1151,81 @@ class AkismetAccessTestCase extends AkismetWebTestCase {
    * 'administer akismet' permission but not those without
    * it.
    */
-  function testAdminAccessRights() {
+  public function testAdminAccessRights() {
     // Check access for a user that only has access to the 'administer
     // site configuration' permission. This user should have access to
     // the Akismet settings page.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/config/content/akismet');
     $this->assertResponse(200);
 
     // Check access for a user that has everything except the 'administer
     // akismet' permission. This user should not have access to the Akismet
     // settings page.
-    $this->web_user = $this->drupalCreateUser(array_diff(module_invoke_all('perm'), array('administer akismet')));
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('admin/config/content/akismet', array('watchdog' => WATCHDOG_WARNING));
+    $this->web_user = $this->backdropCreateUser(array_diff(module_invoke_all('perm'), array('administer akismet')));
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('admin/config/content/akismet', array('watchdog' => WATCHDOG_WARNING));
     $this->assertResponse(403);
   }
 }
 
 class AkismetBypassAccessTestCase extends AkismetWebTestCase {
   // Re-route Akismet communication to this testing site.
-  protected $akismetClass = 'AkismetDrupalTestLocal';
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   // Requires entity-level access permissions.
   protected $profile = 'standard';
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Bypass access',
-      'description' => 'Tests that users having higher privileges can bypass Akismet protection.',
-      'group' => 'Akismet',
-    );
-  }
-
   /**
    * Tests 'bypass access' property of registered forms.
    */
-  function testBypassAccess() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('comment_node_article_form');
-    $this->drupalLogout();
+  public function testBypassAccess() {
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('comment_node_post_form');
+    $this->backdropLogout();
 
-    $node = $this->drupalCreateNode(array('body' => array(LANGUAGE_NONE => array(array('value' => 'node body'))), 'type' => 'article'));
+    $node = $this->backdropCreateNode(array('body' => array(LANGUAGE_NONE => array(array('value' => 'node body'))), 'type' => 'post'));
 
     // Create a regular user and post a comment.
-    $this->web_user = $this->drupalCreateUser(array('edit own comments'));
-    $this->drupalLogin($this->web_user);
+    $this->web_user = $this->backdropCreateUser(array('edit own comments'));
+    $this->backdropLogin($this->web_user);
     $edit = array(
-      'subject' => 'ham',
+      //'subject' => 'ham',
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost('comment/reply/' . $node->nid, $edit, t('Preview'));
+    $this->backdropPost('node/' . $node->nid, $edit, t('Preview'));
 
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
     $this->assertText('node body');
     $this->assertText($edit['comment_body[und][0][value]']);
 
     // Ensure a user having one of the permissions to bypass access can post
     // spam without triggering the spam protection.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('node/' . $node->nid);
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('node/' . $node->nid);
     $this->clickLink('edit');
 
     $edit = array(
-      'subject' => 'spam',
+      //'subject' => 'spam',
       'comment_body[und][0][value]' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'));
+    $this->backdropPost(NULL, $edit, t('Preview'));
     $this->assertNoText($this->spam_message);
 
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
     $this->assertNoText($this->spam_message);
     $this->assertText('node body');
     $this->assertText($edit['comment_body[und][0][value]']);
 
     // Log in back the regular user and try to edit the comment containing spam.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('node/' . $node->nid);
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/' . $node->nid);
     $this->clickLink('edit');
 
-    $this->drupalPost(NULL, array(), t('Preview'));
+    $this->backdropPost(NULL, array(), t('Preview'));
     $this->assertText($this->spam_message);
 
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
     $this->assertText($this->spam_message);
     $this->assertNoText('node body');
   }
@@ -1270,37 +1233,29 @@ class AkismetBypassAccessTestCase extends AkismetWebTestCase {
 
 class AkismetFallbackModeTestCase extends AkismetWebTestCase {
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Fallback mode',
-      'description' => 'Tests expected fallback behavior when Akismet servers are not available.',
-      'group' => 'Akismet',
-    );
-  }
-
   function setUp() {
     parent::setUp(array('node', 'comment'));
 
-    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
   }
 
   /**
    * Tests that form submissions are blocked when Akismet servers are unreachable.
    */
-  function testBlock() {
-    $this->setProtection('comment_node_article_form');
-    $node = $this->drupalCreateNode(array('type' => 'article'));
+  public function testBlock() {
+    $this->setProtection('comment_node_post_form');
+    $node = $this->backdropCreateNode(array('type' => 'post'));
 
     // Set the fallback strategy to 'blocking mode'.
     variable_set('akismet_fallback', AKISMET_FALLBACK_BLOCK);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetDrupalTestInvalid');
+    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
 
     // Check the text analysis protected form.
-    $this->web_user = $this->drupalCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
     $this->assertText('privacy policy');
 
@@ -1308,27 +1263,27 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $edit = array(
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Preview'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText($this->fallback_message);
   }
 
   /**
    * Tests that form submissions are accepted when Akismet servers are unreachable.
    */
-  function testAccept() {
-    $this->setProtection('comment_node_article_form');
-    $node = $this->drupalCreateNode(array('type' => 'article'));
+  public function testAccept() {
+    $this->setProtection('comment_node_post_form');
+    $node = $this->backdropCreateNode(array('type' => 'post'));
 
     // Set the fallback strategy to 'accept mode'.
     variable_set('akismet_fallback', AKISMET_FALLBACK_ACCEPT);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetDrupalTestInvalid');
+    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
 
     // Check the text analysis protected form.
-    $this->web_user = $this->drupalCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/' . $node->nid, array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
     $this->assertText('privacy policy');
 
@@ -1336,33 +1291,33 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $edit = array(
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, $edit, t('Preview'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
-    $this->drupalPost(NULL, array(), t('Save'), array('watchdog' => WATCHDOG_EMERGENCY));
+    $this->backdropPost(NULL, array(), t('Save'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText($this->fallback_message);
   }
 
   /**
    * Tests that form submissions are accepted when only last request attempt to Akismet servers succeeds.
    */
-  function testFailover() {
-    $node = $this->drupalCreateNode(array('type' => 'article'));
-    $this->setProtection('comment_node_article_form');
+  public function testFailover() {
+    $node = $this->backdropCreateNode(array('type' => 'post'));
+    $this->setProtection('comment_node_post_form');
 
     // Set the fallback strategy to 'blocking mode', so that if the failover
     // mechanism does not work, we would expect to get a warning.
     variable_set('akismet_fallback', AKISMET_FALLBACK_BLOCK);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetDrupalTestInvalid');
+    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
     // Enable pseudo server fail-over.
-    // @see AkismetDrupalTestInvalid::handleRequest()
+    // @see AkismetBackdropTestInvalid::handleRequest()
     variable_set('akismet_testing_server_failover', TRUE);
 
     // Validate that the form loads correctly.
-    $this->web_user = $this->drupalCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $node->nid);
+    $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/' . $node->nid);
     $this->assertNoText($this->fallback_message);
     $this->assertText('privacy policy');
 
@@ -1370,9 +1325,9 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $edit = array(
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, t('Preview'));
+    $this->backdropPost(NULL, $edit, t('Preview'));
     $this->assertNoText($this->fallback_message);
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
     $this->assertNoText($this->fallback_message);
   }
 }
@@ -1382,34 +1337,26 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
  */
 class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
   // Re-route Akismet communication to this testing site.
-  protected $akismetClass = 'AkismetDrupalTestLocal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Form administration',
-      'description' => 'Verify that forms can be properly protected and unprotected.',
-      'group' => 'Akismet',
-    );
-  }
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   function setUp() {
     parent::setUp(array('akismet_test'));
 
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
   }
 
   /**
    * Tests configuration of form fields for textual analysis.
    */
-  function testFormFieldsConfiguration() {
+  public function testFormFieldsConfiguration() {
     $form_info = akismet_form_info('akismet_test_form', 'akismet_test');
 
     // Protect Akismet test form.
-    $this->drupalGet('admin/config/content/akismet/add');
+    $this->backdropGet('admin/config/content/akismet/add');
     $edit = array(
       'akismet[form_id]' => 'akismet_test_form',
     );
-    $this->drupalPost(NULL, $edit, t('Next'));
+    $this->backdropPost(NULL, $edit, t('Next'));
     $this->assertText('Akismet test form');
 
     $edit = array(
@@ -1419,7 +1366,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
       'akismet[enabled_fields][' . rawurlencode('parent][child') . ']' => TRUE,
       'akismet[enabled_fields][field]' => TRUE,
     );
-    $this->drupalPost(NULL, $edit, t('Save'));
+    $this->backdropPost(NULL, $edit, t('Save'));
 
     // Verify that akismet_test_form form was protected.
     $this->assertText(t('The form protection has been added.'));
@@ -1428,7 +1375,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     $this->assertTrue($akismet_form, t('Form configuration exists.'));
 
     // Verify that field configuration was properly stored.
-    $this->drupalGet('admin/config/content/akismet/manage/akismet_test_form');
+    $this->backdropGet('admin/config/content/akismet/manage/akismet_test_form');
     foreach ($edit as $name => $value) {
       // Skip any inputs that are not the fields for analysis checkboxes.
       if (strpos($name, '[enabled_fields]') === FALSE) {
@@ -1455,22 +1402,22 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     akismet_form_save($akismet_form);
 
     // Try a submit of the form.
-    $this->drupalLogout();
+    $this->backdropLogout();
     $edit = array(
       'title' => 'spam',
       'body' => 'unsure',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
 
     // Add the title back.
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
     $akismet_form['enabled_fields'][] = 'title';
     // Add a field to the stored configuration that existed previously.
     $akismet_form['enabled_fields'][] = 'orphan_field';
     akismet_form_save($akismet_form);
 
     // Verify that field configuration contains only available elements.
-    $this->drupalGet('admin/config/content/akismet/manage/akismet_test_form');
+    $this->backdropGet('admin/config/content/akismet/manage/akismet_test_form');
     $fields = $this->xpath('//input[starts-with(@name, "akismet[enabled_fields]")]');
     $elements = array();
     foreach ($fields as $field) {
@@ -1480,12 +1427,12 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     $this->assertEqual($elements, array_keys($form_info['elements']), t('Field list only contains available form elements.'));
 
     // Try a simple submit of the form.
-    $this->drupalLogout();
+    $this->backdropLogout();
     $edit = array(
       'title' => 'spam',
       'body' => 'spam',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->spam_message);
 
@@ -1494,7 +1441,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
       'title' => 'spam',
       'body' => 'spam',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->spam_message);
 
@@ -1503,7 +1450,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
       'title' => $this->randomString(),
       'parent[child]' => 'spam',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->spam_message);
 
@@ -1514,7 +1461,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
       'parent[child]' => 'ham',
       'field[new]' => 'ham',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Add');
+    $this->backdropPost('akismet-test/form', $edit, 'Add');
 
     // Verify that the form was rebuilt.
     $this->assertNoText('Successful form submission.');
@@ -1524,7 +1471,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
     $edit = array(
       'field[new]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, 'Add');
+    $this->backdropPost(NULL, $edit, 'Add');
 
     // Verify that the form was rebuilt.
     $this->assertNoText('Successful form submission.');
@@ -1539,56 +1486,56 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
       'field[1]' => $this->randomString(),
       'field[new]' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->backdropPost(NULL, $edit, 'Submit');
 
     // Verify that the form was not submitted and cannot be submitted.
     $this->assertNoText('Successful form submission.');
     $this->assertText($this->spam_message);
 
     // Verify that we can remove the form protection.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/config/content/akismet');
     $this->assertText('Akismet test form');
 
-    $this->drupalPost('admin/config/content/akismet/unprotect/akismet_test_form', array(), t('Confirm'));
+    $this->backdropPost('admin/config/content/akismet/unprotect/akismet_test_form', array(), t('Confirm'));
     $this->assertNoText('Akismet test form');
     $this->assertText(t('The form protection has been removed.'));
     $akismet_form = akismet_form_load('akismet_test_form');
     $this->assertFalse($akismet_form, t('Form protection not found.'));
 
     // Verify that the form is no longer protected.
-    $this->drupalLogout();
+    $this->backdropLogout();
     $edit = array(
       'title' => 'spam',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertText('Successful form submission.');
   }
 
   /**
    * Tests default configuration, protecting, and unprotecting forms.
    */
-  function testFormAdministration() {
+  public function testFormAdministration() {
     $form_info = akismet_form_list();
     foreach ($form_info as $form_id => $info) {
       $form_info[$form_id] += akismet_form_info($form_id, $info['module']);
     }
 
     // Verify that user registration form is not protected.
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropGet('admin/config/content/akismet');
     $this->assertNoText($form_info['user_register_form']['title']);
     $this->assertFalse(akismet_form_load('user_register_form'), t('Form configuration does not exist.'));
 
     // Re-protect user registration form.
-    $this->drupalGet('admin/config/content/akismet/add');
+    $this->backdropGet('admin/config/content/akismet/add');
     $this->assertNoText(t('All available forms are protected already.'));
     $edit = array(
       'akismet[form_id]' => 'user_register_form',
     );
-    $this->drupalPost(NULL, $edit, t('Next'));
+    $this->backdropPost(NULL, $edit, t('Next'));
     $this->assertText($form_info['user_register_form']['title']);
     $this->assertNoText(t('Text fields to analyze'));
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
 
     // Verify that user registration form was protected.
     $this->assertText(t('The form protection has been added.'));
@@ -1612,7 +1559,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
         $edit = array(
           'akismet[form_id]' => $form_id,
         );
-        $this->drupalPost('admin/config/content/akismet/add', $edit, t('Next'));
+        $this->backdropPost('admin/config/content/akismet/add', $edit, t('Next'));
         $this->assertText($info['title']);
         // Verify that forms specifying elements have all possible elements
         // preselected for textual analysis.
@@ -1633,13 +1580,13 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
         foreach ($info['bypass access'] as $permission) {
           $this->assertRaw($all_permissions[$permission]['title']);
         }
-        $this->drupalPost(NULL, $edit, t('Save'));
+        $this->backdropPost(NULL, $edit, t('Save'));
         $this->assertText(t('The form protection has been added.'));
       }
     }
 
     // Verify that trying to add a form redirects to the overview.
-    $this->drupalGet('admin/config/content/akismet/add');
+    $this->backdropGet('admin/config/content/akismet/add');
     $this->assertText(t('All available forms are protected already.'));
     $this->assertText(t('Operations'));
   }
@@ -1651,7 +1598,7 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
    * a warning that the 'nonexisting' module is missing from the file system.
    * Commented out for now.
    */
-  function _testInvalidForms() {
+  public function _testInvalidForms() {
     $forms = array(
       'nonexisting' => 'nonexisting_form',
       'user' => 'user_nonexisting_form',
@@ -1667,14 +1614,14 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
 
     // Just visiting the form administration page is sufficient; it will throw
     // fatal errors, warnings, and notices.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/config/content/akismet');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/config/content/akismet');
 
     // Ensure that unprotecting the forms does not throw any notices either.
     foreach ($forms as $form_id) {
       $this->assertNoLinkByHref('admin/config/content/akismet/manage/' . $form_id);
       $this->assertLinkByHref('admin/config/content/akismet/unprotect/' . $form_id);
-      $this->drupalPost('admin/config/content/akismet/unprotect/' . $form_id, array(), t('Confirm'));
+      $this->backdropPost('admin/config/content/akismet/unprotect/' . $form_id, array(), t('Confirm'));
       $this->assertNoLinkByHref('admin/config/content/akismet/unprotect/' . $form_id);
     }
     // Confirm deletion.
@@ -1687,25 +1634,19 @@ class AkismetFormConfigurationTestCase extends AkismetWebTestCase {
  * Tests Node module integration.
  */
 class AkismetNodeFormTestCase extends AkismetWebTestCase {
-  private $node;
+  protected $profile = 'standard';
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Node integration',
-      'description' => 'Tests node form protection.',
-      'group' => 'Akismet',
-    );
-  }
+  private $node;
 
   function setUp() {
     parent::setUp();
 
-    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
 
     // @todo 'view own unpublished content' permission required to prevent a
-    //   bogus access denied watchdog caused by a bug in Drupal core.
+    //   bogus access denied watchdog caused by a bug in Backdrop core.
     // @see http://drupal.org/node/1429442
-    $this->web_user = $this->drupalCreateUser(array('create article content', 'view own unpublished content'));
+    $this->web_user = $this->backdropCreateUser(array('edit own post content', 'create post content', 'view own unpublished content'));
   }
 
   /**
@@ -1716,20 +1657,19 @@ class AkismetNodeFormTestCase extends AkismetWebTestCase {
    * Therefore, the submitted form values do not contain a 'nid' yet, so Akismet
    * session data cannot be stored for the new node.
    */
-  function testData() {
-    // Enable Akismet CAPTCHA protection for Article nodes.
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('article_node_form');
-    $this->drupalLogout();
+  public function testData() {
+    // Enable Akismet CAPTCHA protection for Post nodes.
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('post_node_form');
 
     // Login and submit a node.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('node/add/article');
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/add/post');
     $edit = array(
       'title' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->node = $this->drupalGetNodeByTitle($edit['title']);
+    $this->backdropPost(NULL, $edit, t('Save'));
+    $this->node = $this->backdropGetNodeByTitle($edit['title']);
     $this->assertUrl('node/' . $this->node->nid);
     $this->assertAkismetData('node', $this->node->nid);
   }
@@ -1737,124 +1677,116 @@ class AkismetNodeFormTestCase extends AkismetWebTestCase {
   /**
    * Tests appearance of feedback options on node delete forms.
    */
-  function testFeedback() {
+  public function testFeedback() {
     // Create a second node type, which is not protected.
-    $this->drupalCreateContentType(array('type' => 'unprotected', 'name' => 'Unprotected'));
-    user_role_grant_permissions(DRUPAL_AUTHENTICATED_RID, array(
+    $this->backdropCreateContentType(array('type' => 'unprotected', 'name' => 'Unprotected'));
+    user_role_grant_permissions(BACKDROP_AUTHENTICATED_ROLE, array(
       'create unprotected content',
       'delete own unprotected content',
-      'delete own article content',
+      'delete own post content',
     ));
 
-    // Protect the article node type.
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('article_node_form');
-    $this->drupalLogout();
+    // Protect the post node type.
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('post_node_form');
 
-    // Login and submit a protected article node.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('node/add/article');
+    // Login and submit a protected post node.
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/add/post');
     $edit = array(
       'title' => 'protected ham',
       'body[und][0][value]' => 'ham',
     );
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->node = $this->drupalGetNodeByTitle($edit['title']);
+    $this->backdropPost(NULL, $edit, t('Save'));
+    $this->node = $this->backdropGetNodeByTitle($edit['title']);
     $this->assertUrl('node/' . $this->node->nid);
     $this->assertAkismetData('node', $this->node->nid);
 
     // Verify that no feedback options appear on the delete confirmation form
     // for the node author.
-    $this->drupalGet('node/' . $this->node->nid . '/delete');
+    $this->backdropGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
     $this->assertNoText(t('Report as…'));
 
     // Verify that feedback options appear for the admin user.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('node/' . $this->node->nid . '/delete');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
     $this->assertText(t('Report as…'));
 
     // Login and submit an unprotected node.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('node/add/unprotected');
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/add/unprotected');
     $edit = array(
       'title' => 'unprotected spam',
       'body[und][0][value]' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Save'));
-    $this->node = $this->drupalGetNodeByTitle($edit['title']);
+    $this->backdropPost(NULL, $edit, t('Save'));
+    $this->node = $this->backdropGetNodeByTitle($edit['title']);
     $this->assertUrl('node/' . $this->node->nid);
     $this->assertNoAkismetData('node', $this->node->nid);
 
     // Verify that no feedback options appear on the delete confirmation form
     // for the node author.
-    $this->drupalGet('node/' . $this->node->nid . '/delete');
+    $this->backdropGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
     $this->assertNoText(t('Report as…'));
 
     // Verify that no feedback options appear for the admin user.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('node/' . $this->node->nid . '/delete');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('node/' . $this->node->nid . '/delete');
     $this->assertResponse(200);
     $this->assertNoText(t('Report as…'));
   }
 }
 
 class AkismetCommentFormTestCase extends AkismetWebTestCase {
-  public static function getInfo() {
-    return array(
-      'name' => 'Comment integration',
-      'description' => 'Check that the comment submission form can be protected.',
-      'group' => 'Akismet',
-    );
-  }
 
   function setUp() {
     parent::setUp(array('comment'));
 
-    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
+    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
 
-    $this->web_user = $this->drupalCreateUser(array('create article content', 'access comments', 'post comments', 'skip comment approval'));
-    $this->node = $this->drupalCreateNode(array('type' => 'article', 'uid' => $this->web_user->uid));
-    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+    $this->web_user = $this->backdropCreateUser(array('access content', 'create post content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->node = $this->backdropCreateNode(array('type' => 'post', 'uid' => $this->web_user->uid));
+    config_set('node.type.post', 'settings.comment_preview', BACKDROP_OPTIONAL);
   }
 
   /**
    * Make sure that the comment submission form can be unprotected.
    */
-  function testUnprotectedCommentForm() {
+  public function testUnprotectedCommentForm() {
     // Request the comment reply form.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/' . $this->node->nid);
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/' . $this->node->nid);
     $this->assertNoPrivacyLink();
 
     // Preview a comment that is 'spam' and make sure there is still no protection.
-    $this->drupalPost(NULL, array('comment_body[und][0][value]' => 'spam'), t('Preview'));
+    $this->backdropPost(NULL, array('comment_body[und][0][value]' => 'spam'), t('Preview'));
     $this->assertNoPrivacyLink();
 
     // Save the comment and make sure it appears.
-    $this->drupalPost(NULL, array(), t('Save'));
+    $this->backdropPost(NULL, array(), t('Save'));
     $this->assertRaw('<p>spam</p>', t('A comment that is known to be spam appears on the screen after it is submitted.'));
   }
 
   /**
    * Make sure that the comment submission form can be fully protected.
    */
-  function testTextAnalysisProtectedCommentForm() {
+  public function testTextAnalysisProtectedCommentForm() {
     // Enable Akismet text-classification for comments.
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('comment_node_article_form');
-    $this->drupalLogout();
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('comment_node_post_form');
+    $this->backdropLogout();
 
     // Request the comment reply form.
-    $this->drupalLogin($this->web_user);
-    $this->drupalGet('comment/reply/'. $this->node->nid);
+    $this->backdropLogin($this->web_user);
+    $this->backdropGet('node/'. $this->node->nid);
     $this->assertPrivacyLink();
 
     // Try to save a new 'spam' comment; it should be discarded.
     $this->resetResponseID();
-    $this->drupalGet('comment/reply/' . $this->node->nid);
+    $this->backdropGet('node/' . $this->node->nid);
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
     $this->assertSpamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
@@ -1867,7 +1799,7 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
 
     // Save a new 'ham' comment.
     $this->resetResponseID();
-    $this->drupalGet('comment/reply/' . $this->node->nid);
+    $this->backdropGet('node/' . $this->node->nid);
     $this->assertPrivacyLink();
     $original_number_of_comments = $this->getCommentCount($this->node->nid);
     $this->assertHamSubmit(NULL, array('comment_body[und][0][value]'), array(), t('Save'));
@@ -1909,47 +1841,41 @@ class AkismetCommentFormTestCase extends AkismetWebTestCase {
  * Tests Akismet actions.
  */
 class AkismetActionsTestCase extends AkismetWebTestCase {
+  protected $profile = 'standard';
+
   // Keep track of nodes and comments for actions.
   protected $nodes = array();
   protected $comments = array();
   // Re-route Akismet communication to this testing site.
-  protected $akismetClass = 'AkismetDrupalTestLocal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Actions integration',
-      'description' => 'Tests actions provided for comments and nodes.',
-      'group' => 'Akismet',
-    );
-  }
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   function setUp() {
     parent::setUp(array('comment'));
-    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
-    $this->web_user = $this->drupalCreateUser(array('create article content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
+    $this->web_user = $this->backdropCreateUser(array('create post content', 'access comments', 'post comments', 'skip comment approval'));
 
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('article_node_form');
-    $this->setProtectionUI('comment_node_article_form');
-    $this->drupalLogout();
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('post_node_form');
+    $this->setProtectionUI('comment_node_post_form');
+    $this->backdropLogout();
 
     // Login and submit a node.
     $this->nodes = array();
     $this->comments = array();
-    $this->drupalLogin($this->web_user);
+    $this->backdropLogin($this->web_user);
     for ($i = 0; $i < 2; $i++) {
       // Create a test node.
       $edit = array(
         'title' => 'ham node ' . $i,
       );
-      $this->drupalPost('node/add/article', $edit, t('Save'));
-      $node = $this->drupalGetNodeByTitle($edit['title']);
+      $this->backdropPost('node/add/post', $edit, t('Save'));
+      $node = $this->backdropGetNodeByTitle($edit['title']);
 
-      $this->drupalGet('comment/reply/' . $node->nid);
+      $this->backdropGet('node/' . $node->nid);
       $edit = array(
         'comment_body[und][0][value]' => 'ham',
       );
-      $this->drupalPost(NULL, $edit, t('Save'));
+      $this->backdropPost(NULL, $edit, t('Save'));
       $this->comments[] = db_query('SELECT * FROM {comment} WHERE subject = :comment AND nid = :nid', array(':comment' => $edit['comment_body[und][0][value]'], ':nid' => $node->nid))->fetchObject();
       $this->nodes[] = $node;
     }
@@ -1959,7 +1885,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
    * Test that calling the akismet action function triggers the unpublish of
    * comments and marking as spam.
    */
-  function testCommentActions() {
+  public function testCommentActions() {
     // Load the comment entity objects.
     $cids = array();
     $guids = array();
@@ -1975,7 +1901,10 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     $this->assertEqual(count($published), count($comment_entities));
 
     // Call the unpublish action.
-    akismet_action_unpublish_comment($comment_entities);
+    //akismet_action_unpublish_comment($comment_entities);
+    foreach ($comment_entities as $comment_entity) {
+      akismet_comment_unpublish_action($comment_entity);
+    }
 
     // Verify that all comments are now unpublished.
     $published = db_query('SELECT * FROM {comment} WHERE cid IN (:cids) AND status = 1', array(':cids' => $cids))->fetchAll();
@@ -1992,7 +1921,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
    * Test that calling the akismet action function triggers the unpublish of
    * nodes and marking as spam.
    */
-  function testNodeActions() {
+  public function testNodeActions() {
     // Load the comment entity objects.
     $nids = array();
     $guids = array();
@@ -2008,7 +1937,10 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     $this->assertEqual(count($published), count($node_entities));
 
     // Call the unpublish action.
-    akismet_action_unpublish_node($node_entities);
+    //akismet_action_unpublish_node($node_entities);
+    foreach ($node_entities as $node_entity) {
+      akismet_node_unpublish_action($node_entity);
+    }
 
     // Verify that all comments are now unpublished.
     $published = db_query('SELECT * FROM {node} WHERE nid IN (:nids) AND status = 1', array(':nids' => $nids))->fetchAll();
@@ -2027,15 +1959,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
  */
 class AkismetDataCRUDTestCase extends AkismetWebTestCase {
 
-  protected $akismetClass = 'AkismetDrupalTestLocal';
-
-  public static function getInfo() {
-    return array(
-      'name' => 'Data CRUD',
-      'description' => 'Verify that Akismet data can be created, read, updated, and deleted.',
-      'group' => 'Akismet',
-    );
-  }
+  protected $akismetClass = 'AkismetBackdropTestLocal';
 
   /**
    * Verify that Akismet data can be updated.
@@ -2044,7 +1968,7 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
    * properly accounted for; i.e., two entities having the same ID but different
    * types must not considered the same.
    */
-  function testUpdate() {
+  public function testUpdate() {
     // Create a first data record.
     $data1 = (object) array(
       'entity' => 'type1',
@@ -2077,7 +2001,7 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
   /**
    * Verify that Akismet data can be deleted.
    */
-  function testDelete() {
+  public function testDelete() {
     // Create a data record.
     $data1 = (object) array(
       'entity' => 'type1',
@@ -2115,18 +2039,10 @@ class AkismetDataCRUDTestCase extends AkismetWebTestCase {
 class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
   protected $disableDefaultSetup = TRUE;
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Text analysis options',
-      'description' => 'Tests text analysis when retaining unsure/spam.',
-      'group' => 'Akismet',
-    );
-  }
-
   function setUp() {
     parent::setUp(array('akismet', 'akismet_test'));
 
-    $this->admin_user = $this->drupalCreateUser(array(
+    $this->admin_user = $this->backdropCreateUser(array(
       'access administration pages',
       'administer akismet',
     ));
@@ -2135,26 +2051,26 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
   /**
    * Tests retaining unsure posts and moderating them.
    */
-  function testRetainUnsure() {
-    $this->drupalLogin($this->admin_user);
+  public function testRetainUnsure() {
+    $this->backdropLogin($this->admin_user);
     // Verify that akismet_basic_elements_test_form cannot be configured to put
     // posts into moderation queue.
     $this->setProtectionUI('akismet_basic_elements_test_form');
-    $this->drupalGet('admin/config/content/akismet/manage/akismet_basic_elements_test_form');
+    $this->backdropGet('admin/config/content/akismet/manage/akismet_basic_elements_test_form');
     $this->assertNoFieldByName('akismet[unsure]');
 
     // Configure akismet_test_form to retain unsure posts.
     $this->setProtectionUI('akismet_test_form', NULL, array(
       'akismet[unsure]' => 'moderate',
     ));
-    $this->drupalLogout();
+    $this->backdropLogout();
 
     // Verify that an unsure post gets unpublished.
     $edit = array(
       'title' => $this->randomString(),
       'body' => 'unsure',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $mid = $this->assertTestSubmitData();
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2168,7 +2084,7 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
       'title' => $this->randomString(),
       'body' => 'unsure unsure',
     );
-    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->backdropPost(NULL, $edit, 'Submit');
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2177,11 +2093,11 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $this->assertSame('moderate', $data->moderate, 1);
 
     // Verify that publishing the post changes the session data accordingly.
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
     $edit = array(
       'status' => TRUE,
     );
-    $this->drupalPost('akismet-test/form/' . $mid, $edit, 'Submit');
+    $this->backdropPost('akismet-test/form/' . $mid, $edit, 'Submit');
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2193,26 +2109,26 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
   /**
    * Tests retaining spam posts and moderating them.
    */
-  function testRetainSpam() {
-    $this->drupalLogin($this->admin_user);
+  public function testRetainSpam() {
+    $this->backdropLogin($this->admin_user);
     // Verify that akismet_basic_test_form cannot be configured to put posts into
     // moderation queue.
     $this->setProtectionUI('akismet_basic_elements_test_form');
-    $this->drupalGet('admin/config/content/akismet/manage/akismet_basic_elements_test_form');
+    $this->backdropGet('admin/config/content/akismet/manage/akismet_basic_elements_test_form');
     $this->assertNoFieldByName('akismet[discard]');
 
     // Configure akismet_test_form to accept bad posts.
     $this->setProtectionUI('akismet_test_form', NULL, array(
       'akismet[discard]' => 0,
     ));
-    $this->drupalLogout();
+    $this->backdropLogout();
 
     // Verify that we are able to post spam and the post is unpublished.
     $edit = array(
       'title' => $this->randomString(),
       'body' => 'spam',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $mid = $this->assertTestSubmitData();
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2226,7 +2142,7 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
       'title' => $this->randomString(),
       'body' => 'spam spam',
     );
-    $this->drupalPost(NULL, $edit, 'Submit');
+    $this->backdropPost(NULL, $edit, 'Submit');
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2235,11 +2151,11 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $this->assertSame('moderate', $data->moderate, 1);
 
     // Verify that publishing the post changes the session data accordingly.
-    $this->drupalLogin($this->admin_user);
+    $this->backdropLogin($this->admin_user);
     $edit = array(
       'status' => TRUE,
     );
-    $this->drupalPost('akismet-test/form/' . $mid, $edit, 'Submit');
+    $this->backdropPost('akismet-test/form/' . $mid, $edit, 'Submit');
     $mid = $this->assertTestSubmitData($mid);
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2248,12 +2164,12 @@ class AkismetAnalysisOptionsTestCase extends AkismetWebTestCase {
     $this->assertSame('moderate', $data->moderate, 0);
 
     // Verify that ham posts are not marked for moderation.
-    $this->drupalLogout();
+    $this->backdropLogout();
     $edit = array(
       'title' => $this->randomString(),
       'body' => 'ham',
     );
-    $this->drupalPost('akismet-test/form', $edit, 'Submit');
+    $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $mid = $this->assertTestSubmitData();
     $data = $this->assertAkismetData('akismet_test', $mid);
     $record = akismet_test_load($mid);
@@ -2271,14 +2187,6 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
 
   protected $disableDefaultSetup = TRUE;
 
-  public static function getInfo() {
-    return array(
-      'name' => 'Text analysis with caching',
-      'description' => 'Tests basic text analysis functionality with enabled caching.',
-      'group' => 'Akismet',
-    );
-  }
-
   function setUp() {
     parent::setUp(array('akismet', 'akismet_test'));
     $this->enablePageCache();
@@ -2287,24 +2195,24 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
   /**
    * Tests text analysis.
    */
-  function testAnalysis() {
+  public function testAnalysis() {
     $this->setProtection('akismet_test_form');
     // Prime the form + page cache.
-    $this->drupalGet('akismet-test/form');
+    $this->backdropGet('akismet-test/form');
     $this->assertText('Views: 1');
-    $this->drupalGet('akismet-test/form');
-    $this->assertText('Views: 1');
-    $this->assertUnsureSubmit(NULL, array('title'), array(), 'Submit');
-
-    $this->drupalGet('akismet-test/form');
+    $this->backdropGet('akismet-test/form');
     $this->assertText('Views: 1');
     $this->assertUnsureSubmit(NULL, array('title'), array(), 'Submit');
 
-    $this->drupalGet('akismet-test/form');
+    $this->backdropGet('akismet-test/form');
+    $this->assertText('Views: 1');
+    $this->assertUnsureSubmit(NULL, array('title'), array(), 'Submit');
+
+    $this->backdropGet('akismet-test/form');
     $this->assertText('Views: 1');
     $this->assertSpamSubmit(NULL, array('title'), array(), 'Submit');
 
-    $this->drupalGet('akismet-test/form');
+    $this->backdropGet('akismet-test/form');
     $this->assertText('Views: 1');
     $this->assertHamSubmit(NULL, array('title'), array(), 'Submit');
   }
@@ -2312,7 +2220,7 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
   /**
    * Tests text analysis with additionally enabled Form API cache.
    */
-  function testAnalysisFormCache() {
+  public function testAnalysisFormCache() {
     variable_set('akismet_test.form.cache', TRUE);
     $this->testAnalysis();
   }
@@ -2323,52 +2231,45 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
  * Tests report to Akismet functionality.
  */
 class AkismetReportTestCase extends AkismetWebTestCase {
-  public static function getInfo() {
-    return array(
-      'name' => 'Reporting functionality',
-      'description' => 'Verify that session data is properly stored and content can be reported to Akismet.',
-      'group' => 'Akismet',
-    );
-  }
 
   function setUp() {
     parent::setUp(array('comment'));
 
-    $this->drupalCreateContentType(array('type' => 'article', 'name' => 'Article'));
-    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
+    config_set('node.type.post', 'settings.comment_preview', BACKDROP_OPTIONAL);
 
-    $this->web_user = $this->drupalCreateUser(array('create article content', 'access comments', 'post comments', 'skip comment approval'));
+    $this->web_user = $this->backdropCreateUser(array('edit own post content', 'create post content', 'access comments', 'post comments', 'skip comment approval'));
   }
 
   /**
    * Tests reporting comments.
    */
-  function testReportComment() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('comment_node_article_form');
-    $this->drupalLogout();
+  public function testReportComment() {
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('comment_node_post_form');
+    $this->backdropLogout();
 
-    $this->node = $this->drupalCreateNode(array('type' => 'article'));
+    $this->node = $this->backdropCreateNode(array('type' => 'post'));
 
     // Post a comment.
-    $this->drupalLogin($this->web_user);
+    $this->backdropLogin($this->web_user);
     $edit = array(
       'comment_body[und][0][value]' => 'ham',
     );
-    $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
+    $this->backdropPost('node/' . $this->node->nid, $edit, t('Save'));
     $this->comment = db_query('SELECT * FROM {comment} WHERE subject = :comment AND nid = :nid', array(':comment' => $edit['comment_body[und][0][value]'], ':nid' => $this->node->nid))->fetchObject();
     $this->assertTrue($this->comment, t('Comment was found in the database.'));
     $this->assertAkismetData('comment', $this->comment->cid);
 
     // Log in comment administrator and verify that we can report to Akismet.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('node/' . $this->node->nid);
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('node/' . $this->node->nid);
     $this->assertText($edit['comment_body[und][0][value]'], t('Comment found.'));
     $this->clickLink('delete');
     $edit = array(
       'akismet[feedback]' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Delete'));
+    $this->backdropPost(NULL, $edit, t('Delete'));
     $this->assertText(t('The comment and all its replies have been deleted.'));
     $this->assertText(t('The content was successfully reported as inappropriate.'));
 
@@ -2380,23 +2281,23 @@ class AkismetReportTestCase extends AkismetWebTestCase {
   /**
    * Tests mass-reporting comments.
    */
-  function testMassReportComments() {
-    $this->drupalLogin($this->admin_user);
-    $this->setProtectionUI('comment_node_article_form');
-    $this->drupalLogout();
+  public function testMassReportComments() {
+    $this->backdropLogin($this->admin_user);
+    $this->setProtectionUI('comment_node_post_form');
+    $this->backdropLogout();
 
-    $this->node = $this->drupalCreateNode(array('type' => 'article'));
-    variable_set('comment_preview_article', DRUPAL_OPTIONAL);
+    $this->node = $this->backdropCreateNode(array('type' => 'post'));
+    config_set('node.type.post', 'settings.comment_preview', BACKDROP_OPTIONAL);
 
     // Post 3 comments.
-    $this->drupalLogin($this->web_user);
+    $this->backdropLogin($this->web_user);
     $this->comments = array();
     foreach (range(1, 3) as $num) {
       $edit = array(
         'subject' => $this->randomName(),
         'comment_body[und][0][value]' => 'ham',
       );
-      $this->drupalPost('comment/reply/' . $this->node->nid, $edit, t('Save'));
+      $this->backdropPost('node/' . $this->node->nid, $edit, t('Save'));
       $this->comments[$num] = db_query('SELECT * FROM {comment} WHERE subject = :subject AND nid = :nid', array(':subject' => $edit['subject'], ':nid' => $this->node->nid))->fetchObject();
       $this->assertTrue($this->comments[$num], t('Comment was found in the database.'));
       $this->assertAkismetData('comment', $this->comments[$num]->cid);
@@ -2404,8 +2305,8 @@ class AkismetReportTestCase extends AkismetWebTestCase {
 
     // Log in comment administrator and verify that we can mass-report all
     // comments to Akismet.
-    $this->drupalLogin($this->admin_user);
-    $this->drupalGet('admin/content/comment');
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/content/comment');
     $edit = array(
       'operation' => 'delete',
     );
@@ -2413,14 +2314,14 @@ class AkismetReportTestCase extends AkismetWebTestCase {
       $this->assertText($comment->subject, t('Comment found.'));
       $edit["comments[{$comment->cid}]"] = TRUE;
     }
-    $this->drupalPost(NULL, $edit, t('Update'));
+    $this->backdropPost(NULL, $edit, t('Update'));
     foreach ($this->comments as $comment) {
       $this->assertText($comment->subject, t('Comment found.'));
     }
     $edit = array(
       'akismet[feedback]' => 'spam',
     );
-    $this->drupalPost(NULL, $edit, t('Delete comments'));
+    $this->backdropPost(NULL, $edit, t('Delete comments'));
     $this->assertText(t('Deleted @count comments.', array('@count' => count($this->comments))));
     $this->assertText(t('The posts were successfully reported as inappropriate.'));
 

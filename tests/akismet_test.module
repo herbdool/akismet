@@ -11,6 +11,9 @@
 function akismet_test_entity_info() {
   $info['akismet_test'] = array(
     'label' => 'Akismet test record',
+    'bundle label' => t('Type'),
+    'controller class' => 'EntityDatabaseStorageController',
+    'entity class' => 'AkismetTest',
     'base table' => 'akismet_test',
     'uri callback' => 'akismet_test_uri',
     'entity keys' => array(
@@ -19,6 +22,15 @@ function akismet_test_entity_info() {
     ),
   );
   return $info;
+}
+
+/**
+ * Implements hook_autoload_info().
+ */
+function akismet_test_autoload_info() {
+  return array(
+    'AkismetTest' => 'akismet_test.entity.inc',
+  );
 }
 
 /**
@@ -36,13 +48,13 @@ function akismet_test_uri($record) {
 function akismet_test_menu() {
   $items['akismet-test/form'] = array(
     'title' => 'Akismet test form',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_test_form'),
     'access callback' => TRUE,
   );
   $items['akismet-test/form/%akismet_test/delete'] = array(
     'title' => 'Delete Akismet test item',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_test_delete_form', 2),
     'access callback' => TRUE,
   );
@@ -52,7 +64,7 @@ function akismet_test_menu() {
     'type' => MENU_CALLBACK,
   );
   $items['akismet-test/pong'] = array(
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_test_pong_form'),
     'access callback' => TRUE,
     'type' => MENU_CALLBACK,
@@ -129,7 +141,7 @@ function akismet_test_akismet_form_info($form_id) {
 function akismet_test_views_reset() {
   variable_del('akismet_test.form.views');
   cache_clear_all();
-  drupal_goto();
+  backdrop_goto();
 }
 
 /**
@@ -157,7 +169,7 @@ function akismet_test_form($form, &$form_state, $mid = NULL) {
 
   // Output a page view counter for page/form cache testing purposes.
   $count = variable_get('akismet_test.form.views', 1);
-  $reset_link = l('Reset', 'akismet-test/form/views/reset', array('query' => drupal_get_destination()));
+  $reset_link = l('Reset', 'akismet-test/form/views/reset', array('query' => backdrop_get_destination()));
   $form['views'] = array(
     '#markup' => '<p>' . 'Views: ' . $count++ . ' ' . $reset_link . '</p>',
   );
@@ -259,15 +271,17 @@ function akismet_test_form_submit($form, &$form_state) {
 
   // Store submission.
   form_state_values_clean($form_state);
-  $record = (object) $form_state['values'];
-  akismet_test_save($record);
+  //$record = (object) $form_state['values'];
+  $record = entity_create('akismet_test', $form_state['values']);
+  $record->save();
+  //akismet_test_save($record);
   $form_state['values']['mid'] = $record->mid;
 
   // Redirect to stored entry.
   $form_state['redirect'] = 'akismet-test/form/' . $record->mid;
 
-  drupal_set_message('Successful form submission.');
-  drupal_set_message('<pre>' . var_export($record, TRUE) . '</pre>');
+  backdrop_set_message('Successful form submission.');
+  backdrop_set_message('<pre>' . var_export($record, TRUE) . '</pre>');
 }
 
 /**
@@ -294,7 +308,7 @@ function akismet_test_save($record) {
   }
 
   $update = !empty($record->mid) ? array('mid') : array();
-  $status = drupal_write_record('akismet_test', $record, $update);
+  $status = backdrop_write_record('akismet_test', $record, $update);
   if ($status === SAVED_NEW) {
     module_invoke_all('akismet_test_insert', $record);
     module_invoke_all('entity_insert', $record, 'akismet_test');
@@ -341,7 +355,7 @@ function akismet_test_delete_form($form, &$form_state, $record) {
  */
 function akismet_test_delete_form_submit($form, &$form_state) {
   akismet_test_delete($form_state['values']['mid']);
-  drupal_set_message('The record has been deleted.');
+  backdrop_set_message('The record has been deleted.');
   $form_state['redirect'] = 'akismet-test/form';
 }
 

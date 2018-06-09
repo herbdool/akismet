@@ -48,6 +48,36 @@ function akismet_hook_info() {
 }
 
 /**
+ * Implements hook_autoload_info().
+ */
+function akismet_autoload_info() {
+  return array(
+    'Akismet' => 'akismet.class.inc',
+    'AkismetResponse' => 'akismet.class.inc',
+    'AkismetException' => 'akismet.class.inc',
+    'AkismetNetworkException' => 'akismet.class.inc',
+    'AkismetResponseException' => 'akismet.class.inc',
+    'AkismetAuthenticationException' => 'akismet.class.inc',
+    'AkismetBadRequestException' => 'akismet.class.inc',
+    'AkismetBackdrop' => 'akismet.backdrop.inc',
+    'AkismetBackdropTest' => 'akismet.backdrop.inc',
+    'AkismetBackdropTestLocal' => 'akismet.backdrop.inc',
+    'AkismetBackdropTestInvalid' => 'akismet.backdrop.inc',
+  );
+}
+
+/**
+* Implements hook_config_info().
+*/
+function akismet_config_info() {
+  $prefixes['akismet.settings'] = array(
+    'label' => t('Akismet settings'),
+    'group' => t('Configuration'),
+  );
+  return $prefixes;
+}
+
+/**
  * Implements hook_help().
  */
 function akismet_help($path, $arg) {
@@ -95,7 +125,7 @@ function akismet_exit() {
 function akismet_menu() {
   $items['akismet/report/%/%'] = array(
     'title' => 'Report to Akismet',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_report_form', 2, 3),
     'access callback' => 'akismet_report_access',
     'access arguments' => array(2, 3),
@@ -124,7 +154,7 @@ function akismet_menu() {
   );
   $items['admin/config/content/akismet/add'] = array(
     'title' => 'Add form',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_admin_configure_form'),
     'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_ACTION,
@@ -132,14 +162,14 @@ function akismet_menu() {
   );
   $items['admin/config/content/akismet/manage/%akismet_form'] = array(
     'title' => 'Configure',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_admin_configure_form', 5),
     'access arguments' => array('administer akismet'),
     'file' => 'akismet.admin.inc',
   );
   $items['admin/config/content/akismet/unprotect/%akismet_form'] = array(
     'title' => 'Unprotect form',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_admin_unprotect_form', 5),
     'access arguments' => array('administer akismet'),
     'file' => 'akismet.admin.inc',
@@ -147,7 +177,7 @@ function akismet_menu() {
   $items['admin/config/content/akismet/settings'] = array(
     'title' => 'Settings',
     'description' => 'Configure Akismet keys and global settings.',
-    'page callback' => 'drupal_get_form',
+    'page callback' => 'backdrop_get_form',
     'page arguments' => array('akismet_admin_settings'),
     'access arguments' => array('administer akismet'),
     'type' => MENU_LOCAL_TASK,
@@ -237,7 +267,7 @@ function akismet_permission() {
  * Implements hook_modules_installed().
  */
 function akismet_modules_installed($modules) {
-  drupal_static_reset('akismet_get_form_info');
+  backdrop_static_reset('akismet_get_form_info');
 }
 
 /**
@@ -319,7 +349,7 @@ function akismet_data_save($data) {
     ':entity' => $data->entity,
     ':id' => $data->id,
   ))->fetchField();
-  drupal_write_record('akismet', $data, $update ? array('entity', $update) : array());
+  backdrop_write_record('akismet', $data, $update ? array('entity', $update) : array());
 
   if (!$update) {
     module_invoke_all('akismet_data_insert', $data);
@@ -422,7 +452,7 @@ function akismet_data_delete_form_submit($form, &$form_state) {
 
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report($entity, $id, $form_state['values']['akismet']['feedback'])) {
-      drupal_set_message(t('The content was successfully reported as inappropriate.'));
+      backdrop_set_message(t('The content was successfully reported as inappropriate.'));
     }
   }
 
@@ -637,7 +667,7 @@ function akismet_form_alter(&$form, &$form_state, $form_id) {
  *     and therefore have an identical 'post_id' mapping.
  */
 function akismet_form_cache($reset = FALSE) {
-  $forms = &drupal_static(__FUNCTION__);
+  $forms = &backdrop_static(__FUNCTION__);
 
   if ($reset) {
     // This catches both 'akismet:form_cache' as well as akismet_form_load()'s
@@ -700,7 +730,7 @@ function akismet_form_list() {
   }
 
   // Allow modules to alter the form list.
-  drupal_alter('akismet_form_list', $form_list);
+  backdrop_alter('akismet_form_list', $form_list);
 
   return $form_list;
 }
@@ -763,7 +793,7 @@ function akismet_form_info($form_id, $module, $form_list = NULL) {
   $form_info = array_merge($form_info, $module_form_info);
 
   // Allow modules to alter the default form information.
-  drupal_alter('akismet_form_info', $form_info, $form_id);
+  backdrop_alter('akismet_form_info', $form_info, $form_id);
 
   return $form_info;
 }
@@ -847,7 +877,7 @@ function akismet_form_load($form_id) {
       // Override entity type and bundle information with current values from
       // the form registry. These properties were originally not stored in
       // {akismet_form} and only introduced in 7.x-2.2. The update path is only
-      // able to map entity types/bundles in Drupal core. Any other form
+      // able to map entity types/bundles in Backdrop core. Any other form
       // protections need to be updated manually. That is the situation in which
       // $akismet_form has NULL values from the database, but the form registry
       // actually contains the proper values.
@@ -869,7 +899,7 @@ function akismet_form_load($form_id) {
  */
 function akismet_form_save(&$akismet_form) {
   $exists = db_query_range('SELECT 1 FROM {akismet_form} WHERE form_id = :form_id', 0, 1, array(':form_id' => $akismet_form['form_id']))->fetchField();
-  $status = drupal_write_record('akismet_form', $akismet_form, ($exists ? 'form_id' : array()));
+  $status = backdrop_write_record('akismet_form', $akismet_form, ($exists ? 'form_id' : array()));
 
   // Allow modules to react on saved form configurations.
   if ($status === SAVED_NEW) {
@@ -1100,7 +1130,7 @@ function akismet_form_get_values(&$form_state, $fields, $mapping) {
   $invalid_utf8 = FALSE;
   foreach ($data as $key => $value) {
     // Check for invalid UTF-8 byte sequences first.
-    if (!drupal_validate_utf8($value)) {
+    if (!backdrop_validate_utf8($value)) {
       $invalid_utf8 = TRUE;
       // Replace the bogus string, since $data will be logged as
       // check_plain(var_export($data)), and check_plain() would empty the
@@ -1165,7 +1195,7 @@ function _akismet_flatten_form_values($values) {
  */
 function _akismet_get_entity_forms_protected($type, $bundles = array()) {
     // Find out if this entity bundle is protected.
-  $protected = &drupal_static(__FUNCTION__,array());
+  $protected = &backdrop_static(__FUNCTION__,array());
   if (empty($bundles)) {
     $info = entity_get_info($type);
     $bundles = array_keys($info['bundles']);
@@ -1207,7 +1237,7 @@ function _akismet_get_entity_forms_protected($type, $bundles = array()) {
  * @see akismet_requirements()
  */
 function _akismet_status($force = FALSE, $update = FALSE) {
-  $static_cache = &drupal_static(__FUNCTION__, array());
+  $static_cache = &backdrop_static(__FUNCTION__, array());
   $testing_mode = (int) variable_get('akismet_testing_mode', 0);
   $status = &$static_cache[$testing_mode];
 
@@ -1277,9 +1307,9 @@ function _akismet_status($force = FALSE, $update = FALSE) {
  * Outputs a warning message about enabled testing mode (once).
  */
 function _akismet_testing_mode_warning() {
-  // drupal_set_message() starts a session and disables page caching, which
+  // backdrop_set_message() starts a session and disables page caching, which
   // breaks cache-related tests. Thus, tests set the verbose variable to TRUE.
-  $warned = &drupal_static(__FUNCTION__, variable_get('akismet_testing_mode_omit_warning', NULL));
+  $warned = &backdrop_static(__FUNCTION__, variable_get('akismet_testing_mode_omit_warning', NULL));
   if (isset($warned)) {
     return;
   }
@@ -1295,7 +1325,7 @@ function _akismet_testing_mode_warning() {
     $message = t('Akismet testing mode is still enabled. !admin-message', array(
       '!admin-message' => $admin_message,
     ));
-    drupal_set_message($message, 'warning');
+    backdrop_set_message($message, 'warning');
   }
 }
 
@@ -1571,13 +1601,13 @@ function akismet_form_submit($form, &$form_state) {
  * @return Akismet
  */
 function akismet($class = NULL, $force = FALSE) {
-  $instances = &drupal_static(__FUNCTION__, array());
+  $instances = &backdrop_static(__FUNCTION__, array());
   if (!isset($class)) {
     if (variable_get('akismet_testing_mode', 0)) {
-      $class = 'AkismetDrupalTest';
+      $class = 'AkismetBackdropTest';
     }
     else {
-      $class = variable_get('akismet_class', 'AkismetDrupal');
+      $class = variable_get('akismet_class', 'AkismetBackdrop');
     }
   }
   // If there is no instance yet or if it is not of the desired class, create a
@@ -1629,7 +1659,7 @@ function akismet($class = NULL, $force = FALSE) {
  */
 function akismet_log(array $entry = NULL, $severity = NULL, $reset = FALSE) {
   // Start with debug severity level.
-  $log = &drupal_static(__FUNCTION__, array());
+  $log = &backdrop_static(__FUNCTION__, array());
 
   if ($reset) {
     $return = $log;
@@ -1830,7 +1860,7 @@ function _akismet_format_log(array $log) {
  *   - @variable: Escaped to HTML using check_plain(). Use this for anything
  *     displayed on a page on the site.
  *   - %variable: Escaped as a placeholder for user-submitted content using
- *     drupal_placeholder(), which shows up as <em>emphasized</em> text.
+ *     backdrop_placeholder(), which shows up as <em>emphasized</em> text.
  *
  * @see t()
  * @ingroup sanitization
@@ -1847,7 +1877,7 @@ function _akismet_format_string($string, array $args = array()) {
       case '%':
       default:
         // Escaped and placeholder.
-        $args[$key] = drupal_placeholder($value);
+        $args[$key] = backdrop_placeholder($value);
         break;
 
       case '!':
@@ -1909,7 +1939,7 @@ function akismet_get_statistics($refresh = FALSE) {
   if ($refresh || !$cache || REQUEST_TIME >= $cache->expire) {
     $status = _akismet_status();
     if ($status['isVerified']) {
-      $statistics = drupal_map_assoc(array(
+      $statistics = backdrop_map_assoc(array(
         'total_days',
         'total_accepted',
         'total_rejected',
@@ -2064,7 +2094,7 @@ function node_akismet_form_list() {
  */
 function node_akismet_form_info($form_id) {
   // Retrieve internal type from $form_id.
-  $nodetype = drupal_substr($form_id, 0, -10);
+  $nodetype = backdrop_substr($form_id, 0, -10);
 
   if (!$type = node_type_get_type($nodetype)) {
     return;
@@ -2121,7 +2151,7 @@ function akismet_form_node_multiple_delete_confirm_submit($form, &$form_state) {
   $nids = array_keys($form_state['values']['nodes']);
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report_multiple('node', $nids, $form_state['values']['akismet']['feedback'])) {
-      drupal_set_message(t('The posts were successfully reported as inappropriate.'));
+      backdrop_set_message(t('The posts were successfully reported as inappropriate.'));
     }
   }
   akismet_data_delete_multiple('node', $nids);
@@ -2213,7 +2243,7 @@ function comment_akismet_form_info($form_id) {
     ),
   );
   // Retrieve internal type from $form_id.
-  $comment_bundle = drupal_substr($form_id, 0, -5);
+  $comment_bundle = backdrop_substr($form_id, 0, -5);
   akismet_form_info_add_fields($form_info, 'comment', $comment_bundle);
   return $form_info;
 }
@@ -2259,7 +2289,7 @@ function akismet_form_comment_multiple_delete_confirm_submit($form, &$form_state
   $cids = array_keys($form_state['values']['comments']);
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report_multiple('comment', $cids, $form_state['values']['akismet']['feedback'])) {
-      drupal_set_message(t('The posts were successfully reported as inappropriate.'));
+      backdrop_set_message(t('The posts were successfully reported as inappropriate.'));
     }
   }
   akismet_data_delete_multiple('comment', $cids);
@@ -2354,7 +2384,7 @@ function akismet_form_user_multiple_cancel_confirm_submit($form, &$form_state) {
   $uids = array_keys($form_state['values']['accounts']);
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report_multiple('user', $uids, $form_state['values']['akismet']['feedback'])) {
-      drupal_set_message(t('The users were successfully reported.'));
+      backdrop_set_message(t('The users were successfully reported.'));
     }
   }
   akismet_data_delete_multiple('user', $uids);
@@ -2463,83 +2493,71 @@ function profile_akismet_form_info_alter(&$form_info, $form_id) {
 function akismet_action_info() {
   return array(
     // Unpublish comment action.
-    'akismet_action_unpublish_comment' => array(
+    'akismet_comment_unpublish_action' => array(
       'label' => t('Report comment to Akismet as spam and unpublish'),
       'type' => 'comment',
-      'configurable' => FALSE,
-      'triggers' => array(
-        'comment_insert',
-        'comment_update',
-      ),
-      'aggregate' => TRUE,
+      'callback' => 'akismet_unpublish_comment_action',
     ),
     // Unpublish node action.
-    'akismet_action_unpublish_node' => array(
-      'label' => t('Report node to Akismet as spam and unpublish'),
+    'akismet_node_unpublish_action' => array(
+      'label' => t('Report to Akismet as spam and unpublish'),
       'type' => 'node',
-      'configurable' => FALSE,
-      'triggers' => array(
-        'node_insert',
-        'node_update',
-      ),
-      'aggregate' => TRUE,
+      'callback' => 'akismet_unpublish_node_action',
     ),
   );
 }
 
 /**
- * Action callback to report a comment to akismet and unpublish.
- */
-function akismet_action_unpublish_comment($comments, $context = array()) {
-  _akismet_action_unpublish('comment', $comments);
-}
-
-/**
- * Action callback to report a node to akismet and unpublish.
- */
-function akismet_action_unpublish_node($nodes, $context = array()) {
-  _akismet_action_unpublish('node', $nodes);
-}
-
-/**
- * Unpublish content and report to Akismet as spam.
+ * Unpublishes a comment.
  *
- * @param $entity_type
- *   The type of entity; one of "comment" or "node".
- * @param $entities
- *   An array of entities to perform the action upon.
+ * @param $comment
+ *   An optional comment object.
+ * @param array $context
+ *   Array with components:
+ *   - 'cid': Comment ID. Required if $comment is not given.
+ *
+ * @ingroup actions
  */
-function _akismet_action_unpublish($entity_type, $entities) {
-  // Make sure this is a supported entity type.
-  if (!in_array($entity_type, array('node', 'comment'))) {
-    watchdog('Akismet', 'Called unpublish action for an unsupported entity type: @type', array('@type' => $entity_type), WATCHDOG_ERROR);
-    return;
-  }
+function akismet_comment_unpublish_action($comment, &$context) {
+  $comment->status = COMMENT_NOT_PUBLISHED;
+  $comment->save();
 
   // Determine the entities for which moderation is allowed.
-  list($allowed, $nids, $cids) = _akismet_actions_access_callbacks($entity_type, $entities);
+  list($allowed, $nid, $cid) = _akismet_actions_access_callbacks('comment', $comment);
 
   // Send feedback to Akismet.
-  $ids = $entity_type === 'comment' ? $cids : $nids;
-  akismet_data_report_multiple($entity_type, $ids, 'spam');
+  akismet_data_report_multiple('comment', array($cid), 'spam');
+}
 
-  if ($entity_type === 'comment') {
-    // Unpublish the comment.
-    db_update("comment")
-      ->fields(array("status" => COMMENT_NOT_PUBLISHED))
-      ->condition("cid", $cids)
-      ->execute();
+/**
+ * Sets the status of a node to 0 (unpublished)
+ * and reports to Akismet.
+ *
+ * @param Node $node
+ *   A node entity.
+ * @param $context
+ *   Contextual information about the triggered action..
+ *
+ * @ingroup actions
+ */
+function akismet_node_unpublish_action(Node $node, &$context) {
+  $node->status = NODE_NOT_PUBLISHED;
+  $node->save();
 
-    foreach ($nids as $nid) {
-      _comment_update_node_statistics($nid);
-    }
-  }
-  else if ($entity_type === 'node') {
-    // Unpublish the node.
-    db_update("node")
-      ->fields(array("status" => NODE_NOT_PUBLISHED))
-      ->condition("nid", $nids)
-      ->execute();
+  // Determine the entities for which moderation is allowed.
+  list($allowed, $nid, $cid) = _akismet_actions_access_callbacks('node', $node->nid);
+
+  // Send feedback to Akismet.
+  akismet_data_report_multiple('node', array($nid), 'spam');
+}
+
+/**
+ * Implements hook_form_FORM_ID_alter().
+ */
+function akismet_form_comment_admin_overview_alter(&$form, &$form_state, $form_id) {
+  // Ensure action is available to old comment admin overview.
+  if ($form_state['build_info']['args'][0] != 'approval') {
+    $form['options']['operation']['#options']['akismet_unpublish_comment_action'] = t('Report comment to Akismet as spam and unpublish');
   }
 }
 

@@ -53,7 +53,7 @@ function akismet_report_form_submit($form, &$form_state) {
     // Send feedback to Akismet, if we have the original request data.
     if ((!empty($data->request)) && !empty($form_state['values']['akismet']['feedback'])) {
       if (_akismet_send_feedback($data, $form_state['values']['akismet']['feedback'])) {
-        drupal_set_message(t('The content was successfully reported as inappropriate.'));
+        backdrop_set_message(t('The content was successfully reported as inappropriate.'));
       }
     }
 
