@@ -15,18 +15,15 @@ Installation
 * Install this module using the official Backdrop CMS instructions at
   https://backdropcms.org/guide/modules
 * Go to https://akismet.com,
-
   - sign up or log in with your account
   - go to your Account Overview
   - Find your Akismet API key at the top of the page.
 * Enter your API keys on Administration » Configuration » Content authoring
   » Akismet » Settings.
 * If your site runs behind a reverse proxy or load balancer:
-
   - Open sites/default/settings.php in a text editor.
   - Ensure that the "reverse_proxy" settings are enabled and configured
     correctly.
-
   Your site MUST send the actual/proper IP address for every site visitor to
   Akismet.  You can confirm that your configuration is correct by going to
   Reports » "Recent log messages".  In the details of each log entry, you should
@@ -57,7 +54,7 @@ in the form submission (at all).
 Testing
 -------
 
-Do NOT test Akismet without enabling the testing mode.  Doing so would negatively
+Do NOT test Akismet without enabling the testing mode. Doing so would negatively
 affect your own author reputation across all sites in the Akismet network.
 
 To test Akismet:
@@ -89,7 +86,7 @@ A: Out of the box, the Akismet module allows to protect Backdrop CMS core forms 
    is extensively documented in akismet.api.php in this directory.
 
    To protect a custom form, you need to integrate with the Akismet module API.
-   If you have a completely custom form (not even using Drupal's Form API), see
+   If you have a completely custom form (not even using Backdrop's Form API), see
    the Akismet developer documentation:
 
    - https://akismet.com/development/api/

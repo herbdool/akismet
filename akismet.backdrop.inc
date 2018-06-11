@@ -64,7 +64,7 @@ class AkismetBackdrop extends Akismet {
    */
   public function getUserAgentInformation() {
     // Retrieve Backdrop distribution and installation profile information.
-    $profile = drupal_get_profile();
+    $profile = backdrop_get_profile();
     $profile_info = system_get_info('module', $profile) + array(
       'distribution_name' => 'Backdrop',
       'version' => VERSION,
@@ -74,7 +74,7 @@ class AkismetBackdrop extends Akismet {
     $akismet_info = system_get_info('module', 'akismet');
     if (empty($akismet_info['version'])) {
       // Manually build a module version string for repository checkouts.
-      $akismet_info['version'] = DRUPAL_CORE_COMPATIBILITY . '-1.x-dev';
+      $akismet_info['version'] = BACKDROP_CORE_COMPATIBILITY . '-2.x-dev';
     }
 
     $data = array(
@@ -137,7 +137,7 @@ class AkismetBackdrop extends Akismet {
       }
     }
 
-    $dhr = drupal_http_request($server . '/' . $path, $request);
+    $dhr = backdrop_http_request($server . '/' . $path, $request);
     // @todo Core: Ensure that $dhr->code is an integer.
     $dhr->code = (int) $dhr->code;
     // @todo Core: Any other code than 200 is interpreted as error.
@@ -211,7 +211,7 @@ class AkismetBackdropTestLocal extends AkismetBackdropTest {
    */
   protected function request($method, $server, $path, $query = NULL, array $headers = array()) {
     $response = parent::request($method, $server, $path, $query, $headers);
-    $keys = preg_grep('@^x-drupal-assertion-@', array_keys($response->headers));
+    $keys = preg_grep('@^x-backdrop-assertion-@', array_keys($response->headers));
     foreach ($keys as $key) {
       $header = $response->headers[$key];
       $header = unserialize(urldecode($header));
