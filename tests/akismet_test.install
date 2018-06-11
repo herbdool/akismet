@@ -41,13 +41,3 @@ function akismet_test_schema() {
   );
   return $schema;
 }
-
-/**
- * Implements hook_uninstall().
- */
-function akismet_test_uninstall() {
-  db_delete('variable')
-    ->condition('name', db_like('akismet_test.') . '%', 'LIKE')
-    ->execute();
-}
-

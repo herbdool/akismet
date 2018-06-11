@@ -246,9 +246,9 @@ function akismet_test_server_endpoint_submit_feedback($type, $params) {
     backdrop_add_http_header('X-akismet-guid', $guid);
   }
 
-  $storage = variable_get('akismet_test_server_' . $type, array());
+  $storage = state_get('akismet_test_server_' . $type, array());
   $storage[$guid] = $params;
-  variable_set('akismet_test_server_' . $type, $storage);
+  state_set('akismet_test_server_' . $type, $storage);
 
   return 'Thanks for making the web a better place.';
 }

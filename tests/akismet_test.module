@@ -139,7 +139,7 @@ function akismet_test_akismet_form_info($form_id) {
  * Page callback; Resets the akismet_test_form() [page] view counter.
  */
 function akismet_test_views_reset() {
-  variable_del('akismet_test.form.views');
+  state_del('akismet_test.form.views');
   cache_clear_all();
   backdrop_goto();
 }
@@ -168,15 +168,15 @@ function akismet_test_form($form, &$form_state, $mid = NULL) {
   $form_state['storage']['field']['new'] = '';
 
   // Output a page view counter for page/form cache testing purposes.
-  $count = variable_get('akismet_test.form.views', 1);
+  $count = state_get('akismet_test.form.views', 1);
   $reset_link = l('Reset', 'akismet-test/form/views/reset', array('query' => backdrop_get_destination()));
   $form['views'] = array(
     '#markup' => '<p>' . 'Views: ' . $count++ . ' ' . $reset_link . '</p>',
   );
-  variable_set('akismet_test.form.views', $count);
+  state_set('akismet_test.form.views', $count);
 
   // Conditionally enable form caching.
-  if (variable_get('akismet_test.form.cache', FALSE)) {
+  if (state_get('akismet_test.form.cache', FALSE)) {
     $form_state['cache'] = TRUE;
   }
 

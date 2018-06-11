@@ -62,13 +62,14 @@ class AkismetWebTestCase extends BackdropWebTestCase {
     // Re-initialize stored session_id and watchdog messages.
     $this->resetResponseID();
     $this->messages = array();
+    $config = config('akismet.settings');
 
     $modules = func_get_args();
     $modules = (isset($modules[0]) ? $modules[0] : array());
 
     // Use the real API key, if the test requires it.
     if ($this->useProductionKey) {
-      $key = variable_get('akismet_api_key');
+      $key = $config->get('akismet_api_key');
       $this->key = $key;
     }
 
@@ -86,18 +87,19 @@ class AkismetWebTestCase extends BackdropWebTestCase {
     parent::setUp($modules);
 
     // Save the Akismet client implementation to use for running the tests.
-    variable_set('akismet_class', $this->akismetClass);
+    $config->set('akismet_class', $this->akismetClass);
 
     // Save the API key for use during testing.
-    variable_set('akismet_api_key', $this->key);
+    $config->set('akismet_api_key', $this->key);
 
     // Disable testing mode warnings.
     // backdrop_set_message() starts a session, which disables page caching, and
     // in turn, page/form cache related tests would not behave correctly.
-    variable_set('akismet_testing_mode_omit_warning', TRUE);
+    $config->set('akismet_testing_mode_omit_warning', TRUE);
 
     // Log all messages.
-    variable_set('akismet_log_minimum_severity', WATCHDOG_DEBUG);
+    $config->set('akismet_log_minimum_severity', WATCHDOG_DEBUG);
+    $config->save();
 
     // D7's new default theme Bartik is bogus in various locations, which leads
     // to failing tests.
@@ -646,14 +648,16 @@ class AkismetWebTestCase extends BackdropWebTestCase {
   protected function getServerRecord($resource = 'content', $retain = FALSE) {
     $function = 'akismet_test_server_' . $resource;
 
-    // Ensure that we do not read obsolete/outdated data from variable_get()'s
+    // Ensure that we do not read obsolete/outdated data from config_get()'s
     // static cache while variables might have been updated in the child site.
     $this->refreshVariables();
 
     // Retrieve last recorded values.
-    $storage = variable_get($function, array());
+    $config = config('akismet.settings');
+    $storage = $config->get($function);
     $return = ($retain ? end($storage) : array_shift($storage));
-    variable_set($function, $storage);
+    $config->set($function, $storage);
+    $config->save();
 
     return $return;
   }
@@ -670,7 +674,9 @@ class AkismetWebTestCase extends BackdropWebTestCase {
     $function = 'akismet_test_server_' . $resource;
 
     // Delete the variable.
-    variable_del($function);
+    $config = config('akismet.settings');
+    $config->clear($function);
+    $config->save();
   }
 
   /**
@@ -842,7 +848,9 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     parent::setUp(array('akismet', 'akismet_test'));
 
     // Enable testing mode warnings.
-    variable_del('akismet_testing_mode_omit_warning');
+    $config = config('akismet.settings');
+    $config->clear('akismet.settings', 'akismet_testing_mode_omit_warning');
+    $config->save();
 
     $this->admin_user = $this->backdropCreateUser(array(
       'access administration pages',
@@ -858,7 +866,7 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
 
     // Protect akismet_test_form.
     $this->setProtectionUI('akismet_test_form');
-    variable_set('akismet_fallback', AKISMET_FALLBACK_ACCEPT);
+    config_set('akismet.settings', 'akismet_fallback', AKISMET_FALLBACK_ACCEPT);
 
     // Set up an invalid production API key. It must be retained throughout the
     // test.
@@ -1012,7 +1020,7 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->assertText($message_invalid);
 
     // Ensure unreachable servers.
-    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
+    config_set('akismet.settings', 'akismet_class', 'AkismetBackdropTestInvalid');
 
     // Verify presence of 'network error' message.
     $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1024,7 +1032,7 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     $this->assertText($message_invalid);
     $this->assertNoText($this->fallback_message, t('Fallback message not found.'));
 
-    variable_set('akismet_class', $this->akismetClass);
+    config_set('akismet.settings', 'akismet_class', $this->akismetClass);
 
     // Verify that a valid key works.
     $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1247,10 +1255,10 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $node = $this->backdropCreateNode(array('type' => 'post'));
 
     // Set the fallback strategy to 'blocking mode'.
-    variable_set('akismet_fallback', AKISMET_FALLBACK_BLOCK);
+    config_set('akismet.settings', 'akismet_fallback', AKISMET_FALLBACK_BLOCK);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
+    config_set('akismet.settings', 'akismet_class', 'AkismetBackdropTestInvalid');
 
     // Check the text analysis protected form.
     $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
@@ -1275,10 +1283,10 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
     $node = $this->backdropCreateNode(array('type' => 'post'));
 
     // Set the fallback strategy to 'accept mode'.
-    variable_set('akismet_fallback', AKISMET_FALLBACK_ACCEPT);
+    config_set('akismet.settings', 'akismet_fallback', AKISMET_FALLBACK_ACCEPT);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
+    config_set('akismet.settings', 'akismet_class', 'AkismetBackdropTestInvalid');
 
     // Check the text analysis protected form.
     $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
@@ -1306,13 +1314,13 @@ class AkismetFallbackModeTestCase extends AkismetWebTestCase {
 
     // Set the fallback strategy to 'blocking mode', so that if the failover
     // mechanism does not work, we would expect to get a warning.
-    variable_set('akismet_fallback', AKISMET_FALLBACK_BLOCK);
+    config_set('akismet.settings', 'akismet_fallback', AKISMET_FALLBACK_BLOCK);
 
     // Make all requests to Akismet fail.
-    variable_set('akismet_class', 'AkismetBackdropTestInvalid');
+    config_set('akismet.settings', 'akismet_class', 'AkismetBackdropTestInvalid');
     // Enable pseudo server fail-over.
     // @see AkismetBackdropTestInvalid::handleRequest()
-    variable_set('akismet_testing_server_failover', TRUE);
+    config_set('akismet.settings', 'akismet_testing_server_failover', TRUE);
 
     // Validate that the form loads correctly.
     $this->web_user = $this->backdropCreateUser(array('access content', 'access comments', 'post comments', 'skip comment approval'));
@@ -1902,6 +1910,7 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
 
     // Call the unpublish action.
     //akismet_action_unpublish_comment($comment_entities);
+    // @todo use the action example from node.test instead of calling it directly.
     foreach ($comment_entities as $comment_entity) {
       akismet_comment_unpublish_action($comment_entity);
     }
@@ -2221,7 +2230,7 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
    * Tests text analysis with additionally enabled Form API cache.
    */
   public function testAnalysisFormCache() {
-    variable_set('akismet_test.form.cache', TRUE);
+    state_set('akismet_test.form.cache', TRUE);
     $this->testAnalysis();
   }
 

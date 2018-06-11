@@ -17,7 +17,7 @@ class AkismetBackdrop extends Akismet {
    */
   public function __construct() {
     parent::__construct();
-    $this->requestTimeout = variable_get('akismet_connection_timeout', 3);
+    $this->requestTimeout = config_get('akismet.settings', 'akismet_connection_timeout');
   }
 
   /**
@@ -34,7 +34,7 @@ class AkismetBackdrop extends Akismet {
    */
   public function loadConfiguration($name) {
     $name = $this->configuration_map[$name];
-    return variable_get($name);
+    return config_get('akismet.settings', $name);
   }
 
   /**
@@ -47,7 +47,7 @@ class AkismetBackdrop extends Akismet {
     }
     // Persist in Backdrop.
     $name = $this->configuration_map[$name];
-    variable_set($name, $value);
+    config_set('akismet.settings', $name, $value);
   }
 
   /**
@@ -55,7 +55,8 @@ class AkismetBackdrop extends Akismet {
    */
   public function deleteConfiguration($name) {
     $name = $this->configuration_map[$name];
-    variable_del($name);
+    $config = config('akismet.settings');
+    $config->clear($name);
   }
 
   /**
@@ -265,7 +266,7 @@ class AkismetBackdropTestInvalid extends AkismetBackdropTestLocal {
   protected function handleRequest($method, $server, $path, $data) {
     $this->currentAttempt++;
 
-    if (variable_get('akismet_testing_server_failover', FALSE) && $this->currentAttempt == $this->requestMaxAttempts) {
+    if (config_get('akismet.settings', 'akismet_testing_server_failover') == TRUE && $this->currentAttempt == $this->requestMaxAttempts) {
       // Prior to PHP 5.3, there is no late static binding, so there is no way
       // to access the original value of AkismetBackdropTest::$server.
       $server = strtr($server, array($this->server => $this->originalServer));

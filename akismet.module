@@ -581,7 +581,7 @@ function akismet_form_alter(&$form, &$form_state, $form_id) {
 
       // Add link to privacy policy on forms protected via textual analysis,
       // if enabled.
-      if ($akismet_form['mode'] == AKISMET_MODE_ANALYSIS && variable_get('akismet_privacy_link', 1)) {
+      if ($akismet_form['mode'] == AKISMET_MODE_ANALYSIS && config_get('akismet.settings', 'akismet_privacy_link')) {
         $form['akismet']['privacy'] = array(
           '#prefix' => '<div class="description akismet-privacy">',
           '#suffix' => '</div>',
@@ -1238,7 +1238,7 @@ function _akismet_get_entity_forms_protected($type, $bundles = array()) {
  */
 function _akismet_status($force = FALSE, $update = FALSE) {
   $static_cache = &backdrop_static(__FUNCTION__, array());
-  $testing_mode = (int) variable_get('akismet_testing_mode', 0);
+  $testing_mode = (int) config_get('akismet.settings', 'akismet_testing_mode');
   $status = &$static_cache[$testing_mode];
 
   if (!$force && isset($status)) {
@@ -1309,13 +1309,13 @@ function _akismet_status($force = FALSE, $update = FALSE) {
 function _akismet_testing_mode_warning() {
   // backdrop_set_message() starts a session and disables page caching, which
   // breaks cache-related tests. Thus, tests set the verbose variable to TRUE.
-  $warned = &backdrop_static(__FUNCTION__, variable_get('akismet_testing_mode_omit_warning', NULL));
+  $warned = &backdrop_static(__FUNCTION__, config_get('akismet.settings', 'akismet_testing_mode_omit_warning'));
   if (isset($warned)) {
     return;
   }
   $warned = TRUE;
 
-  if (variable_get('akismet_testing_mode', 0) && empty($_POST)) {
+  if (config_get('akismet.settings', 'akismet_testing_mode') && empty($_POST)) {
     $admin_message = '';
     if (user_access('administer akismet') && $_GET['q'] != 'admin/config/content/akismet/settings') {
       $admin_message = t('Visit the <a href="@settings-url">Akismet settings page</a> to disable it.', array(
@@ -1333,7 +1333,7 @@ function _akismet_testing_mode_warning() {
  * Helper function to log and optionally output an error message when Akismet servers are unavailable.
  */
 function _akismet_fallback() {
-  $fallback = variable_get('akismet_fallback', AKISMET_FALLBACK_BLOCK);
+  $fallback = config_get('akismet.settings', 'akismet_fallback');
   if ($fallback == AKISMET_FALLBACK_BLOCK) {
     form_set_error('akismet', t("The spam filter installed on this site is currently unavailable. Per site policy, we are unable to accept new submissions until that problem is resolved. Please try resubmitting the form in a couple of minutes."));
   }
@@ -1603,11 +1603,11 @@ function akismet_form_submit($form, &$form_state) {
 function akismet($class = NULL, $force = FALSE) {
   $instances = &backdrop_static(__FUNCTION__, array());
   if (!isset($class)) {
-    if (variable_get('akismet_testing_mode', 0)) {
+    if (config_get('akismet.settings', 'akismet_testing_mode')) {
       $class = 'AkismetBackdropTest';
     }
     else {
-      $class = variable_get('akismet_class', 'AkismetBackdrop');
+      $class = config_get('akismet.settings', 'akismet_class');
     }
   }
   // If there is no instance yet or if it is not of the desired class, create a
@@ -1711,7 +1711,7 @@ function akismet_log_write() {
   }
   // Only log if severity if it meets configured minimum severity, or if testing
   // mode is enabled.
-  if (variable_get('akismet_testing_mode', 0) || $log['severity'] <= variable_get('akismet_log_minimum_severity', WATCHDOG_WARNING)) {
+  if (config_get('akismet.settings', 'akismet_testing_mode') || $log['severity'] <= config_get('akismet.settings', 'akismet_log_minimum_severity')) {
     list($message, $arguments) = _akismet_format_log($log);
     watchdog('akismet', $message, $arguments, $log['severity']);
   }

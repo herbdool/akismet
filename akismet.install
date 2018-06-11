@@ -233,16 +233,8 @@ function akismet_install() {
   // Point the user to Akismet's settings page after installation.
   $requirements = akismet_requirements('runtime', FALSE);
   if (isset($requirements['akismet']['description'])) {
-    drupal_set_message($requirements['akismet']['description'], 'warning');
+    backdrop_set_message($requirements['akismet']['description'], 'warning');
   }
-}
-
-/**
- * Implements hook_uninstall().
- */
-function akismet_uninstall() {
-  db_delete('variable')->condition('name', db_like('akismet_') . '%', 'LIKE')->execute();
-  cache_clear_all('akismet', 'cache', TRUE);
 }
 
 /**
@@ -266,18 +258,20 @@ function akismet_update_1000() {
   $config->set('akismet_class', update_variable_get('akismet_class', 'AkismetBackdrop'));
   $config->set('akismet_log_minimum_severity', update_variable_get('akismet_log_minimum_severity', WATCHDOG_WARNING));
   $config->set('akismet_privacy_link', update_variable_get('akismet_privacy_link', 1));
+  $config->set('akismet_connection_timeout', update_variable_get('akismet_connection_timeout', 3));
 
   $config->save();
 
   // Delete variables.
-  //update_variable_del('akismet_api_key');
-  //update_variable_del('akismet_privacy_link');
-  //update_variable_del('akismet_testing_mode');
-  //update_variable_del('akismet_testing_mode_omit_warning');
-  //update_variable_del('akismet_fallback');
-  //update_variable_del('akismet_class');
-  //update_variable_del('akismet_log_minimum_severity');
-  //update_variable_del('akismet_privacy_link');
+  update_variable_del('akismet_api_key');
+  update_variable_del('akismet_privacy_link');
+  update_variable_del('akismet_testing_mode');
+  update_variable_del('akismet_testing_mode_omit_warning');
+  update_variable_del('akismet_fallback');
+  update_variable_del('akismet_class');
+  update_variable_del('akismet_log_minimum_severity');
+  update_variable_del('akismet_privacy_link');
+  update_variable_del('akismet_connection_timeout');
 }
 
 /*

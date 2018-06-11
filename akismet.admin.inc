@@ -419,18 +419,20 @@ function akismet_admin_unprotect_form_submit($form, &$form_state) {
  *   the fallback mode.
  */
 function akismet_admin_settings($form, &$form_state) {
+  $config = config('akismet.settings');
   $check = empty($_POST);
   $status = akismet_admin_site_status($check);
-  if ($check && $status['isVerified'] && !variable_get('akismet_testing_mode', 0)) {
+  if ($check && $status['isVerified'] && $config->get('akismet_testing_mode') == 0) {
     backdrop_set_message(t('Akismet verified your key. The service is operating correctly.'));
   }
 
+  $form['#config'] = 'akismet.settings';
   // The key is not #required, so that users can install this module and
   // configure it later.
   $form['akismet_api_key'] = array(
     '#type' => 'textfield',
     '#title' => t('API key'),
-    '#default_value' => variable_get('akismet_api_key'),
+    '#default_value' => $config->get('akismet_api_key'),
     '#element_validate' => array('akismet_admin_settings_validate_key'),
     '#description' => t('To obtain an API key, <a href="@signup-url">sign up</a> or log in to your <a href="@account-url">account</a>, add a subscription for this site, and copy the key into the field below.', array(
       '@signup-url' => 'https://akismet.com/signup',
@@ -479,7 +481,7 @@ function akismet_admin_settings($form, &$form_state) {
   $form['akismet_fallback'] = array(
     '#type' => 'radios',
     '#title' => t('When the Akismet service is unavailable'),
-    '#default_value' => variable_get('akismet_fallback', AKISMET_FALLBACK_ACCEPT),
+    '#default_value' => $config->get('akismet_fallback'),
     '#options' => array(
       AKISMET_FALLBACK_ACCEPT => t('Accept all form submissions'),
       AKISMET_FALLBACK_BLOCK => t('Block all form submissions'),
@@ -490,14 +492,14 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'checkbox',
     '#title' => t("Show a link to Akismet's privacy policy"),
     '#return_value' => 1,
-    '#default_value' => variable_get('akismet_privacy_link', 1),
+    '#default_value' => $config->get('akismet_privacy_link'),
     '#description' => t('If you disable this option, you should inform visitors about the privacy of their data through other means.'),
   );
 
   $form['akismet_testing_mode'] = array(
     '#type' => 'checkbox',
     '#title' => t('Enable testing mode'),
-    '#default_value' => variable_get('akismet_testing_mode', 0),
+    '#default_value' => $config->get('akismet_testing_mode'),
     '#description' => t('Do not enable this option if this site is publicly accessible.'),
   );
 
@@ -508,7 +510,7 @@ function akismet_admin_settings($form, &$form_state) {
     '#collapsed' => TRUE,
   );
   // Lower severity numbers indicate a high severity level.
-  $min_severity = variable_get('akismet_log_minimum_severity', WATCHDOG_WARNING);
+  $min_severity = $config->get('akismet_log_minimum_severity');
   $form['akismet_advanced']['akismet_log_minimum_severity'] = array(
     '#type' => 'radios',
     '#title' => t('Akismet logging level warning'),
@@ -522,7 +524,7 @@ function akismet_admin_settings($form, &$form_state) {
     '#type' => 'textfield',
     '#title' => t('Time-out when attempting to contact Akismet servers.'),
     '#description' => t('This is the length of time that a call to Akismet will wait before timing out.'),
-    '#default_value' => variable_get('akismet_connection_timeout', 3),
+    '#default_value' => $config->get('akismet_connection_timeout'),
     '#size' => 5,
     '#field_suffix' => t('seconds'),
     '#required' => TRUE,
