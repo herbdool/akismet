@@ -5,6 +5,3 @@ type = module
 configure = admin/config/content/akismet
 
 stylesheets[all][] = akismet.css
-
-files[] = akismet.class.inc
-files[] = akismet.drupal.inc

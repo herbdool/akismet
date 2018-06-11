@@ -1,38 +1,26 @@
-
--- SUMMARY --
+Akismet
+=======
 
 Integrates with the Akismet content moderation service: https://akismet.com
 
-For a full description of the module, visit the project page:
-  http://drupal.org/project/akismet
-
-To submit bug reports and feature suggestions, or to track changes:
-  http://drupal.org/project/issues/akismet
-
-For issues pertaining to the Akismet service, contact Akismet Support:
-  https://akismet.com/contact
-  - e.g., inappropriately blocked posts, spam posts getting through, etc.
-
-
--- REQUIREMENTS --
+Requirements
+------------
 
 None.
 
 
--- INSTALLATION --
+Installation
+------------
 
-* Install as usual:
-  http://drupal.org/documentation/install/modules-themes/modules-7
-
+* Install this module using the official Backdrop CMS instructions at
+  https://backdropcms.org/guide/modules
 * Go to https://akismet.com,
 
   - sign up or log in with your account
   - go to your Account Overview
   - Find your Akismet API key at the top of the page.
-
 * Enter your API keys on Administration » Configuration » Content authoring
   » Akismet » Settings.
-
 * If your site runs behind a reverse proxy or load balancer:
 
   - Open sites/default/settings.php in a text editor.
@@ -45,7 +33,6 @@ None.
   see a different IP address for each site visitor in the "Hostname" field.
   If you see the same IP address for different visitors, then your reverse proxy
   configuration is not correct.
-
 * On servers running PHP <5.4, and PHP as CGI (not Apache module), inbound HTTP
   request headers are not made available to PHP.  Add the following lines to
   your .htaccess file:
@@ -53,21 +40,13 @@ None.
     RewriteEngine On
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
--- OPTIONAL INSTALLATION --
- * Download and enable the libraries module: http://drupal.org/project/libraries
- * Download the chosen JavaScript plugin into your libraries location
-   - Download from https://github.com/harvesthq/chosen/releases
-     and save in your libraries location in a new "chosen" folder.
-   - See instructions from the libraries module for details:
-     https://www.drupal.org/node/1440066
-
--- CONFIGURATION --
+Configuration
+-------------
 
 The Akismet protection needs to be enabled and configured separately for each
 form that you want to protect with Akismet:
 
 * Go to Administration » Configuration » Content authoring » Akismet.
-
 * Add a form to protect and configure the options as desired.
 
 Note the "bypass permissions" for each protected form:  If the currently
@@ -75,7 +54,8 @@ logged-in user has any of the listed permissions, then Akismet is NOT involved
 in the form submission (at all).
 
 
--- TESTING --
+Testing
+-------
 
 Do NOT test Akismet without enabling the testing mode.  Doing so would negatively
 affect your own author reputation across all sites in the Akismet network.
@@ -83,16 +63,13 @@ affect your own author reputation across all sites in the Akismet network.
 To test Akismet:
 
 * Go to Administration » Configuration » Content authoring » Akismet » Settings.
-
 * Enable the "Testing mode" option.
   Note: Ensure to read the difference in behavior.
-
 * Log out or switch to a different user, and perform your tests.
-
 * Disable the testing mode once you're done with testing.
 
-
--- FAQ --
+FAQ
+---
 
 Q: Akismet does not stop any spam on my form?
 
@@ -106,7 +83,7 @@ Q: Can I protect other forms that are not listed?
 Q: Can I protect a custom form?
 Q: The form I want to protect is not offered as an option?
 
-A: Out of the box, the Akismet module allows to protect Drupal core forms only.
+A: Out of the box, the Akismet module allows to protect Backdrop CMS core forms only.
    However, the Akismet module provides an API for other modules.  Other modules
    need to integrate with the Akismet module API to expose their forms.  The API
    is extensively documented in akismet.api.php in this directory.
@@ -117,20 +94,35 @@ A: Out of the box, the Akismet module allows to protect Drupal core forms only.
 
    - https://akismet.com/development/api/
 
+Issues
+------
 
--- CONTACT --
+To submit bug reports and feature suggestions, or to track changes:
+  http://.org/project/issues/akismet
 
-For questions pertaining to the Akismet service go to https://akismet.com/support
+For issues pertaining to the Akismet service, contact Akismet Support:
+  https://akismet.com/contact
+  - e.g., inappropriately blocked posts, spam posts getting through, etc.
 
-Current maintainers:
-* Katherine Senzee (ksenzee) - http://drupal.org/u/ksenzee
+Current Maintainers
+-------------------
 
-Co-maintainers wanted.
+- Herb v/d Dool (https://github.com/herbdool/)
+- Seeking additional maintainers.
 
+Credits
+-------
 
--- MOLLOM --
+- Ported to Backdrop by Herb v/d Dool (https://github.com/herbdool/)
+- Originally developed for Drupal by [Katherine Senzee (ksenzee)](http://drupal.org/u/ksenzee)
 
 This module is a fork of the Mollom module. The Mollom spam-control service was
 discontinued in 2018. This module attempts to serve as a drop-in replacement
 for sites that were previously using Mollom and want to switch to Akismet. It
 makes as few changes to the original Mollom module code as possible.
+
+License
+-------
+
+This project is GPL v2 software. See the LICENSE.txt file in this directory for
+complete text.
