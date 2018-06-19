@@ -238,7 +238,7 @@ class AkismetBackdropTestInvalid extends AkismetBackdropTestLocal {
   private $originalServer;
 
   /**
-   * Overrides MollomBackdropTest::__construct().
+   * Overrides AkismetBackdropTest::__construct().
    */
   function __construct() {
     $this->configuration_map['server'] = 'akismet_test_invalid_api_endpoint';

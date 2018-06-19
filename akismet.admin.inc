@@ -522,7 +522,7 @@ function akismet_admin_settings($form, &$form_state) {
   );
   $form['akismet_advanced']['akismet_connection_timeout'] = array(
     '#type' => 'textfield',
-    '#title' => t('Time-out when attempting to contact Akismet servers.'),
+    '#title' => t('Time-out when attempting to contact Akismet servers'),
     '#description' => t('This is the length of time that a call to Akismet will wait before timing out.'),
     '#default_value' => $config->get('akismet_connection_timeout'),
     '#size' => 5,

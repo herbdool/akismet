@@ -2494,15 +2494,15 @@ function akismet_action_info() {
   return array(
     // Unpublish comment action.
     'akismet_comment_unpublish_action' => array(
-      'label' => t('Report comment to Akismet as spam and unpublish'),
+      'label' => t('Report comment as spam and unpublish'),
       'type' => 'comment',
-      'callback' => 'akismet_unpublish_comment_action',
+      'callback' => 'akismet_comment_unpublish_action',
     ),
     // Unpublish node action.
     'akismet_node_unpublish_action' => array(
-      'label' => t('Report to Akismet as spam and unpublish'),
+      'label' => t('Report as spam and unpublish'),
       'type' => 'node',
-      'callback' => 'akismet_unpublish_node_action',
+      'callback' => 'akismet_node_unpublish_action',
     ),
   );
 }
@@ -2545,7 +2545,7 @@ function akismet_node_unpublish_action(Node $node, &$context) {
   $node->save();
 
   // Determine the entities for which moderation is allowed.
-  list($allowed, $nid, $cid) = _akismet_actions_access_callbacks('node', $node->nid);
+  list($allowed, $nid, $cid) = _akismet_actions_access_callbacks('node', $node);
 
   // Send feedback to Akismet.
   akismet_data_report_multiple('node', array($nid), 'spam');
@@ -2557,7 +2557,7 @@ function akismet_node_unpublish_action(Node $node, &$context) {
 function akismet_form_comment_admin_overview_alter(&$form, &$form_state, $form_id) {
   // Ensure action is available to old comment admin overview.
   if ($form_state['build_info']['args'][0] != 'approval') {
-    $form['options']['operation']['#options']['akismet_unpublish_comment_action'] = t('Report comment to Akismet as spam and unpublish');
+    $form['options']['operation']['#options']['akismet_unpublish_comment_action'] = t('Report as spam and unpublish');
   }
 }
 
@@ -2575,7 +2575,7 @@ function akismet_form_comment_admin_overview_alter(&$form, &$form_state, $form_i
  *   - 1 An array of node ids
  *   - 2 An array of comment ids (if entity_type is comment).
  */
-function _akismet_actions_access_callbacks($entity_type, $entities) {
+function _akismet_actions_access_callbacks($entity_type, $entity) {
   $cids = array();
   $nids = array();
 
@@ -2607,41 +2607,40 @@ function _akismet_actions_access_callbacks($entity_type, $entities) {
     }
   }
 
-  // Check access for this comment.
-  foreach ($entities as $entity) {
-    list($entity_id, $rev_id, $bundle) = entity_extract_ids($entity_type, $entity);
-    if ($entity_type === 'comment') {
-      $cids[$entity_id] = $entity_id;
-      $nids[$entity->nid] = $entity->nid;
-    }
-    else {
-      $nids[$entity_id] = $entity_id;
-    }
-
-    // Check reporting callbacks.
-    foreach($report_access_callbacks as $callback) {
-      if (!$callback($entity_type, $entity_id)) {
-        break;
-      }
-    }
-
-    // Check reporting user permissions.
-    foreach($access_permissions as $permission) {
-      if (!user_access($permission)) {
-        break;
-      }
-    }
-
-    // Check entity reporting callbacks.
-    foreach($report_access_callbacks as $callback) {
-      if (!$callback($entity)) {
-        break;
-      }
-    }
-
-    // If still here, then user has access to report this entity.
-    $allowed[] = $entity;
+  // Check access for this entity.
+  list($entity_id, $rev_id, $bundle) = entity_extract_ids($entity_type, $entity);
+  if ($entity_type === 'comment') {
+    $cids[$entity_id] = $entity_id;
+    $nids[$entity->nid] = $entity->nid;
   }
+  else {
+    $nids[$entity_id] = $entity_id;
+  }
+
+  // Check reporting callbacks.
+  foreach($report_access_callbacks as $callback) {
+    if (!$callback($entity_type, $entity_id)) {
+      break;
+    }
+  }
+
+  // Check reporting user permissions.
+  foreach($access_permissions as $permission) {
+    if (!user_access($permission)) {
+      break;
+    }
+  }
+
+  // Check entity reporting callbacks.
+  foreach($report_access_callbacks as $callback) {
+    if (!$callback($entity)) {
+      break;
+    }
+  }
+
+  // If still here, then user has access to report this entity.
+  $allowed[] = $entity;
+
   return array($allowed, $nids, $cids);
 }
 

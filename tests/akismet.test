@@ -62,16 +62,9 @@ class AkismetWebTestCase extends BackdropWebTestCase {
     // Re-initialize stored session_id and watchdog messages.
     $this->resetResponseID();
     $this->messages = array();
-    $config = config('akismet.settings');
 
     $modules = func_get_args();
     $modules = (isset($modules[0]) ? $modules[0] : array());
-
-    // Use the real API key, if the test requires it.
-    if ($this->useProductionKey) {
-      $key = $config->get('akismet_api_key');
-      $this->key = $key;
-    }
 
     // Automatically enable local testing server implementation.
     if (strstr($this->akismetClass, 'Local') && !in_array('akismet_test_server', $modules)) {
@@ -85,6 +78,14 @@ class AkismetWebTestCase extends BackdropWebTestCase {
     // Database logging is unconditionally required to assert watchdog messages.
     $modules[] = 'dblog';
     parent::setUp($modules);
+
+    $config = config('akismet.settings');
+
+    // Use the real API key, if the test requires it.
+    if ($this->useProductionKey) {
+      $key = $config->get('akismet_api_key');
+      $this->key = $key;
+    }
 
     // Save the Akismet client implementation to use for running the tests.
     $config->set('akismet_class', $this->akismetClass);
@@ -112,6 +113,8 @@ class AkismetWebTestCase extends BackdropWebTestCase {
       $permissions = array(
         'access administration pages',
         'administer akismet',
+        'administer nodes',
+        'access content overview',
         'administer content types',
         'administer permissions',
         'administer users',
@@ -875,13 +878,13 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
       'akismet_api_key' => $apiKey,
     );
     $this->backdropGet('admin/config/content/akismet/settings');
-    $this->assertNoText('The Akismet API key is not configured yet.');
+    $this->assertText('The Akismet API key is not configured yet.');
     $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText('The Akismet API key is not configured yet.');
     $this->assertText(t('The configuration options have been saved.'));
     $this->assertText('The API key could not be verified.');
 
-    $this->backdropLogout($this->admin_user);
+    $this->backdropLogout();
 
     // Verify that spam can be posted, since testing mode is disabled and API
     // keys are invalid.
@@ -889,21 +892,22 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
       'title' => $this->randomString(),
       'body' => 'spam',
     );
-    $this->backdropPost(NULL, $akismet_test, 'Submit');
+    $this->backdropGet('akismet-test/form');
+    $this->backdropPost(NULL, $edit, 'Submit');
     $this->assertText('Successful form submission.');
 
     // Enable testing mode.
     $this->backdropLogin($this->admin_user);
     $edit = array(
-      'akismet_testing_mode' => 1,
+      'akismet_testing_mode' => TRUE,
     );
     $this->backdropGet('admin/config/content/akismet/settings', array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertText('API key could not be verified.');
     $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText('The Akismet API key is not configured yet.');
-    $this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
+    //$this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
 
-    $this->backdropLogout($this->admin_user);
+    $this->backdropLogout();
 
     // Verify presence of testing mode warning.
     $this->backdropGet('akismet-test/form');
@@ -977,12 +981,9 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
 
     // Verify that forms can be submitted without valid Akismet module configuration.
     $this->backdropLogin($this->web_user);
-    
     $edit = array(
       'title' => 'spam',
-      'body' => '',
     );
-    $this->backdropGet('akismet-test/form/' . $akismet_test->mid);
     $this->backdropPost('akismet-test/form', $edit, 'Submit');
     $this->assertText('Successful form submission.');
 
@@ -1005,6 +1006,7 @@ class AkismetInstallationTestCase extends AkismetWebTestCase {
     // Configure an invalid key.
     $edit = array(
       'akismet_api_key' => 'invalid-key',
+      'akismet_connection_timeout' => 3
     );
     $this->backdropGet('admin/config/content/akismet/settings');
     $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
@@ -1085,6 +1087,7 @@ class AkismetResponseLocalTestCase extends AkismetWebTestCase {
   public function testCommentCheck() {
     $akismet = akismet();
     $data = array(
+      'comment_content' => 'ham',
       'comment_author' => $this->admin_user->name,
       'comment_author_email' => $this->admin_user->mail,
       'author_id' => $this->admin_user->uid,
@@ -1188,6 +1191,9 @@ class AkismetBypassAccessTestCase extends AkismetWebTestCase {
    * Tests 'bypass access' property of registered forms.
    */
   public function testBypassAccess() {
+    // Allow comment title
+    config_set('node.type.post', 'settings.comment_subject_field', TRUE);
+
     $this->backdropLogin($this->admin_user);
     $this->setProtectionUI('comment_node_post_form');
     $this->backdropLogout();
@@ -1198,7 +1204,7 @@ class AkismetBypassAccessTestCase extends AkismetWebTestCase {
     $this->web_user = $this->backdropCreateUser(array('edit own comments'));
     $this->backdropLogin($this->web_user);
     $edit = array(
-      //'subject' => 'ham',
+      'subject' => 'ham',
       'comment_body[und][0][value]' => 'ham',
     );
     $this->backdropPost('node/' . $node->nid, $edit, t('Preview'));
@@ -1214,7 +1220,7 @@ class AkismetBypassAccessTestCase extends AkismetWebTestCase {
     $this->clickLink('edit');
 
     $edit = array(
-      //'subject' => 'spam',
+      'subject' => 'spam',
       'comment_body[und][0][value]' => 'spam',
     );
     $this->backdropPost(NULL, $edit, t('Preview'));
@@ -1649,8 +1655,6 @@ class AkismetNodeFormTestCase extends AkismetWebTestCase {
   function setUp() {
     parent::setUp();
 
-    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
-
     // @todo 'view own unpublished content' permission required to prevent a
     //   bogus access denied watchdog caused by a bug in Backdrop core.
     // @see http://drupal.org/node/1429442
@@ -1859,7 +1863,6 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
 
   function setUp() {
     parent::setUp(array('comment'));
-    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
     $this->web_user = $this->backdropCreateUser(array('create post content', 'access comments', 'post comments', 'skip comment approval'));
 
     $this->backdropLogin($this->admin_user);
@@ -1909,11 +1912,16 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     $this->assertEqual(count($published), count($comment_entities));
 
     // Call the unpublish action.
-    //akismet_action_unpublish_comment($comment_entities);
-    // @todo use the action example from node.test instead of calling it directly.
-    foreach ($comment_entities as $comment_entity) {
-      akismet_comment_unpublish_action($comment_entity);
-    }
+    // Login and unpublish the comments.
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/content/comment');
+    $edit = array(
+        'action' => 'akismet_comment_unpublish_action',
+        'comments[0]' => TRUE,
+        'comments[1]' => TRUE,
+    );
+    $this->backdropPost(NULL, $edit, t('Update'));
+    //$this->backdropPost(NULL, array(), t('Delete'));
 
     // Verify that all comments are now unpublished.
     $published = db_query('SELECT * FROM {comment} WHERE cid IN (:cids) AND status = 1', array(':cids' => $cids))->fetchAll();
@@ -1946,12 +1954,17 @@ class AkismetActionsTestCase extends AkismetWebTestCase {
     $this->assertEqual(count($published), count($node_entities));
 
     // Call the unpublish action.
-    //akismet_action_unpublish_node($node_entities);
-    foreach ($node_entities as $node_entity) {
-      akismet_node_unpublish_action($node_entity);
-    }
+    // Login and unpublish the comments.
+    $this->backdropLogin($this->admin_user);
+    $this->backdropGet('admin/content');
+    $edit = array(
+        'action' => 'akismet_node_unpublish_action',
+        'bulk_form[0]' => TRUE,
+        'bulk_form[1]' => TRUE,
+    );
+    $this->backdropPost(NULL, $edit, t('Execute'));
 
-    // Verify that all comments are now unpublished.
+    // Verify that all nodes are now unpublished.
     $published = db_query('SELECT * FROM {node} WHERE nid IN (:nids) AND status = 1', array(':nids' => $nids))->fetchAll();
     $this->assertEqual(count($published), 0);
 
@@ -2241,11 +2254,14 @@ class AkismetAnalysisPageCachingTestCase extends AkismetWebTestCase {
  */
 class AkismetReportTestCase extends AkismetWebTestCase {
 
+  protected $profile = 'standard';
+
   function setUp() {
     parent::setUp(array('comment'));
 
-    $this->backdropCreateContentType(array('type' => 'post', 'name' => 'Post'));
     config_set('node.type.post', 'settings.comment_preview', BACKDROP_OPTIONAL);
+    // Allow comment title
+    config_set('node.type.post', 'settings.comment_subject_field', TRUE);
 
     $this->web_user = $this->backdropCreateUser(array('edit own post content', 'create post content', 'access comments', 'post comments', 'skip comment approval'));
   }
@@ -2297,6 +2313,8 @@ class AkismetReportTestCase extends AkismetWebTestCase {
 
     $this->node = $this->backdropCreateNode(array('type' => 'post'));
     config_set('node.type.post', 'settings.comment_preview', BACKDROP_OPTIONAL);
+    // Allow comment title
+    config_set('node.type.post', 'settings.comment_subject_field', TRUE);
 
     // Post 3 comments.
     $this->backdropLogin($this->web_user);
