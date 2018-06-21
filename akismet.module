@@ -2518,7 +2518,7 @@ function akismet_action_info() {
  *
  * @ingroup actions
  */
-function akismet_comment_unpublish_action($comment, &$context) {
+function akismet_comment_unpublish_action($comment, $context) {
   $comment->status = COMMENT_NOT_PUBLISHED;
   $comment->save();
 
@@ -2540,7 +2540,7 @@ function akismet_comment_unpublish_action($comment, &$context) {
  *
  * @ingroup actions
  */
-function akismet_node_unpublish_action(Node $node, &$context) {
+function akismet_node_unpublish_action(Node $node, $context) {
   $node->status = NODE_NOT_PUBLISHED;
   $node->save();
 
@@ -2559,6 +2559,27 @@ function akismet_form_comment_admin_overview_alter(&$form, &$form_state, $form_i
   if ($form_state['build_info']['args'][0] != 'approval') {
     $form['options']['operation']['#options']['akismet_unpublish_comment_action'] = t('Report as spam and unpublish');
   }
+  $form['#submit'][] = "akismet_form_comment_admin_overview_submit";
+}
+
+/**
+ * Form submission handler for akismet_comment_admin_overview_alter().
+ */
+function akismet_form_comment_admin_overview_submit($form, &$form_state) {
+  $operation = $form_state['values']['operation'];
+  $cids = $form_state['values']['comments'];
+
+  foreach ($cids as $cid => $value) {
+    $comment = comment_load($value);
+
+    if ($operation == 'akismet_unpublish_comment_action') {
+      akismet_comment_unpublish_action($comment, array($value));
+    }
+  }
+
+  backdrop_set_message(t('The update has been performed.'));
+  $form_state['redirect'] = 'admin/content/comment';
+  cache_clear_all();
 }
 
 /**

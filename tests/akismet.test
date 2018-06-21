@@ -905,7 +905,7 @@ class AkismetTestingModeTestCase extends AkismetWebTestCase {
     $this->assertText('API key could not be verified.');
     $this->backdropPost(NULL, $edit, t('Save configuration'), array('watchdog' => WATCHDOG_EMERGENCY));
     $this->assertNoText('The Akismet API key is not configured yet.');
-    //$this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
+    $this->assertText(t('Akismet testing mode is still enabled. !admin-message', array('!admin-message' => '')));
 
     $this->backdropLogout();
 
