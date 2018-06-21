@@ -3,5 +3,5 @@ description = Protects your site from spam by sending user-submitted content to 
 backdrop = 1.x
 type = module
 configure = admin/config/content/akismet
-
+package = "Spam control"
 stylesheets[all][] = akismet.css
