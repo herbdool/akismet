@@ -2381,7 +2381,7 @@ function akismet_form_user_multiple_cancel_confirm_alter(&$form, &$form_state) {
  * Form submit handler for node_multiple_delete_confirm().
  */
 function akismet_form_user_multiple_cancel_confirm_submit($form, &$form_state) {
-  $uids = array_keys($form_state['values']['accounts']);
+  $uids = array_keys($form_state['accounts']);
   if (!empty($form_state['values']['akismet']['feedback'])) {
     if (akismet_data_report_multiple('user', $uids, $form_state['values']['akismet']['feedback'])) {
       backdrop_set_message(t('The users were successfully reported.'));
